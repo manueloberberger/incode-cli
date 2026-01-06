@@ -53,7 +53,7 @@ def interactive_menu(options: List[Tuple[str, str]], title: str = "HAUPTMENÜ") 
     while True:
         clear_screen()
         console.print(BANNER)
-        console.print(f"\n[header]{title}[/header]")
+        console.print(f"\n[header]{title}[/header]\n")
         
         for idx, (label, _) in enumerate(options):
             if idx == selected_idx:
