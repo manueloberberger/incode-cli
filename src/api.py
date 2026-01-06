@@ -1,4 +1,5 @@
 import requests
+import time
 from urllib3.util.retry import Retry
 import re
 from datetime import datetime, timedelta
@@ -76,7 +77,6 @@ class IncodeRequests:
         try:
             # Parse as UTC (assuming 'Z' at end implies UTC or it's raw UTC time)
             dt = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')
-            import time
             # Simple offset calculation
             offset = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
             local_dt = dt + timedelta(seconds=offset)

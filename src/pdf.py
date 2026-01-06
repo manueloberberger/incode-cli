@@ -81,7 +81,6 @@ def export_to_pdf(duties, filename="dienstplan.pdf", title_text="Dienstplan Übe
                 crew_str
             ])
         except Exception as ex: 
-            # console.print(f"Debug PDF Error: {ex}") 
             pass
 
     # Column Widths
