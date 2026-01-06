@@ -43,7 +43,7 @@ def run_cli():
     menu_options = [
         ("📅  Mein Dienstplan", "future"),
         ("🚑  Tagesplan (Heute)", "today"),
-        ("🗓️  Tagesplan (Datum wählen)", "date"),
+        ("📆  Tagesplan (Datum wählen)", "date"),
         ("🔍  Kollegen finden", "colleague"),
         ("📺  Live-Monitor", "live"),
         ("🤖  Telegram Bot", "bot"),
