@@ -1,0 +1,12 @@
+.credentials.json
+*.pdf
+__pycache__/
+*.pyc
+bot.log
+homepage_dump.html
+dashboard_dump.html
+js_urls.txt
+.vscode/
+.idea/
+.DS_Store
+.venv/
