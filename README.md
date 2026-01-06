@@ -1,49 +1,69 @@
 # Incode CLI v1.0
 
-Eine leistungsstarke CLI-Anwendung und ein Telegram-Bot zur Abfrage von Dienstplänen aus dem Rotes Kreuz Incode-System.
+Eine hochoptimierte CLI-Anwendung und ein automatisierter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-Dieses Tool ermöglicht es Sanitätern und Mitarbeitern, ihren persönlichen Dienstplan sowie den allgemeinen Tagesplan (Fahrzeuge, Besatzungen, Einsatzbereiche) effizient über das Terminal oder mobil via Telegram abzurufen. Es ersetzt die bisherigen Einzeltools `incode-checker` und `tg-incode-bot` durch eine zentrale, kombinierte Lösung.
+Dieses Projekt vereint die Funktionalitäten eines interaktiven Terminals mit der Mobilität eines Telegram-Bots. Es wurde entwickelt, um Sanitätern und Führungskräften einen schnellen, gefilterten und übersichtlichen Zugriff auf Einsatzpläne zu ermöglichen – ohne die oft träge Weboberfläche nutzen zu müssen.
 
-## Features
+## 🚀 Kernfunktionen
 
-- **Persönlicher Dienstplan:** Abfrage aller zukünftigen und vergangenen Dienste.
-- **Tagesplan-Einsicht:** Komplette Übersicht aller Fahrzeuge und deren Besetzung für jeden beliebigen Tag.
-- **Telegram-Bot:** Fordere deinen Plan von unterwegs an und erhalte ihn sofort als sauber formatiertes **PDF**.
-- **Live-Monitor:** Ein interaktiver Modus im Terminal, der sich automatisch aktualisiert (ideal für Standorte oder Wachen).
-- **Kollegen-Suche:** Finde schnell heraus, wann und wo bestimmte Kollegen eingeteilt sind.
-- **iCal-Export:** (Optional) Synchronisiere deine Dienste mit deinem digitalen Kalender.
+### 1. Interaktives Terminal-Interface (CLI)
+Das CLI ist das Herzstück für die stationäre Nutzung (z.B. auf der Dienststelle oder am PC):
+- **Dashboard:** Eine kompakte Übersicht deiner nächsten Dienste direkt beim Start.
+- **Tagesplan-Explorer:** Durchsuche den gesamten Dienstplan für heute oder ein beliebiges Datum. Sieh sofort, welche Fahrzeuge (RTW, KTW, NEF etc.) besetzt sind und wer die Besatzung bildet.
+- **Live-Monitor:** Ein spezialisierter Modus, der den Plan in Echtzeit (Auto-Refresh) anzeigt – ideal für einen Monitor in der Fahrzeughalle oder im Aufenthaltsraum.
+- **Intelligente Suche:** Suche nach Kollegen, um deren Einteilungen zu sehen (praktisch für die Dienstübergabe oder zum Finden von Tauschpartnern).
+- **Daten-Export:** Generiere PDF-Übersichten oder iCal-Dateien für deinen persönlichen Kalender.
 
-## Installation
+### 2. Telegram Bot (Mobile Access)
+Der Bot dient als dein persönlicher Assistent für die Hosentasche:
+- **On-Demand PDF:** Sende `/dienste` oder `/tagesplan` an den Bot und erhalte innerhalb von Sekunden ein fertig formatiertes PDF-Dokument.
+- **Sicherheit:** Der Bot reagiert nur auf deine spezifische Telegram User-ID (Whitelist-Prinzip).
+- **Effizienz:** Statt hunderte Zeilen Text zu scrollen, bietet das PDF eine druckreife und professionelle Tabellenansicht.
 
-1. Erstelle ein Virtual Environment (optional, aber empfohlen):
+### 3. Technische Highlights
+- **Smart Scraper:** Die API-Schnittstelle (`src/api.py`) nutzt eine hybride Methode aus JSON-API-Abfragen und intelligentem HTML-Parsing, um auch bei unterschiedlichen Incode-Konfigurationen zuverlässig Daten zu liefern.
+- **Deduplizierung:** Automatische Bereinigung von Doppeleinträgen und Zusammenführung von Archiv- und Zukunftsdaten.
+- **Sicherheit:** Zugangsdaten werden lokal verschlüsselt bzw. mit restriktiven Dateirechten (`chmod 600`) in `.credentials.json` gespeichert. Keine Daten verlassen dein System außer in Richtung der offiziellen Incode-Server und der Telegram-API.
+
+## 🛠 Installation & Setup
+
+1. **Repository klonen:**
+   ```bash
+   git clone https://github.com/manueloberberger/incode-cli.git
+   cd incode-cli
+   ```
+
+2. **Umgebung einrichten:**
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   ```
-
-2. Installiere die Abhängigkeiten:
-   ```bash
    pip install -r requirements.txt
    ```
 
-## Nutzung
+3. **Starten:**
+   ```bash
+   chmod +x incode
+   ./incode
+   ```
 
-### Interaktiver Modus (CLI)
-Startet das Terminal-Interface mit Menüführung:
-```bash
-./incode
-# oder
-python3 incode.py
-```
+## 📖 Nutzungshilfen
 
-### Telegram Bot Modus
-Startet den Bot-Prozess:
-```bash
-./incode bot
-# oder
-python3 incode.py bot
-```
-Der Bot antwortet auf Befehle wie `/dienste` oder `/tagesplan` mit einer generierten PDF-Datei.
+### CLI Befehle
+Im Hauptmenü navigierst du einfach mit den Pfeiltasten oder durch Eingabe der entsprechenden Ziffern.
+- `Live-Monitor`: Startet eine Endlosschleife. Beenden mit `Strg + C`.
+- `Tagesplan`: Datumseingabe im Format `TT.MM.JJJJ` oder einfach Enter für heute.
 
-## Konfiguration
-Die Zugangsdaten (Incode & Telegram) werden beim ersten Start sicher abgefragt und lokal in `.credentials.json` gespeichert. Die Datei wird automatisch mit restriktiven Leserechten (`600`) versehen.
+### Telegram Befehle
+- `/start`: Zeigt die verfügbaren Optionen.
+- `/dienste`: Generiert ein PDF mit all deinen zukünftigen Diensten.
+- `/tagesplan`: Generiert ein PDF des heutigen Gesamtfahrzeugplans.
+
+## ⚙️ Konfiguration
+Beim ersten Start fragt das Tool nach:
+- **Incode-User:** Dein Standard-Login (meist die Personalnummer).
+- **Incode-Passwort:** Dein Passwort (wird sicher maskiert).
+- **Telegram Token:** (Optional) Falls du den Bot nutzen möchtest, von [@BotFather](https://t.me/botfather).
+- **User ID:** Deine Telegram ID (erhältst du z.B. über [@userinfobot](https://t.me/userinfobot)).
+
+---
+*Hinweis: Dieses Tool steht in keiner offiziellen Verbindung zum Roten Kreuz. Es nutzt die öffentlich zugänglichen Web-Schnittstellen des Dienstplansystems.*
