@@ -87,18 +87,13 @@ class IncodeBot:
 
     def _format_duties(self, duties):
         if not duties: return "⚠️ Keine Dienste gefunden."
-        msg = "🚑 *Deine Dienste:*
-
-"
+        msg = """🚑 *Deine Dienste:*\n\n"""
         for d in duties:
             try:
-                # API returns ISO strings
                 bd = datetime.strptime(d['begin'][:19], '%Y-%m-%dT%H:%M:%S')
                 ed = datetime.strptime(d['end'][:19], '%Y-%m-%dT%H:%M:%S')
-                
                 date_str = bd.strftime('%d.%m.%Y')
                 time_str = f"{bd.strftime('%H:%M')} - {ed.strftime('%H:%M')}"
-                
                 msg += f"📅 *{date_str} | {time_str}*\n"
                 msg += f"📍 {d['location']} | {d['vehicle']}\n"
                 if d['crew']: msg += f"👥 {', '.join(d['crew'])}\n"
@@ -109,26 +104,18 @@ class IncodeBot:
         return msg
 
     def _format_daily_plan(self, plan, date):
-        msg = f"📋 *Tagesplan {date.strftime('%d.%m.%Y')}*
-
-"
+        msg = f"📋 *Tagesplan {date.strftime('%d.%m.%Y')}*\n\n"
         for d in plan:
             time_str = "??:?? - ??:??"
             if d['begin'] and d['end']:
                 time_str = f"{d['begin'].strftime('%H:%M')} - {d['end'].strftime('%H:%M')}"
-            
             msg += f"🕒 *{time_str}*\n"
             msg += f"🚑 {d['vehicle'] if d['vehicle'] else 'Unbekanntes KFZ'}\n"
-            
             crew_list = []
             crew_dict = d.get('crew', {})
-            # Crew is a dict in daily plan from api.py: {'FAHRER': 'Name', ...}
             if "FAHRER" in crew_dict: crew_list.append(f"👨‍✈️ {crew_dict['FAHRER']}")
             if "SANITAETER1" in crew_dict: crew_list.append(f"🩺 {crew_dict['SANITAETER1']}")
             if "SANITAETER2" in crew_dict: crew_list.append(f"🩺 {crew_dict['SANITAETER2']}")
-            
-            # Fallback if crew is a list (API logic varies slightly in some branches, but _parse_daily_plan_raw uses dict)
-            
             if crew_list:
                 msg += " | ".join(crew_list) + "\n"
             msg += "\n"
@@ -137,34 +124,21 @@ class IncodeBot:
     def run(self):
         logger.info("🤖 Bot gestartet! Warte auf Nachrichten...")
         console.print("[bold green]Bot läuft! Drücke Strg + C zum Beenden.[/bold green]")
-        
         while True:
             try:
                 updates = self.telegram_request("getUpdates", {"offset": self.offset, "timeout": 5})
-                
                 for update in updates.get("result", []):
                     self.offset = update["update_id"] + 1
-                    
                     if "message" not in update: continue
                     msg = update["message"]
                     chat_id = msg.get("chat", {}).get("id")
                     text = msg.get("text", "")
-                    
                     if str(chat_id) != str(self.config["allowed_user_id"]):
                         logger.warning(f"🔒 Zugriff verweigert für ID: {chat_id}")
                         continue
-                    
                     logger.info(f"📩 Nachricht von {chat_id}: {text}")
-                    
                     if text.startswith("/start"):
-                        reply = (
-                            "✨ *Incode CLI Bot v1.0* ✨\n\n"
-                            "📌 *Befehle:*
-"
-                            "🚀 /start — Hilfe\n"
-                            "📅 /dienste — Deine Dienste\n"
-                            "📋 /tagesplan — Tagesplan HEUTE\n"
-                        )
+                        reply = """✨ *Incode CLI Bot v1.0* ✨\n\n📌 *Befehle:*\n🚀 /start — Hilfe\n📅 /dienste — Deine Dienste\n📋 /tagesplan — Tagesplan HEUTE\n"""
                     elif any(x in text.lower() for x in ["/tagesplan", "/heute", "tagesplan"]):
                         self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "typing"})
                         reply = self.get_duties_message(filter_today=True)
@@ -173,9 +147,7 @@ class IncodeBot:
                         reply = self.get_duties_message()
                     else:
                         reply = "Unbekannter Befehl. /dienste oder /tagesplan"
-                    
                     self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
-            
             except KeyboardInterrupt:
                 logger.info("👋 Bot vom Benutzer beendet.")
                 break
