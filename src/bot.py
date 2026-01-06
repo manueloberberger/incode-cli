@@ -99,14 +99,10 @@ class IncodeBot:
                 date_str = bd.strftime('%d.%m.%Y')
                 time_str = f"{bd.strftime('%H:%M')} - {ed.strftime('%H:%M')}"
                 
-                msg += f"📅 *{date_str} | {time_str}*
-"
-                msg += f"📍 {d['location']} | {d['vehicle']}
-"
-                if d['crew']: msg += f"👥 {', '.join(d['crew'])}
-"
-                msg += "
-"
+                msg += f"📅 *{date_str} | {time_str}*\n"
+                msg += f"📍 {d['location']} | {d['vehicle']}\n"
+                if d['crew']: msg += f"👥 {', '.join(d['crew'])}\n"
+                msg += "\n"
             except Exception as e:
                 logger.error(f"Fehler beim Formatieren eines Dienstes: {e}")
                 continue
@@ -121,10 +117,8 @@ class IncodeBot:
             if d['begin'] and d['end']:
                 time_str = f"{d['begin'].strftime('%H:%M')} - {d['end'].strftime('%H:%M')}"
             
-            msg += f"🕒 *{time_str}*
-"
-            msg += f"🚑 {d['vehicle'] if d['vehicle'] else 'Unbekanntes KFZ'}
-"
+            msg += f"🕒 *{time_str}*\n"
+            msg += f"🚑 {d['vehicle'] if d['vehicle'] else 'Unbekanntes KFZ'}\n"
             
             crew_list = []
             crew_dict = d.get('crew', {})
@@ -136,10 +130,8 @@ class IncodeBot:
             # Fallback if crew is a list (API logic varies slightly in some branches, but _parse_daily_plan_raw uses dict)
             
             if crew_list:
-                msg += " | ".join(crew_list) + "
-"
-            msg += "
-"
+                msg += " | ".join(crew_list) + "\n"
+            msg += "\n"
         return msg
 
     def run(self):
@@ -166,17 +158,12 @@ class IncodeBot:
                     
                     if text.startswith("/start"):
                         reply = (
-                            "✨ *Incode CLI Bot v1.0* ✨
-
-"
+                            "✨ *Incode CLI Bot v1.0* ✨\n\n"
                             "📌 *Befehle:*
 "
-                            "🚀 /start — Hilfe
-"
-                            "📅 /dienste — Deine Dienste
-"
-                            "📋 /tagesplan — Tagesplan HEUTE
-"
+                            "🚀 /start — Hilfe\n"
+                            "📅 /dienste — Deine Dienste\n"
+                            "📋 /tagesplan — Tagesplan HEUTE\n"
                         )
                     elif any(x in text.lower() for x in ["/tagesplan", "/heute", "tagesplan"]):
                         self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "typing"})
