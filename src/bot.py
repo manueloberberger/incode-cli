@@ -1,4 +1,5 @@
 import time
+import os
 import sys
 import logging
 import requests
@@ -6,6 +7,7 @@ from datetime import datetime
 from rich.prompt import Prompt
 from src.config import load_credentials, update_credentials, console
 from src.api import IncodeRequests
+from src.pdf import export_to_pdf
 
 # Logging
 logging.basicConfig(
@@ -49,77 +51,56 @@ class IncodeBot:
             logger.error(f"Telegram Request Error ({method}): {e}")
             return {}
 
-    def get_duties_message(self, filter_today=False):
-        # Ensure login
-        creds = load_credentials()
-        if not self.api.header_key: # Check if logged in (simple check)
-            ok, msg = self.api.login(creds['username'], creds['password'])
-            if not ok: return f"Login Fehler: {msg}"
-
-        if filter_today:
-            return self.get_daily_plan_message(datetime.now())
-
+    def send_document(self, chat_id, file_path, caption=None):
+        url = f"https://api.telegram.org/bot{self.config['telegram_token']}/sendDocument"
+        data = {'chat_id': chat_id}
+        if caption: data['caption'] = caption
         try:
-            duties = self.api.load_future_duties()
-            return self._format_duties(duties)
+            with open(file_path, 'rb') as f:
+                files = {'document': f}
+                requests.post(url, data=data, files=files, timeout=30)
+            return True
         except Exception as e:
-            logger.exception("Fehler bei get_duties")
-            return f"Fehler bei Abfrage: {str(e)}"
+            logger.error(f"Telegram Send Document Error: {e}")
+            return False
 
-    def get_daily_plan_message(self, date):
+    def handle_duties_request(self, chat_id, filter_today=False):
         # Ensure login
         creds = load_credentials()
         if not self.api.header_key:
             ok, msg = self.api.login(creds['username'], creds['password'])
-            if not ok: return f"Login Fehler: {msg}"
+            if not ok: 
+                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": f"Login Fehler: {msg}"})
+                return
 
         try:
-            plan = self.api.load_daily_plan(date)
-            # Sort by begin time
-            plan.sort(key=lambda x: x['begin'] if x['begin'] else datetime.max)
-            
-            if not plan:
-                return f"📅 *Kein Tagesplan für den {date.strftime('%d.%m.%Y')} gefunden.*"
-            return self._format_daily_plan(plan, date)
+            if filter_today:
+                date = datetime.now()
+                duties = self.api.load_daily_plan(date)
+                # Sort by begin time
+                duties.sort(key=lambda x: x['begin'] if x['begin'] else datetime.max)
+                title = f"Tagesplan {date.strftime('%d.%m.%Y')}"
+                filename = f"tagesplan_{date.strftime('%Y%m%d')}.pdf"
+            else:
+                duties = self.api.load_future_duties()
+                title = "Meine Dienste"
+                filename = f"dienste_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+            if not duties:
+                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": "⚠️ Keine Dienste gefunden."})
+                return
+
+            # Generate PDF
+            if export_to_pdf(duties, filename, title_text=title):
+                self.send_document(chat_id, filename, caption=f"📄 {title}")
+                # Clean up
+                if os.path.exists(filename): os.remove(filename)
+            else:
+                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": "Fehler beim Erstellen der PDF."})
+
         except Exception as e:
-            logger.exception("Fehler bei get_daily_plan")
-            return f"Fehler bei Tagesplan: {str(e)}"
-
-    def _format_duties(self, duties):
-        if not duties: return "⚠️ Keine Dienste gefunden."
-        msg = """🚑 *Deine Dienste:*\n\n"""
-        for d in duties:
-            try:
-                bd = datetime.strptime(d['begin'][:19], '%Y-%m-%dT%H:%M:%S')
-                ed = datetime.strptime(d['end'][:19], '%Y-%m-%dT%H:%M:%S')
-                date_str = bd.strftime('%d.%m.%Y')
-                time_str = f"{bd.strftime('%H:%M')} - {ed.strftime('%H:%M')}"
-                msg += f"📅 *{date_str} | {time_str}*\n"
-                msg += f"📍 {d['location']} | {d['vehicle']}\n"
-                if d['crew']: msg += f"👥 {', '.join(d['crew'])}\n"
-                msg += "\n"
-            except Exception as e:
-                logger.error(f"Fehler beim Formatieren eines Dienstes: {e}")
-                continue
-        return msg
-
-    def _format_daily_plan(self, plan, date):
-        msg = f"📋 *Tagesplan {date.strftime('%d.%m.%Y')}*\n\n"
-        for d in plan:
-            time_str = "??:?? - ??:??"
-            if d['begin'] and d['end']:
-                time_str = f"{d['begin'].strftime('%H:%M')} - {d['end'].strftime('%H:%M')}"
-            msg += f"🕒 *{time_str}*\n"
-            msg += f"🚑 {d['vehicle'] if d['vehicle'] else 'Unbekanntes KFZ'}\n"
-            crew_list = []
-            crew_dict = d.get('crew', {})
-            if "FAHRER" in crew_dict: crew_list.append(f"👨‍✈️ {crew_dict['FAHRER']}")
-            if "SANITAETER1" in crew_dict: crew_list.append(f"🩺 {crew_dict['SANITAETER1']}")
-            if "SANITAETER2" in crew_dict: crew_list.append(f"🩺 {crew_dict['SANITAETER2']}")
-            if crew_list:
-                msg += " | ".join(crew_list) + "\n"
-            msg += "\n"
-        return msg
+            logger.exception("Fehler bei Abfrage")
+            self.telegram_request("sendMessage", {"chat_id": chat_id, "text": f"Fehler: {str(e)}"})
 
     def run(self):
         logger.info("🤖 Bot gestartet! Warte auf Nachrichten...")
@@ -137,17 +118,19 @@ class IncodeBot:
                         logger.warning(f"🔒 Zugriff verweigert für ID: {chat_id}")
                         continue
                     logger.info(f"📩 Nachricht von {chat_id}: {text}")
+                    
                     if text.startswith("/start"):
-                        reply = """✨ *Incode CLI Bot v1.0* ✨\n\n📌 *Befehle:*\n🚀 /start — Hilfe\n📅 /dienste — Deine Dienste\n📋 /tagesplan — Tagesplan HEUTE\n"""
+                        reply = """✨ *Incode CLI Bot v1.0* ✨\n\n📌 *Befehle:*\n🚀 /start — Hilfe\n📅 /dienste — Deine Dienste (PDF)\n📋 /tagesplan — Tagesplan HEUTE (PDF)\n"""
+                        self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
                     elif any(x in text.lower() for x in ["/tagesplan", "/heute", "tagesplan"]):
-                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "typing"})
-                        reply = self.get_duties_message(filter_today=True)
+                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
+                        self.handle_duties_request(chat_id, filter_today=True)
                     elif any(x in text.lower() for x in ["/dienste", "plan", "dienst"]):
-                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "typing"})
-                        reply = self.get_duties_message()
+                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
+                        self.handle_duties_request(chat_id, filter_today=False)
                     else:
                         reply = "Unbekannter Befehl. /dienste oder /tagesplan"
-                    self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
+                        self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
             except KeyboardInterrupt:
                 logger.info("👋 Bot vom Benutzer beendet.")
                 break

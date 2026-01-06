@@ -1,6 +1,7 @@
 # Incode CLI v1.0
 
 Dies ist die kombinierte Version von `incode-checker` und `tg-incode-bot`.
+Das Tool bietet ein interaktives Terminal-Interface sowie einen Telegram-Bot, der Dienstpläne direkt als PDF versendet.
 
 ## Installation
 
@@ -18,18 +19,27 @@ Dies ist die kombinierte Version von `incode-checker` und `tg-incode-bot`.
 ## Nutzung
 
 ### Interaktiver Modus (CLI)
-Startet das klassische Terminal-Interface:
+Startet das klassische Terminal-Interface mit Menüführung:
 ```bash
-python main.py
+./incode
+# oder
+python3 incode.py
 ```
-Im Menü gibt es nun auch die Option "Telegram Bot starten".
+Funktionen:
+- Anzeige zukünftiger Dienste
+- Tagesplan-Abfrage (Heute oder spezifisches Datum)
+- Suche nach Kollegen
+- **Live-Monitor** (Auto-Update)
+- Telegram Bot starten
 
-### Bot Modus
-Startet direkt den Telegram Bot:
+### Telegram Bot Modus
+Startet den Bot, der auf Befehle reagiert:
 ```bash
-python main.py bot
+./incode bot
+# oder
+python3 incode.py bot
 ```
-Beim ersten Start wirst du nach dem Bot-Token und deiner User ID gefragt, falls diese noch nicht konfiguriert sind.
+Der Bot antwortet auf Befehle wie `/dienste` oder `/tagesplan` mit einer generierten **PDF-Datei** für eine bessere Übersicht.
 
 ## Konfiguration
-Die Zugangsdaten (Incode & Telegram) werden in `.credentials.json` gespeichert.
+Die Zugangsdaten (Incode & Telegram) werden beim ersten Start abgefragt und sicher in `.credentials.json` gespeichert.
