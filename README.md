@@ -27,6 +27,12 @@ Der Bot dient als dein persönlicher Assistent für die Hosentasche:
 
 ## 🛠 Installation & Setup
 
+### Voraussetzungen
+- Ein Computer mit **Linux** oder **macOS** (Windows via WSL möglich).
+- **Python 3.8** oder neuer.
+
+### Schritt-für-Schritt
+
 1. **Repository klonen:**
    ```bash
    git clone https://github.com/manueloberberger/incode-cli.git
@@ -45,6 +51,13 @@ Der Bot dient als dein persönlicher Assistent für die Hosentasche:
    chmod +x incode
    ./incode
    ```
+
+### Optional: Globaler Befehl
+Damit du das Tool von überall aufrufen kannst (ohne immer in den Ordner zu wechseln), erstelle einen Link:
+```bash
+ln -sf $(pwd)/incode ~/.local/bin/incode
+# Dann einfach tippen: incode
+```
 
 ## 📖 Nutzungshilfen
 
