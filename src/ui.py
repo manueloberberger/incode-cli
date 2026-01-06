@@ -12,10 +12,34 @@ from rich.prompt import Prompt
 from rich.live import Live
 from rich.console import Group
 
-from src.config import console, BANNER
+from src.config import console, BANNER, load_credentials
 from src.utils import get_key, wait_for_return, clear_screen, flush_input, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP_ALT, KEY_DOWN_ALT, KEY_LEFT, KEY_RIGHT, KEY_LEFT_ALT, KEY_RIGHT_ALT
 from src.pdf import export_to_pdf
 from src.ical import export_to_ics
+
+# Import Bot for internal sending
+# Use a lazy import or import inside function to avoid circular dep if needed, 
+# but here it should be fine if bot.py imports only config/api.
+from src.bot import IncodeBot
+
+def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
+    """Helper to send a PDF via the built-in bot logic."""
+    try:
+        # We need a bot instance. It needs an API instance (which we have).
+        bot = IncodeBot(incode_instance)
+        # Check if configured
+        creds = load_credentials()
+        if not creds.get("telegram_token") or not creds.get("allowed_user_id"):
+            console.print("[yellow]Telegram Bot ist noch nicht konfiguriert.[/yellow]")
+            console.print("Bitte starte einmal 'Telegram Bot starten' im Hauptmenü oder 'incode bot'.")
+            return False
+            
+        chat_id = creds["allowed_user_id"]
+        success = bot.send_document(chat_id, file_path, caption)
+        return success
+    except Exception as e:
+        console.print(f"[error]Fehler beim Bot-Versand: {e}[/error]")
+        return False
 
 def interactive_menu(options: List[Tuple[str, str]], title: str = "HAUPTMENÜ") -> Optional[str]:
     """
@@ -198,9 +222,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             # Display tables side by side or neatly stacked
             console.print(Columns([stats_table, count_table, loc_table], equal=True, expand=True))
         
-        has_telegram = shutil.which("telegram") is not None
-        opt_str = "'p' für PDF, 'c' für Kalender (iCal)"
-        if has_telegram: opt_str += ", 't' für PDF & Telegram"
+        opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
         console.print(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste...[/dim]")
         
         flush_input()
@@ -209,17 +231,14 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             if k:
                 k = k.lower()
                 ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-                if k == 'p' or (k == 't' and has_telegram):
+                if k == 'p' or k == 't':
                     fn = f"dienstplan_{ts}.pdf"
                     if search_colleague: fn = f"dienstplan_colleague_{ts}.pdf"
                     if export_to_pdf(export_duties, fn):
                         if k == 't':
-                            try:
-                                msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-                                subprocess.run(["telegram", fn, msg], check=True)
+                            msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                            if send_pdf_via_bot(incode, fn, msg):
                                 console.print("[success]PDF erfolgreich per Telegram gesendet![/success]")
-                            except Exception as e:
-                                console.print(f"[error]Fehler beim Telegram-Versand: {e}[/error]")
                     wait_for_return()
                     break
                 elif k == 'c':
@@ -293,9 +312,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
     else: 
         console.print(table)
         
-        has_telegram = shutil.which("telegram") is not None
-        opt_str = "'p' für PDF, 'c' für Kalender (iCal)"
-        if has_telegram: opt_str += ", 't' für PDF & Telegram"
+        opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
         console.print(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste...[/dim]")
         
         flush_input()
@@ -304,16 +321,13 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
             if k:
                 k = k.lower()
                 ts_str = date.strftime('%Y%m%d')
-                if k == 'p' or (k == 't' and has_telegram):
+                if k == 'p' or k == 't':
                     fn = f"tagesplan_{ts_str}.pdf"
                     if export_to_pdf(export_duties, fn):
                         if k == 't':
-                            try:
-                                msg = f"Tagesplan Export vom {date.strftime('%d.%m.%Y')}"
-                                subprocess.run(["telegram", fn, msg], check=True)
+                            msg = f"Tagesplan Export vom {date.strftime('%d.%m.%Y')}"
+                            if send_pdf_via_bot(incode, fn, msg):
                                 console.print("[success]PDF erfolgreich per Telegram gesendet![/success]")
-                            except Exception as e:
-                                console.print(f"[error]Fehler beim Telegram-Versand: {e}[/error]")
                     wait_for_return()
                     break
                 elif k == 'c':
@@ -339,7 +353,11 @@ def show_live_monitor(incode: Any) -> None:
     
     # 2. Telegram Setup
     enable_telegram = False
-    has_telegram = shutil.which("telegram") is not None
+    
+    # Check if configured
+    creds = load_credentials()
+    has_telegram = creds and creds.get("telegram_token") and creds.get("allowed_user_id")
+    
     if has_telegram:
         console.print("Telegram-Benachrichtigungen aktivieren (PDF bei Start & Änderung)?")
         console.print("[dim][j] Ja  •  [n] Nein  •  ESC Abbrechen[/dim]")
@@ -355,6 +373,9 @@ def show_live_monitor(incode: Any) -> None:
                 break
             elif k == KEY_ESC or k == 'q':
                 return
+    else:
+        console.print("[dim]Telegram nicht konfiguriert - Benachrichtigungen deaktiviert.[/dim]")
+        time.sleep(1)
     
     # 3. Refresh Interval
     try:
@@ -381,12 +402,6 @@ def show_live_monitor(incode: Any) -> None:
             if last_plan is None:
                 has_changes = True # First load is always a "change"
             else:
-                # Simple comparison: if the list of dicts differs, something changed.
-                # Note: api returns objects with datetime objects, which are comparable.
-                # However, we need to be careful if load_daily_plan returns different instances that compare equal.
-                # Assuming the structure is stable enough for direct equality check.
-                # To be safe against minor object diffs, we could compare a serialized version, 
-                # but let's try direct comparison first as it usually works for data dicts.
                 if current_plan != last_plan:
                     has_changes = True
 
@@ -420,11 +435,9 @@ def show_live_monitor(incode: Any) -> None:
                         if first_run:
                             msg_text = f"Live-Monitor gestartet für {target_date.strftime('%d.%m.%Y')} (Stand: {ts})"
                         
-                        # Send silently in background to not block UI too much? 
-                        # subprocess.run is blocking. For a CLI tool, blocking briefly is usually OK to ensure it sent.
                         try:
                             console.print(f"[dim]Sende Telegram Update...[/dim]")
-                            subprocess.run(["telegram", fn, msg_text], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            send_pdf_via_bot(incode, fn, msg_text)
                             console.print(f"[success]Telegram gesendet.[/success]")
                         except Exception as e:
                             console.print(f"[error]Telegram Fehler: {e}[/error]")
