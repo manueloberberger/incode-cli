@@ -1,5 +1,9 @@
 # Incode CLI v1.0
 
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-stable-success.svg)
+
 Eine hochoptimierte CLI-Anwendung und ein automatisierter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
 Dieses Projekt vereint die Funktionalitäten eines interaktiven Terminals mit der Mobilität eines Telegram-Bots. Es wurde entwickelt, um Sanitätern und Führungskräften einen schnellen, gefilterten und übersichtlichen Zugriff auf Einsatzpläne zu ermöglichen – ohne die oft träge Weboberfläche nutzen zu müssen.
@@ -77,6 +81,31 @@ Beim ersten Start fragt das Tool nach:
 - **Incode-Passwort:** Dein Passwort (wird sicher maskiert).
 - **Telegram Token:** (Optional) Falls du den Bot nutzen möchtest, von [@BotFather](https://t.me/botfather).
 - **User ID:** Deine Telegram ID (erhältst du z.B. über [@userinfobot](https://t.me/userinfobot)).
+
+## 🏗 Projektstruktur
+
+```
+incode-cli/
+├── incode.py           # Haupt-Einstiegspunkt
+├── src/
+│   ├── api.py          # Kommunikation mit Incode (Login, Datenabruf)
+│   ├── bot.py          # Telegram-Bot Logik
+│   ├── pdf.py          # PDF-Generierung (ReportLab)
+│   ├── ui.py           # Terminal-Interface (Rich)
+│   └── ...
+└── requirements.txt    # Abhängigkeiten
+```
+
+## ❓ Troubleshooting
+
+**Login fehlgeschlagen?**
+- Prüfe deine Internetverbindung.
+- Stelle sicher, dass du dich auf der Incode-Webseite normal einloggen kannst.
+- Lösche zur Not die Datei `.credentials.json` und starte das Tool neu, um die Daten erneut einzugeben.
+
+**Bot antwortet nicht?**
+- Prüfe, ob deine User-ID korrekt in der Konfiguration hinterlegt ist.
+- Der Bot antwortet aus Sicherheitsgründen **nur** der konfigurierten ID.
 
 ---
 *Hinweis: Dieses Tool steht in keiner offiziellen Verbindung zum Roten Kreuz. Es nutzt die öffentlich zugänglichen Web-Schnittstellen des Dienstplansystems.*
