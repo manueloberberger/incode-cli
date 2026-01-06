@@ -41,13 +41,13 @@ def run_cli():
         return
     
     menu_options = [
-        ("📅 Mein Dienstplan", "future"),
-        ("🚑 Tagesplan (Heute)", "today"),
-        ("🗓️ Tagesplan (Datum wählen)", "date"),
-        ("🔍 Kollegen finden", "colleague"),
-        ("📺 Live-Monitor", "live"),
-        ("🤖 Telegram Bot", "bot"),
-        ("🚪 Beenden", "exit")
+        ("📅  Mein Dienstplan", "future"),
+        ("🚑  Tagesplan (Heute)", "today"),
+        ("🗓️  Tagesplan (Datum wählen)", "date"),
+        ("🔍  Kollegen finden", "colleague"),
+        ("📺  Live-Monitor", "live"),
+        ("🤖  Telegram Bot", "bot"),
+        ("🚪  Beenden", "exit")
     ]
 
     while True:

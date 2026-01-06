@@ -136,7 +136,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
         wait_for_return()
         return
 
-    title = "📅 Mein Dienstplan" if not search_colleague else f"🔍 Gemeinsame Dienste mit '{search_colleague}'"
+    title = "📅  Mein Dienstplan" if not search_colleague else f"🔍  Gemeinsame Dienste mit '{search_colleague}'"
     table = Table(title=title, header_style="header", expand=False, box=None, padding=(0, 1), show_header=True)
     table.add_column("Datum", style="info")
     table.add_column("Zeit", style="info")
@@ -269,7 +269,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
             wait_for_return()
         return None
         
-    table = Table(title=f"🚑 Gesamter Tagesplan {date.strftime('%d.%m.%Y')}", header_style="header", expand=False, box=None, padding=(0, 1))
+    table = Table(title=f"🚑  Gesamter Tagesplan {date.strftime('%d.%m.%Y')}", header_style="header", expand=False, box=None, padding=(0, 1))
     table.add_column("Zeit", style="info"); table.add_column("Fzg", style="success"); table.add_column("Besatzung")
     
     # Prepare data for export logic later
@@ -341,8 +341,8 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
 
 def show_live_monitor(incode: Any) -> None:
     # 1. Date Selection
-    options = [("🕒 Heute überwachen", "today"), ("🗓️ Anderes Datum wählen", "date")]
-    sel = interactive_menu(options, title="📺 LIVE MONITOR SETUP")
+    options = [("🕒  Heute überwachen", "today"), ("🗓️  Anderes Datum wählen", "date")]
+    sel = interactive_menu(options, title="📺  LIVE MONITOR SETUP")
     if sel is None: return
 
     target_date = datetime.now()
