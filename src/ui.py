@@ -291,6 +291,154 @@ def show_staff_search(incode: Any) -> None:
     elif k == KEY_ENTER:
         return
 
+def get_holidays(year: int) -> List[datetime.date]:
+    """Returns a list of Austrian holidays for the given year."""
+    # Fixed
+    holidays = [
+        datetime(year, 1, 1).date(),
+        datetime(year, 1, 6).date(),
+        datetime(year, 5, 1).date(),
+        datetime(year, 8, 15).date(),
+        datetime(year, 10, 26).date(),
+        datetime(year, 11, 1).date(),
+        datetime(year, 12, 8).date(),
+        datetime(year, 12, 24).date(),
+        datetime(year, 12, 25).date(),
+        datetime(year, 12, 26).date(),
+        datetime(year, 12, 31).date()
+    ]
+    
+    # Variable (Easter based)
+    # Simple Gauss algorithm for Easter Sunday
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    
+    easter_sunday = datetime(year, month, day).date()
+    
+    holidays.append(easter_sunday + timedelta(days=1))  # Easter Monday
+    holidays.append(easter_sunday + timedelta(days=39)) # Ascension
+    holidays.append(easter_sunday + timedelta(days=50)) # Whit Monday
+    holidays.append(easter_sunday + timedelta(days=60)) # Corpus Christi
+    
+    return holidays
+
+def show_absences(incode: Any) -> None:
+    with console.status("[bold green]Lade Abwesenheiten..."): 
+        # Try the dedicated endpoint first
+        absences = incode.load_absences()
+        
+        # If nothing found, maybe try the old method as fallback (in case they ARE in duties but named differently)
+        if not absences:
+             absences = incode.load_future_duties(filter_mode='only_absences')
+
+    if not absences: 
+        console.print("[info]Keine geplanten Abwesenheiten gefunden.[/info]")
+        wait_for_return()
+        return
+
+    table = Table(title="🌴  Meine Abwesenheiten", header_style="header", expand=False, box=None, padding=(0, 1), show_header=True)
+    table.add_column("Datum", style="info")
+    table.add_column("Art", style="warning")
+    table.add_column("Dauer", style="dim")
+    
+    total_vacation_days = 0
+    weekday_map = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+    for a in absences:
+        try:
+            b_raw = datetime.strptime(a['begin'], '%Y-%m-%dT%H:%M:%S')
+            e_raw = datetime.strptime(a['end'], '%Y-%m-%dT%H:%M:%S')
+            reason = a.get('duty_type', '')
+            
+            # 1. Adjust Start Date (Heuristic: Starts after 20:00 are logically the next day due to TZ/System quirks)
+            b = b_raw
+            if b_raw.hour >= 20:
+                b = b_raw + timedelta(days=1)
+                b = b.replace(hour=0, minute=0, second=0)
+
+            # 2. Adjust End Date (00:00 counts as end of previous day)
+            e = e_raw
+            if e_raw.hour == 0 and e_raw.minute == 0 and e_raw.second == 0:
+                e = e_raw - timedelta(seconds=1)
+            
+            # Duration logic (Recalculate with original raw times for hours, but adjusted for days)
+            total_seconds = int((e_raw - b_raw).total_seconds())
+            
+            dur_str = ""
+            # Days diff based on adjusted dates
+            days_diff = (e.date() - b.date()).days + 1
+            
+            if "urlaub" in reason.lower() or "abwesend" in reason.lower() or "sonderabwesenheit" in reason.lower():
+                # For these types, we usually count the calendar days involved
+                if days_diff == 1:
+                    dur_str = "1 Tag"
+                else:
+                    dur_str = f"{days_diff} Tage"
+            elif total_seconds >= 86400:
+                # Fallback for other long types
+                days = days_diff
+                dur_str = f"{days} Tag" if days == 1 else f"{days} Tage"
+            else:
+                # Hours (use raw seconds)
+                h = total_seconds / 3600
+                if h == int(h):
+                    dur_str = f"{int(h)} Std."
+                else:
+                    dur_str = f"{h:g} Std."
+            
+            # Add to summary if it is explicitly "Urlaub"
+            if "urlaub" in reason.lower():
+                # Iterate days to check for Sundays/Holidays
+                net_days = 0
+                curr = b.date()
+                end_d = e.date()
+                holidays = get_holidays(curr.year)
+                if end_d.year != curr.year:
+                    holidays.extend(get_holidays(end_d.year))
+                
+                while curr <= end_d:
+                    # Check Sunday (6)
+                    is_sunday = curr.weekday() == 6
+                    is_holiday_day = curr in holidays
+                    
+                    if not is_sunday and not is_holiday_day:
+                        net_days += 1
+                    
+                    curr += timedelta(days=1)
+                
+                total_vacation_days += net_days
+
+            # Format date range with Weekdays using adjusted dates
+            wd_start = weekday_map[b.weekday()]
+            date_str = f"{wd_start} {b.strftime('%d.%m.%Y')}"
+            
+            if e.date() > b.date():
+                 wd_end = weekday_map[e.weekday()]
+                 date_str = f"{wd_start} {b.strftime('%d.%m.')} - {wd_end} {e.strftime('%d.%m.%Y')}"
+
+            table.add_row(date_str, reason, dur_str)
+        except Exception: pass
+        
+    console.print(table)
+    
+    # Summary Panel
+    console.print(Panel(f"[bold]Verbrauchter Urlaub:[/bold] [cyan]{total_vacation_days} Tage[/cyan] (Netto, ohne So/Feiertage)", style="white", expand=False))
+    
+    wait_for_return()
+
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
     with console.status("[bold green]Lade Dienstplan..."): duties = incode.load_future_duties()
     if not duties: 

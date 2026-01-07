@@ -239,7 +239,205 @@ class IncodeRequests:
                 continue
         return results
 
-    def load_archive_duties(self, year: int) -> List[Dict[str, Any]]:
+    def _get_holidays(self, year: int) -> List[datetime.date]:
+        """Returns a list of Austrian holidays for the given year."""
+        holidays = [
+            datetime(year, 1, 1).date(), datetime(year, 1, 6).date(),
+            datetime(year, 5, 1).date(), datetime(year, 8, 15).date(),
+            datetime(year, 10, 26).date(), datetime(year, 11, 1).date(),
+            datetime(year, 12, 8).date(), datetime(year, 12, 24).date(),
+            datetime(year, 12, 25).date(), datetime(year, 12, 26).date(),
+            datetime(year, 12, 31).date()
+        ]
+        # Easter
+        a = year % 19; b = year // 100; c = year % 100
+        d = b // 4; e = b % 4; f = (b + 8) // 25
+        g = (b - f + 1) // 3; h = (19 * a + b - d - g + 15) % 30
+        i = c // 4; k = c % 4; l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        month = (h + l - 7 * m + 114) // 31
+        day = ((h + l - 7 * m + 114) % 31) + 1
+        easter = datetime(year, month, day).date()
+        holidays.extend([easter + timedelta(days=1), easter + timedelta(days=39), easter + timedelta(days=50), easter + timedelta(days=60)])
+        return holidays
+
+    def load_absences(self) -> List[Dict[str, Any]]:
+        """
+        Loads absences using day-by-day logic to correctly handle holidays, weekends, and gaps.
+        """
+        results = []
+        daily_map = {} # date -> {'label': str, 'fixed': bool}
+
+        now = datetime.now()
+        # Look back 30 days, forward 400 days
+        start_date = now - timedelta(days=30)
+        end_date = now + timedelta(days=400)
+        
+        date_from_str = start_date.strftime('%Y-%m-%dT00:00:00.000Z')
+        date_to_str = end_date.strftime('%Y-%m-%dT23:59:59.000Z')
+
+        def normalize_start_date(dt):
+            if dt.hour >= 20: return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+            return dt
+
+        holiday_cache = {}
+        def is_holiday(d):
+            if d.year not in holiday_cache:
+                holiday_cache[d.year] = self._get_holidays(d.year)
+            return d in holiday_cache[d.year]
+
+        # 1. FIXED ROSTER (load.json)
+        url_abs = f"{self.base_url}/StaffPortal/absence/data/load.json"
+        body = {'max': '1000', 'dateFrom': date_from_str, 'dateTo': date_to_str, 'reason': '', 'form.event.onsubmit': 'searchForm'}
+        
+        try:
+            resp = self.session.post(url_abs, headers=self._get_api_headers(), data=body)
+            if resp.status_code == 200:
+                for item in resp.json().get('data', []):
+                    reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
+                    dt_start = normalize_start_date(self._fix_datetime(item.get('begin')))
+                    dt_end = self._fix_datetime(item.get('end'))
+                    if not dt_start or not dt_end: continue
+                    if dt_end.hour == 0 and dt_end.minute == 0: dt_end -= timedelta(seconds=1)
+
+                    curr = dt_start.date()
+                    while curr <= dt_end.date():
+                        label = reason
+                        # Split by Holiday if it's Urlaub
+                        if "urlaub" in reason.lower() and is_holiday(curr):
+                            label = "Geplante Sonderabwesenheit"
+                        
+                        daily_map[curr] = {'label': label, 'fixed': True}
+                        curr += timedelta(days=1)
+        except Exception as e:
+            console.print(f"[warning]Fehler (Fixed): {e}[/warning]")
+
+        # 2. WISHES (loadWishes.json)
+        url_wish = f"{self.base_url}/StaffPortal/absence/data/loadWishes.json"
+        try:
+            resp = self.session.post(url_wish, headers=self._get_api_headers(), data=body)
+            if resp.status_code == 200:
+                for item in resp.json().get('data', []):
+                    try:
+                        state = int(item.get('approvalState'))
+                    except: state = 0
+                    
+                    if state != 1: continue
+                    if item.get('withdrawn') == 1 or item.get('withdrawn') is True: continue
+
+                    reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
+                    dt_start = normalize_start_date(self._fix_datetime(item.get('begin')))
+                    dt_end = self._fix_datetime(item.get('end'))
+                    if not dt_start or not dt_end: continue
+                    if dt_end.hour == 0 and dt_end.minute == 0: dt_end -= timedelta(seconds=1)
+
+                    curr = dt_start.date()
+                    while curr <= dt_end.date():
+                        # Don't overwrite fixed items
+                        if curr in daily_map and daily_map[curr]['fixed']:
+                            curr += timedelta(days=1)
+                            continue
+                        
+                        label = reason
+                        if "urlaub" in reason.lower() and is_holiday(curr):
+                            label = "Geplante Sonderabwesenheit"
+                        
+                        label += " [green](Gen. / n. eingetr.)[/green]"
+                        
+                        daily_map[curr] = {'label': label, 'fixed': False}
+                        curr += timedelta(days=1)
+        except Exception as e:
+            console.print(f"[warning]Fehler (Wishes): {e}[/warning]")
+
+        # 3. SUNDAY FILLER
+        sorted_dates = sorted(daily_map.keys())
+        sunday_adds = []
+        
+        for d in sorted_dates:
+            if d.weekday() == 5: # Saturday
+                info = daily_map[d]
+                if "urlaub" in info['label'].lower():
+                    sunday = d + timedelta(days=1)
+                    if sunday not in daily_map:
+                        lbl = "Abwesend"
+                        if "[green]" in info['label']:
+                            lbl += " [green](Gen. / n. eingetr.)[/green]"
+                        sunday_adds.append((sunday, lbl))
+        
+        for d, lbl in sunday_adds:
+            daily_map[d] = {'label': lbl, 'fixed': False}
+
+        # 4. CONDENSE
+        if not daily_map: return []
+        
+        final_dates = sorted(daily_map.keys())
+        
+        current_block_start = final_dates[0]
+        current_block_end = final_dates[0]
+        current_label = daily_map[final_dates[0]]['label']
+        
+        for i in range(1, len(final_dates)):
+            d = final_dates[i]
+            label = daily_map[d]['label']
+            
+            if d == current_block_end + timedelta(days=1) and label == current_label:
+                current_block_end = d
+            else:
+                start_ts = datetime.combine(current_block_start, datetime.min.time())
+                end_ts = datetime.combine(current_block_end, datetime.max.time().replace(microsecond=0))
+                results.append({
+                    'begin': start_ts.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'end': end_ts.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'location': '', 'vehicle': '', 
+                    'duty_type': current_label, 'crew': []
+                })
+                
+                current_block_start = d
+                current_block_end = d
+                current_label = label
+        
+        start_ts = datetime.combine(current_block_start, datetime.min.time())
+        end_ts = datetime.combine(current_block_end, datetime.max.time().replace(microsecond=0))
+        results.append({
+            'begin': start_ts.strftime('%Y-%m-%dT%H:%M:%S'),
+            'end': end_ts.strftime('%Y-%m-%dT%H:%M:%S'),
+            'location': '', 'vehicle': '', 
+            'duty_type': current_label, 'crew': []
+        })
+
+        return results
+
+    def _parse_absences_raw(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        results = []
+        # Support both 'data' list or direct list if API differs
+        items = data.get('data', [])
+        if not isinstance(items, list): return []
+        
+        for item in items:
+            # Inspection of fields (speculative but common):
+            # 'absenceTypeName' or 'type', 'begin', 'end', 'reason'
+            
+            # Try to map to our common structure
+            duty_type = item.get('absenceTypeName') or item.get('type') or item.get('text') or "Abwesenheit"
+            comment = item.get('comment') or ""
+            
+            dt_obj = self._fix_datetime(item.get('begin', ''))
+            end_obj = self._fix_datetime(item.get('end', ''))
+            
+            if not dt_obj or not end_obj: continue
+            
+            results.append({
+                'begin': dt_obj.strftime('%Y-%m-%dT%H:%M:%S'),
+                'end': end_obj.strftime('%Y-%m-%dT%H:%M:%S'),
+                'location': '',
+                'vehicle': '',
+                'duty_type': f"{duty_type} {comment}".strip(),
+                'crew': []
+            })
+            
+        return results
+
+    def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
         url = f"{self.base_url}/StaffPortal/archive/data/loadDuties.json"
         body = {
             'year': str(year),
@@ -252,25 +450,21 @@ class IncodeRequests:
         try:
             resp = self.session.post(url, headers=self._get_api_headers(), data=body)
             if resp.status_code == 200:
-                return self._parse_personal_duties(resp.json())
+                return self._parse_personal_duties(resp.json(), filter_mode)
         except Exception as e:
             console.print(f"[warning]Fehler beim Laden des Archivs ({year}): {e}[/warning]")
         return []
 
-    def load_future_duties(self, use_cache=True) -> List[Dict[str, Any]]:
-        """Loads future duties with caching strategy."""
-        cache_key = "future_duties"
+    def load_future_duties(self, use_cache=True, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
+        """
+        Loads future duties/absences.
+        filter_mode options: 'exclude_absences' (default), 'only_absences', 'include_all'
+        """
+        cache_key = f"future_duties_{filter_mode}"
         
         if use_cache:
             cached = self._get_cached_data(cache_key)
             if cached:
-                # Convert string dates back to objects if needed (simple hack since JSON stores strings)
-                # But our downstream uses dicts, let's keep it simple.
-                # However, _fix_datetime usually returns datetime objects. 
-                # When loading from JSON, they are strings.
-                # We should re-parse them or adjust downstream. 
-                # For now, let's assume downstream handles strings or we fix them here.
-                # Ideally, we return the list of dicts.
                 return cached
 
         url = f"{self.base_url}/StaffPortal/duties/data/load.json"
@@ -304,10 +498,13 @@ class IncodeRequests:
         try:
             resp = self.session.post(url, headers=self._get_api_headers(), data=body)
             resp.raise_for_status()
-            duties = self._parse_personal_duties(resp.json())
+            duties = self._parse_personal_duties(resp.json(), filter_mode)
             
-            # Additional fetch from archive
-            archive_duties = self.load_archive_duties(now.year)
+            # Additional fetch from archive (only for duties, archive usually doesn't show future absences reliably or duplicates)
+            # For simplicity, if we want absences, we rely on the main load.json which should have them.
+            # Archive loading is mostly for past duties which might be missing from load.json rolling window?
+            # Existing logic:
+            archive_duties = self.load_archive_duties(now.year, filter_mode)
             duty_map = {d['begin']: d for d in duties}
             for ad in archive_duties:
                 begin = ad['begin']
@@ -383,16 +580,32 @@ class IncodeRequests:
             hydrated.append(new_item)
         return hydrated
 
-    def _parse_personal_duties(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _parse_personal_duties(self, data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
         results = []
-        filter_words = ["urlaub", "frei", "wunsch", "abwesenheit", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag"]
+        filter_words = ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung"]
         for item in data.get('data', []):
-            duty_type, location = str(item.get('dutyTypeName', '')), str(item.get('orgUnitName', ''))
+            duty_type = item.get('dutyTypeName') or item.get('absenceTypeName') or item.get('type') or item.get('text') or ""
+            duty_type = str(duty_type)
+
+            location = str(item.get('orgUnitName', ''))
+            comment = str(item.get('comment', ''))
+
             alloc = item.get('allocationInfo', {})
             if isinstance(alloc, dict): al = next(iter(alloc.values())) if alloc.values() else []
             else: al = alloc if isinstance(alloc, list) else []
-            content_str = (duty_type + location + str(al)).lower()
-            if any(word in content_str for word in filter_words): continue
+            
+            content_str = (duty_type + location + comment + str(al)).lower()
+            
+            # Check for explicit absence indicators from API fields
+            is_explicit_absence = bool(item.get('absenceTypeName'))
+            
+            # Check for keywords
+            is_text_absence = any(word in content_str for word in filter_words)
+            
+            is_absence = is_explicit_absence or is_text_absence
+            
+            if filter_mode == 'exclude_absences' and is_absence: continue
+            if filter_mode == 'only_absences' and not is_absence: continue
             
             dt_obj = self._fix_datetime(item.get('begin', ''))
             end_obj = self._fix_datetime(item.get('end', ''))

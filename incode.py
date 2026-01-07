@@ -6,7 +6,7 @@ try:
     from rich.prompt import Prompt
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
-    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search
+    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences
     from src.utils import clear_screen, check_for_updates, wait_for_return
     from src.bot import IncodeBot
 except ImportError as e:
@@ -72,6 +72,7 @@ def run_cli():
     
     menu_options = [
         ("📅  Mein Dienstplan", "future"),
+        ("🌴  Meine Abwesenheiten (BETA)", "absences"),
         ("🚑  Tagesplan (Heute)", "today"),
         ("📆  Tagesplan (Datum wählen)", "date"),
         ("📒  Mitarbeiter-Verzeichnis (BETA)", "staff"),
@@ -86,6 +87,8 @@ def run_cli():
         
         if selection == "future":
             show_future_duties(incode)
+        elif selection == "absences":
+            show_absences(incode)
         elif selection == "today":
             show_daily_plan(incode)
         elif selection == "date":
