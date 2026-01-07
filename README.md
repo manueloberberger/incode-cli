@@ -23,6 +23,10 @@ Der Bot ist dein persönlicher Dienstplan-Assistent für die Hosentasche.
 *   **PDF on Demand:** Egal ob *eigener Dienstplan* oder *Gesamttagesplan* – der Bot generiert sofort eine saubere PDF-Datei.
 *   **Endlos-Modus:** Nach jeder Aktion bietet dir der Bot das Menü erneut an, damit du sofort weitermachen kannst.
 
+### 🛠 Wartung & Komfort
+*   **Auto-Update Check:** Das Tool prüft beim Start automatisch auf neue Versionen auf GitHub und benachrichtigt dich.
+*   **Dependency Guard:** Startet das Tool nicht, weil Bibliotheken fehlen (z.B. nach einem Update)? Der `incode`-Startwrapper erkennt das sofort und zeigt dir den passenden Befehl zur Reparatur.
+
 ### 💻 Terminal CLI
 Die mächtige Kommandozentrale für den PC:
 *   **Smart Dashboard:** Zeigt sofort beim Start deine nächsten Dienste (dank lokalem Caching ohne Wartezeit).

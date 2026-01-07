@@ -147,6 +147,35 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
+import subprocess
+
+def check_for_updates() -> bool:
+    """Checks for git updates. Returns True if updates are available."""
+    if not os.path.exists(".git"):
+        return False
+    
+    try:
+        # Fetch latest changes silently (timeout to prevent hanging)
+        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        
+        # Check if behind upstream
+        # HEAD..@{u} calculates commits reachable from upstream but not from HEAD
+        res = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD..@{u}"], 
+            capture_output=True, 
+            text=True, 
+            timeout=2
+        )
+        
+        if res.returncode == 0 and res.stdout.strip().isdigit():
+            count = int(res.stdout.strip())
+            return count > 0
+            
+    except Exception:
+        pass
+        
+    return False
+
 def wait_for_return() -> Optional[str]:
     console.print("\n[dim]Beliebige Taste drücken um fortzufahren...[/dim]")
     flush_input()

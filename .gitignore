@@ -1,5 +1,6 @@
 .credentials.json
 *.pdf
+*.ics
 __pycache__/
 *.pyc
 bot.log
