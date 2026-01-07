@@ -129,6 +129,117 @@ def select_date_interactive() -> Optional[datetime]:
         elif key == KEY_ESC or key.lower() == 'q':
             return None
 
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.pretty import Pretty
+
+def show_staff_search(incode: Any) -> None:
+    query = Prompt.ask("Name, PNR oder Kürzel eingeben")
+    if not query: return
+    
+    with console.status(f"[bold green]Suche im Verzeichnis nach '{query}'..."):
+        results = incode.search_staff_contact(query)
+        
+    if not results:
+        console.print(f"[warning]Nichts gefunden für '{query}'.[/warning]")
+        wait_for_return()
+        return
+
+    # If multiple results, let user choose (simple list first)
+    selected_person = results[0]
+    if len(results) > 1:
+        table = Table(title=f"Mehrere Treffer ({len(results)})", box=None)
+        table.add_column("#", style="dim"); table.add_column("Name"); table.add_column("PNR")
+        for idx, r in enumerate(results):
+            table.add_row(str(idx+1), r.get('_display_name'), str(r.get('personalnummer', '')))
+        console.print(table)
+        
+        try:
+            sel_idx = int(Prompt.ask("Nummer wählen", default="1")) - 1
+            if 0 <= sel_idx < len(results):
+                selected_person = results[sel_idx]
+            else: return
+        except: return
+
+    # Show FULL DETAILS for the selected person
+    p = selected_person
+    clear_screen()
+    console.print(BANNER)
+    
+    # 1. Header Info
+    console.print(f"\n[bold header]👤 {p.get('_display_name')}[/bold header]\n")
+    
+    # 2. Key-Value Table for Basic Info
+    grid = Table.grid(expand=True, padding=(0, 2))
+    grid.add_column(style="bold cyan", justify="right")
+    grid.add_column(style="white")
+    
+    # Extract interesting scalar fields
+    fields = [
+        ("Personalnummer", 'personalnummer'),
+        ("Telefon (Dienst)", 'telefon'),
+        ("Telefon (Privat)", 'telefon_privat'),
+        ("Email", 'email'),
+        ("Geburtsdatum", 'birthdate'),
+        ("Login", 'maportal_lastLogin'),
+        ("Letzte Aktivität", 'maportal_lastActivity'),
+        ("Saldo Urlaub", 'saldo_urlaub'),
+        ("Saldo ZA", 'saldo_za'),
+        ("Valid From", 'validFrom'),
+        ("Valid To", 'validTo'),
+        ("Info Text", 'info'),
+        ("GUID", 'guid'),
+        ("User ID", 'externalId')
+    ]
+    
+    for label, key in fields:
+        val = str(p.get(key, ''))
+        if val and val != "None":
+            grid.add_row(label + ":", val)
+            
+    console.print(Panel(grid, title="Basisdaten", border_style="blue"))
+    
+    # 3. Complex Lists (Occupations, Skills, Groups)
+    
+    # Occupations
+    occs = p.get('ressourceToOccupations', [])
+    if occs:
+        t_occ = Table(title="Rollen / Beschäftigung", box=None, show_edge=False, padding=(0,1))
+        t_occ.add_column("Name"); t_occ.add_column("Beginn"); t_occ.add_column("Ende")
+        for o in occs:
+            t_occ.add_row(o.get('name', '-'), str(o.get('begin', ''))[:10], str(o.get('end', ''))[:10])
+        console.print(t_occ)
+
+    # Skills
+    skills = p.get('staffToSkills', [])
+    if skills:
+        t_skill = Table(title="Qualifikationen / Skills (IDs)", box=None, show_edge=False, padding=(0,1))
+        t_skill.add_column("Skill GUID/ID", style="dim"); t_skill.add_column("Beginn"); t_skill.add_column("Ende")
+        for s in skills:
+            # Try to show something readable if possible, otherwise GUID parts
+            sid = s.get('skillDataGuid', '???')
+            t_skill.add_row(sid[:20]+"...", str(s.get('begin', ''))[:10], str(s.get('end', ''))[:10])
+        console.print(t_skill)
+        
+    # Groups
+    groups = p.get('ressourceToGroups', [])
+    if groups:
+        t_grp = Table(title="Gruppen", box=None, show_edge=False, padding=(0,1))
+        t_grp.add_column("Group GUID", style="dim"); t_grp.add_column("Beginn")
+        for g in groups:
+             gid = g.get('groupDataGuid', '???')
+             t_grp.add_row(gid[:20]+"...", str(g.get('begin', ''))[:10])
+        console.print(t_grp)
+
+    # 4. Raw Dump Option
+    console.print("\n[dim]Drücke 'r' für RAW JSON Dump, oder ENTER weiter...[/dim]")
+    k = get_key()
+    if k and k.lower() == 'r':
+        console.print(Pretty(p))
+        wait_for_return()
+    elif k == KEY_ENTER:
+        return
+
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
     with console.status("[bold green]Lade Dienstplan..."): duties = incode.load_future_duties()
     if not duties: 

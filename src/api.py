@@ -106,6 +106,71 @@ class IncodeRequests:
                 return True, "Eingeloggt."
             except Exception as e: return False, f"Fehler: {e}"
 
+    def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
+        """
+        Searches for a colleague's contact info (Phone, Email, etc.) using getStaff.json.
+        """
+        url = f"{self.base_url}/StaffPortal/staff/data/getStaff.json"
+        
+        # We need a valid range to get active staff. Let's take current year +/- 1 year
+        now = datetime.now()
+        df = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z')
+        dt = (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
+        
+        body = {
+            'orgUnitDataGuid': self.org_unit_data_guid or DEFAULT_GUID,
+            'withSubOrgUnits': 'true',
+            'loadModelData': '1',
+            'dateFrom': df,
+            'dateTo': dt
+        }
+
+        try:
+            resp = self.session.post(url, headers=self._get_api_headers(), data=body)
+            if resp.status_code == 200:
+                data = resp.json()
+                return self._parse_staff_contact(data, query_name)
+        except Exception as e:
+            console.print(f"[warning]Fehler bei der Mitarbeitersuche: {e}[/warning]")
+        return []
+
+    def _parse_staff_contact(self, data: Dict[str, Any], query_name: str) -> List[Dict[str, Any]]:
+        """
+        Returns the FULL raw data object for matching staff members to allow detailed inspection.
+        """
+        results = []
+        staff_list = data.get('data', [])
+        
+        q = query_name.lower()
+        
+        for p in staff_list:
+            first = str(p.get('vorname', '')).strip()
+            last = str(p.get('nachname', '')).strip()
+            full_name = f"{first} {last}".strip()
+            if not full_name:
+                full_name = str(p.get('name', '')).strip()
+
+            # Search in Name, Personalnummer or Email
+            search_text = (full_name + str(p.get('personalnummer', '')) + str(p.get('email', ''))).lower()
+            
+            if q in search_text:
+                # Return the full raw object, but add a convenient display name
+                p['_display_name'] = full_name
+                results.append(p)
+        
+        # Sort by name
+        results.sort(key=lambda x: x.get('_display_name', ''))
+        return results
+
+    def _extract_role(self, person_data: Dict[str, Any]) -> str:
+        """Helper to find the main role (Beruf, Zivi, Freiwillig)"""
+        roles = []
+        occupations = person_data.get('ressourceToOccupations', [])
+        for occ in occupations:
+            name = occ.get('name', '')
+            if name: roles.append(name)
+        return ", ".join(roles) if roles else "-"
+
     def _get_api_headers(self) -> Dict[str, str]:
         headers = {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'User-Agent': self.user_agent}
         if self.header_key and self.header_value:

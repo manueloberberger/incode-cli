@@ -6,7 +6,7 @@ try:
     from rich.prompt import Prompt
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
-    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive
+    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search
     from src.utils import clear_screen, check_for_updates, wait_for_return
     from src.bot import IncodeBot
 except ImportError as e:
@@ -74,7 +74,8 @@ def run_cli():
         ("📅  Mein Dienstplan", "future"),
         ("🚑  Tagesplan (Heute)", "today"),
         ("📆  Tagesplan (Datum wählen)", "date"),
-        ("🔍  Kollegen finden", "colleague"),
+        ("📒  Mitarbeiter-Verzeichnis (BETA)", "staff"),
+        ("🔍  Gemeinsame Dienste suchen", "colleague"),
         ("📺  Live-Monitor", "live"),
         ("🤖  Telegram Bot", "bot"),
         ("🚪  Beenden", "exit")
@@ -91,6 +92,8 @@ def run_cli():
             target_date = select_date_interactive()
             if target_date:
                 show_daily_plan(incode, target_date)
+        elif selection == "staff":
+            show_staff_search(incode)
         elif selection == "colleague":
             name = Prompt.ask("Name des Kollegen")
             if name: show_future_duties(incode, search_colleague=name)
