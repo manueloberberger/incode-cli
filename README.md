@@ -21,7 +21,7 @@ Das CLI ist das Herzstück für die stationäre Nutzung (z.B. auf der Dienststel
   - **PDF:** Generiert saubere Übersichten mit Zeitstempel im Dateinamen (z.B. `Tagesplan_2026-01-07_14-30.pdf`).
   - **iCal:** Vollständig standardkonforme `.ics` Dateien für Outlook, Google Kalender & Apple Calendar.
 
-### 2. Modernisierter Telegram Bot v2.0
+### 2. Modernisierter Telegram Bot v1.1
 Der Bot wurde auf eine asynchrone Architektur umgestellt (`python-telegram-bot`), was ihn deutlich stabiler und reaktiver macht.
 - **Befehle:**
   - `/start` - Übersicht und Hilfe.
