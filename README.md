@@ -1,4 +1,4 @@
-# Incode CLI v1.1
+# Incode CLI v1.2
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -7,7 +7,7 @@
 
 Eine hochoptimierte CLI-Anwendung und ein reaktiver Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-In Version 1.1 wurde der Kern modernisiert: **Smart Caching** für sofortigen Start (auch offline), eine **asynchrone Bot-Engine** für schnellere Reaktionen und **standardkonforme Kalender-Exporte**.
+In Version 1.2 wurde die Bedienung vereinfacht: Ein **interaktives Button-Menü** im Telegram-Bot sorgt für schnellen Zugriff ohne Befehle tippen zu müssen.
 
 ## 🚀 Kernfunktionen
 
@@ -21,10 +21,11 @@ Das CLI ist das Herzstück für die stationäre Nutzung (z.B. auf der Dienststel
   - **PDF:** Generiert saubere Übersichten mit Zeitstempel im Dateinamen (z.B. `Tagesplan_2026-01-07_14-30.pdf`).
   - **iCal:** Vollständig standardkonforme `.ics` Dateien für Outlook, Google Kalender & Apple Calendar.
 
-### 2. Modernisierter Telegram Bot v1.1
-Der Bot wurde auf eine asynchrone Architektur umgestellt (`python-telegram-bot`), was ihn deutlich stabiler und reaktiver macht.
+### 2. Modernisierter Telegram Bot v1.2
+Der Bot wurde auf eine asynchrone Architektur umgestellt (`python-telegram-bot`) und um interaktive Elemente erweitert.
+- **Interactive Buttons:** Sende `/start` und erhalte ein klickbares Menü für deine Dienste und den Tagesplan.
 - **Befehle:**
-  - `/start` - Übersicht und Hilfe.
+  - `/start` - Übersicht und Hilfe mit interaktiven Buttons.
   - `/dienste` - Sendet deinen persönlichen Dienstplan als PDF.
   - `/tagesplan` (oder `/heute`) - Sendet den aktuellen Tagesplan der Dienststelle als PDF.
 - **Security:** Der Bot reagiert ausschließlich auf die konfigurierte `User-ID`. Fremde Anfragen werden ignoriert.
