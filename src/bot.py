@@ -2,10 +2,11 @@ import os
 import sys
 import logging
 import asyncio
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from rich.prompt import Prompt
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ConversationHandler
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
 from src.pdf import export_to_pdf
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 # Silent httpx logger slightly
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+# States for ConversationHandler
+WAITING_FOR_DATE = 1
 
 class IncodeBot:
     def __init__(self, api: IncodeRequests):
@@ -65,7 +69,8 @@ class IncodeBot:
         logger.info(f"Start command received from {update.effective_user.id}")
         keyboard = [
             [InlineKeyboardButton("📅 Meine Dienste (PDF)", callback_data='my_duties')],
-            [InlineKeyboardButton("🚑 Tagesplan (PDF)", callback_data='today_plan')]
+            [InlineKeyboardButton("🚑 Tagesplan (PDF)", callback_data='today_plan')],
+            [InlineKeyboardButton("📆 Anderes Datum", callback_data='custom_date')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -75,6 +80,7 @@ class IncodeBot:
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+        return ConversationHandler.END
 
     async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Parses button clicks."""
@@ -90,8 +96,57 @@ class IncodeBot:
 
         await query.answer() 
         
+        if query.data == 'custom_date':
+            # Ask for date
+            await query.message.reply_text(
+                "📅 Bitte gib das Datum ein (Format: TT.MM. oder TT.MM.JJJJ).\n"
+                "Oder klicke hier:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Morgen", callback_data='date_tomorrow')],
+                    [InlineKeyboardButton("Übermorgen", callback_data='date_after_tomorrow')]
+                ])
+            )
+            return WAITING_FOR_DATE
+
         filter_today = (query.data == 'today_plan')
         await self._process_duties_request(query.message, context, filter_today, chat_id=user_id)
+        return ConversationHandler.END
+
+    async def date_button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle quick date selection buttons."""
+        query = update.callback_query
+        user_id = query.from_user.id
+        await query.answer() 
+        
+        target_date = datetime.now()
+        if query.data == 'date_tomorrow':
+            target_date += timedelta(days=1)
+        elif query.data == 'date_after_tomorrow':
+            target_date += timedelta(days=2)
+            
+        await self._process_duties_request(query.message, context, True, chat_id=user_id, custom_date=target_date)
+        return ConversationHandler.END
+
+    async def manual_date_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle manual text input for date."""
+        text = update.message.text.strip()
+        user_id = update.effective_user.id
+        
+        try:
+            # Try parsing DD.MM. or DD.MM.YYYY
+            current_year = datetime.now().year
+            
+            # Auto-append year if missing
+            if re.match(r'^\d{1,2}\.\d{1,2}\.?$', text):
+                text = text.rstrip('.') + f".{current_year}"
+            
+            target_date = datetime.strptime(text, '%d.%m.%Y')
+            await self._process_duties_request(update.message, context, True, chat_id=user_id, custom_date=target_date)
+            return ConversationHandler.END
+            
+        except ValueError:
+            await update.message.reply_text("❌ Ungültiges Format. Bitte nutze TT.MM. (z.B. 15.01.)")
+            return WAITING_FOR_DATE
 
     async def unauthorized(self, update: Update):
         uid = update.effective_user.id
@@ -112,24 +167,33 @@ class IncodeBot:
         filter_today = "/tagesplan" in cmd or "/heute" in cmd
         
         await self._process_duties_request(update.message, context, filter_today, chat_id)
+        return ConversationHandler.END
 
-    async def _process_duties_request(self, message_obj, context, filter_today, chat_id):
-        """Shared logic for processing duty requests from commands or buttons."""
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("Vorgang abgebrochen.")
+        return ConversationHandler.END
+
+    async def _process_duties_request(self, message_obj, context, filter_today, chat_id, custom_date=None):
+        """Shared logic for processing duty requests."""
         try:
-            logger.info(f"Processing request for chat {chat_id} (Today={filter_today})")
+            date_label = "Heute"
+            if custom_date:
+                date_label = custom_date.strftime('%d.%m.%Y')
+                
+            logger.info(f"Processing request for chat {chat_id} (Date={date_label})")
             await context.bot.send_chat_action(chat_id=chat_id, action='upload_document')
             
-            duties = await asyncio.to_thread(self._fetch_duties_sync, filter_today)
+            duties = await asyncio.to_thread(self._fetch_duties_sync, filter_today, custom_date)
 
             if not duties:
                 logger.info("No duties found to send.")
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Keine Dienste gefunden.")
+                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Keine Dienste gefunden für {date_label}.")
                 return
 
-            if filter_today:
-                date = datetime.now()
-                title = f"Tagesplan {date.strftime('%d.%m.%Y')}"
-                filename = f"Tagesplan_{date.strftime('%Y-%m-%d')}_{date.strftime('%H-%M')}.pdf"
+            if filter_today or custom_date:
+                d_obj = custom_date if custom_date else datetime.now()
+                title = f"Tagesplan {d_obj.strftime('%d.%m.%Y')}"
+                filename = f"Tagesplan_{d_obj.strftime('%Y-%m-%d')}_{datetime.now().strftime('%H-%M')}.pdf"
             else:
                 title = "Meine Dienste"
                 filename = f"Mein_Dienstplan_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.pdf"
@@ -145,6 +209,18 @@ class IncodeBot:
                 if os.path.exists(filename):
                     os.remove(filename)
                 logger.info("Upload complete and cleanup done.")
+                
+                # UX Improvement: Show menu again
+                keyboard = [
+                    [InlineKeyboardButton("📅 Meine Dienste (PDF)", callback_data='my_duties')],
+                    [InlineKeyboardButton("🚑 Tagesplan (PDF)", callback_data='today_plan')],
+                    [InlineKeyboardButton("📆 Anderes Datum", callback_data='custom_date')]
+                ]
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text="Was möchtest du als nächstes tun?", 
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
             else:
                 logger.error("PDF Export returned False.")
                 await context.bot.send_message(chat_id=chat_id, text="❌ Fehler beim Erstellen der PDF.")
@@ -153,7 +229,7 @@ class IncodeBot:
             logger.exception(f"Exception in _process_duties_request: {e}")
             await context.bot.send_message(chat_id=chat_id, text=f"❌ Ein Fehler ist aufgetreten: {e}")
 
-    def _fetch_duties_sync(self, filter_today: bool):
+    def _fetch_duties_sync(self, filter_today: bool, custom_date: datetime = None):
         """Helper to run blocking API calls."""
         # Ensure login if needed
         creds = load_credentials()
@@ -162,7 +238,9 @@ class IncodeBot:
             if not ok:
                 raise Exception(f"Login fehlgeschlagen: {msg}")
 
-        if filter_today:
+        if custom_date:
+             return self.api.load_daily_plan(custom_date)
+        elif filter_today:
             return self.api.load_daily_plan(datetime.now())
         else:
             return self.api.load_future_duties()
@@ -172,19 +250,26 @@ class IncodeBot:
         token = self.config['telegram_token']
         application = ApplicationBuilder().token(token).build()
 
-        start_handler = CommandHandler('start', self.start)
-        duties_handler = CommandHandler(['dienste', 'plan', 'dienst'], self.send_duties)
-        today_handler = CommandHandler(['tagesplan', 'heute'], self.send_duties)
-        
-        # Handler for ALL callback queries
-        button_handler = CallbackQueryHandler(self.button_handler)
+        # Conversation Handler for Date Selection
+        conv_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler('start', self.start),
+                CommandHandler(['dienste', 'plan', 'dienst'], self.send_duties),
+                CommandHandler(['tagesplan', 'heute'], self.send_duties),
+                CallbackQueryHandler(self.button_handler, pattern='^(my_duties|today_plan|custom_date)$')
+            ],
+            states={
+                WAITING_FOR_DATE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.manual_date_input),
+                    CallbackQueryHandler(self.date_button_handler, pattern='^(date_tomorrow|date_after_tomorrow)$')
+                ]
+            },
+            fallbacks=[CommandHandler('cancel', self.cancel), CommandHandler('start', self.start)],
+            per_message=True
+        )
 
-        application.add_handler(start_handler)
-        application.add_handler(button_handler) 
-        application.add_handler(duties_handler)
-        application.add_handler(today_handler)
+        application.add_handler(conv_handler)
         
         console.print("[bold green]Bot läuft! Drücke Strg + C zum Beenden.[/bold green]")
         logger.info("Bot is polling...")
-        # Explicitly allow all updates to ensure CallbackQueries work
         application.run_polling(allowed_updates=Update.ALL_TYPES)
