@@ -3,10 +3,16 @@ import sys
 import logging
 import asyncio
 import re
+import warnings
 from datetime import datetime, timedelta
 from rich.prompt import Prompt
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ConversationHandler
+from telegram.warnings import PTBUserWarning
+
+# Suppress specific PTB warning about CallbackQueryHandler tracking
+warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_message=False', 'CallbackQueryHandler' will not be tracked")
+
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
 from src.pdf import export_to_pdf
@@ -76,7 +82,7 @@ class IncodeBot:
         
         await update.message.reply_text(
             f"✨ *Incode CLI Bot v{VERSION}* ✨\n\n"
-            f"Hallo! Was möchtest du tun?",
+            f"Hallo! Was möchtest du tun ???",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
@@ -99,7 +105,7 @@ class IncodeBot:
         if query.data == 'custom_date':
             # Ask for date
             await query.message.reply_text(
-                "📅 Bitte gib das Datum ein (Format: TT.MM. oder TT.MM.JJJJ).\n"
+                "📅 Bitte gib das Datum ein ... (Format: TT.MM. oder TT.MM.JJJJ).\n"
                 "Oder klicke hier:",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("Morgen", callback_data='date_tomorrow')],
@@ -218,7 +224,7 @@ class IncodeBot:
                 ]
                 await context.bot.send_message(
                     chat_id=chat_id, 
-                    text="Was möchtest du als nächstes tun?", 
+                    text="Was möchtest du als nächstes tun ???", 
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             else:
@@ -265,7 +271,9 @@ class IncodeBot:
                 ]
             },
             fallbacks=[CommandHandler('cancel', self.cancel), CommandHandler('start', self.start)],
-            per_message=True
+            per_user=True,
+            per_chat=True,
+            per_message=False
         )
 
         application.add_handler(conv_handler)
