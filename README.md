@@ -11,6 +11,7 @@ A high-performance CLI tool for Red Cross staff to manage rosters, absences, and
 - **Smart Statistics:** Monthly hour analysis and duty distribution by vehicle type/location.
 - **Multi-Format Export:** High-quality PDF generation and iCal (ICS) calendar sync.
 - **Telegram Integration:** Built-in bot logic to receive schedules and notifications directly on your phone.
+- **Auto-Update:** Automatically detects new versions, performs `git pull` and updates dependencies via `pip`.
 
 ---
 

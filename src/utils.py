@@ -176,6 +176,22 @@ def check_for_updates() -> bool:
         
     return False
 
+def update_app() -> bool:
+    """Performs git pull and pip install. Returns True if successful."""
+    try:
+        console.print("[info]Führe 'git pull' aus...[/info]")
+        subprocess.run(["git", "pull"], check=True)
+        
+        console.print("[info]Aktualisiere Abhängigkeiten (pip install)...[/info]")
+        # Use sys.executable to ensure we use the same python/venv
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
+        
+        console.print("[success]Update erfolgreich abgeschlossen![/success]")
+        return True
+    except Exception as e:
+        console.print(f"[error]Update fehlgeschlagen: {e}[/error]")
+        return False
+
 def wait_for_return() -> Optional[str]:
     console.print("\n[dim]Beliebige Taste drücken um fortzufahren...[/dim]")
     flush_input()

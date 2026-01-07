@@ -1,30 +1,16 @@
 import os
 import sys
+import time
 from datetime import datetime
 
-try:
     from rich.prompt import Prompt
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu
-    from src.utils import clear_screen, check_for_updates, wait_for_return
+    from src.utils import clear_screen, check_for_updates, update_app, wait_for_return
     from src.bot import IncodeBot
 except ImportError as e:
-    print(f"\n[!] FEHLER: Fehlende Abhängigkeiten ({e})")
-    print("\nEs sieht so aus, als wären neue Bibliotheken hinzugefügt worden.")
-    print("Bitte führe folgendes aus, um das Problem zu beheben:\n")
-    
-    if sys.prefix != sys.base_prefix:
-        print("    pip install -r requirements.txt")
-    else:
-        print("    # Falls du eine virtuelle Umgebung nutzt (empfohlen):")
-        print("    source .venv/bin/activate  # oder .venv\\Scripts\\activate")
-        print("    pip install -r requirements.txt")
-        print("\n    # Oder global:")
-        print("    pip install -r requirements.txt")
-        
-    print()
-    sys.exit(1)
+# ... (rest of imports)
 
 def setup_auth():
     creds = load_credentials()
@@ -49,13 +35,24 @@ def run_cli():
     # Check for updates
     try:
         with console.status("[dim]Prüfe auf Updates...[/dim]", spinner="dots"):
-            if check_for_updates():
-                console.print("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]")
-                console.print("Nutze [bold green]git pull[/bold green] um die neueste Version zu erhalten.")
+            has_update = check_for_updates()
+            
+        if has_update:
+            console.print("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]")
+            if Prompt.ask("Möchtest du das Update jetzt automatisch installieren?", choices=["j", "n"], default="j") == "j":
+                if update_app():
+                    console.print("[info]Die App wird neu gestartet...[/info]")
+                    time.sleep(1)
+                    # Restart the script
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                else:
+                    wait_for_return()
+            else:
+                console.print("\nNutze [bold green]git pull[/bold green] um die neueste Version manuell zu erhalten.")
                 console.print("[dim](Denke danach daran, 'pip install -r requirements.txt' auszuführen)[/dim]\n")
                 wait_for_return()
-                clear_screen()
-                console.print(BANNER)
+            clear_screen()
+            console.print(BANNER)
     except Exception:
         pass # Ignore errors during update check to not block startup
     
