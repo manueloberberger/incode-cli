@@ -166,6 +166,13 @@ def show_staff_search(incode: Any) -> None:
     clear_screen()
     console.print(BANNER)
     
+    # Helper for nice dates
+    def fmt_date(s):
+        if not s or len(str(s)) < 10: return "-"
+        try:
+            return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
+        except: return s
+
     # 1. Header Info
     console.print(f"\n[bold header]👤 {p.get('_display_name')}[/bold header]\n")
     
@@ -174,64 +181,108 @@ def show_staff_search(incode: Any) -> None:
     grid.add_column(style="bold cyan", justify="right")
     grid.add_column(style="white")
     
+    # Try to extract Service Number (Dienstnummer) from Occupations
+    service_number = "-"
+    occs = p.get('ressourceToOccupations', [])
+    for o in occs:
+        name = str(o.get('name', ''))
+        parts = name.split('.')
+        if parts and parts[0].isdigit():
+            service_number = parts[0]
+            break
+        if name.split(' ')[0].isdigit():
+             service_number = name.split(' ')[0]
+
+    # Counts
+    skill_count = len(p.get('staffToSkills', []))
+    group_count = len(p.get('ressourceToGroups', []))
+
     # Extract interesting scalar fields
     fields = [
-        ("Personalnummer", 'personalnummer'),
+        ("Dienstnummer", lambda _: service_number),
+        ("Incode-ID (PNR)", 'personalnummer'),
+        ("Benutzername", 'maportal_manualName'),
+        ("Rolle (Maportal)", 'maportal_role'),
         ("Telefon (Dienst)", 'telefon'),
         ("Telefon (Privat)", 'telefon_privat'),
         ("Email", 'email'),
-        ("Geburtsdatum", 'birthdate'),
-        ("Login", 'maportal_lastLogin'),
-        ("Letzte Aktivität", 'maportal_lastActivity'),
-        ("Saldo Urlaub", 'saldo_urlaub'),
-        ("Saldo ZA", 'saldo_za'),
-        ("Valid From", 'validFrom'),
-        ("Valid To", 'validTo'),
-        ("Info Text", 'info'),
-        ("GUID", 'guid'),
-        ("User ID", 'externalId')
+        ("Geburtsdatum", lambda x: fmt_date(x.get('birthdate'))),
+        ("Letzter Login", lambda x: fmt_date(x.get('maportal_lastLogin'))),
+        ("Urlaubssaldo", 'saldo_urlaub'),
+        ("ZA-Saldo", 'saldo_za'),
+        ("Gültig ab", lambda x: fmt_date(x.get('validFrom'))),
+        ("Gültig bis", lambda x: fmt_date(x.get('validTo'))),
+        ("Erstellt", 'created'),
+        ("Bearbeitet", 'updated'),
+        ("Ursprung", 'origin'),
+        ("Info", 'info')
     ]
     
     for label, key in fields:
-        val = str(p.get(key, ''))
-        if val and val != "None":
-            grid.add_row(label + ":", val)
+        if callable(key):
+            val = key(p)
+        else:
+            val = str(p.get(key, ''))
+            
+        if val and val != "None" and val != "-":
+            grid.add_row(label + ":", str(val))
             
     console.print(Panel(grid, title="Basisdaten", border_style="blue"))
     
-    # 3. Complex Lists (Occupations, Skills, Groups)
+    from rich import box
     
-    # Occupations
-    occs = p.get('ressourceToOccupations', [])
+    # 3. Occupations Table (Rollen)
     if occs:
-        t_occ = Table(title="Rollen / Beschäftigung", box=None, show_edge=False, padding=(0,1))
-        t_occ.add_column("Name"); t_occ.add_column("Beginn"); t_occ.add_column("Ende")
+        t_occ = Table(title="Rollen / Beschäftigung", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+        t_occ.add_column("Bezeichnung", style="bold white")
+        t_occ.add_column("Beginn", style="dim")
+        t_occ.add_column("Ende", style="dim")
+        t_occ.add_column("Ext. ID", style="dim")
+        
         for o in occs:
-            t_occ.add_row(o.get('name', '-'), str(o.get('begin', ''))[:10], str(o.get('end', ''))[:10])
+            t_occ.add_row(
+                o.get('name', '-'), 
+                fmt_date(o.get('begin')), 
+                fmt_date(o.get('end')),
+                o.get('externalId', '')
+            )
         console.print(t_occ)
 
-    # Skills
+    # 4. Skills (Qualifikationen)
     skills = p.get('staffToSkills', [])
     if skills:
-        t_skill = Table(title="Qualifikationen / Skills (IDs)", box=None, show_edge=False, padding=(0,1))
-        t_skill.add_column("Skill GUID/ID", style="dim"); t_skill.add_column("Beginn"); t_skill.add_column("Ende")
-        for s in skills:
-            # Try to show something readable if possible, otherwise GUID parts
-            sid = s.get('skillDataGuid', '???')
-            t_skill.add_row(sid[:20]+"...", str(s.get('begin', ''))[:10], str(s.get('end', ''))[:10])
-        console.print(t_skill)
+        t_skill = Table(title=f"Qualifikationen ({len(skills)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+        t_skill.add_column("External ID", style="cyan")
+        t_skill.add_column("Skill GUID", style="dim")
+        t_skill.add_column("Beginn", style="white")
+        t_skill.add_column("Ende", style="dim")
         
-    # Groups
+        for s in skills:
+            t_skill.add_row(
+                s.get('externalId', '-'),
+                s.get('skillDataGuid', '')[:15] + "...",
+                fmt_date(s.get('begin')),
+                fmt_date(s.get('end'))
+            )
+        console.print(t_skill)
+
+    # 5. Groups (Gruppen)
     groups = p.get('ressourceToGroups', [])
     if groups:
-        t_grp = Table(title="Gruppen", box=None, show_edge=False, padding=(0,1))
-        t_grp.add_column("Group GUID", style="dim"); t_grp.add_column("Beginn")
+        t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+        t_grp.add_column("Gruppen GUID", style="dim")
+        t_grp.add_column("Beginn", style="white")
+        t_grp.add_column("Ende", style="dim")
+        
         for g in groups:
-             gid = g.get('groupDataGuid', '???')
-             t_grp.add_row(gid[:20]+"...", str(g.get('begin', ''))[:10])
+            t_grp.add_row(
+                g.get('groupDataGuid', '')[:25] + "...",
+                fmt_date(g.get('begin')),
+                fmt_date(g.get('end'))
+            )
         console.print(t_grp)
 
-    # 4. Raw Dump Option
+    # 6. Raw Dump Option
     console.print("\n[dim]Drücke 'r' für RAW JSON Dump, oder ENTER weiter...[/dim]")
     k = get_key()
     if k and k.lower() == 'r':

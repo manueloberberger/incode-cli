@@ -1,4 +1,4 @@
-# Incode CLI & Bot v1.5
+# Incode CLI & Bot v1.6
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -7,20 +7,24 @@
 
 Eine hochoptimierte CLI-Anwendung und ein intelligenter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-**Neu in Version 1.5:** Einführung des **Mitarbeiter-Verzeichnisses (BETA)**. Durchsuche das gesamte Personalverzeichnis deiner Dienststelle nach Kontaktdaten, Qualifikationen und Detail-Infos – direkt aus dem Terminal.
+**Neu in Version 1.6:** Optimiertes **Mitarbeiter-Verzeichnis**. Suche Kollegen jetzt auch direkt über ihre Dienstnummer. Die Ergebnis-Anzeige wurde komplett überarbeitet, optisch aufpoliert und bietet nun noch mehr Details (Erstellungsdatum, Ursprung, Maportal-Rolle) bei besserer Übersichtlichkeit.
 
 ---
 
 ## 🚀 Kern-Features
 
-### 📒 NEU: Mitarbeiter-Verzeichnis (v1.5)
+### 📒 Mitarbeiter-Verzeichnis (Optimiert in v1.6)
 Ein mächtiges Werkzeug, um schnell Kontaktinformationen oder Details zu Kollegen zu finden.
-*   **Intelligente Suche:** Finde Personen nicht nur über den Namen, sondern auch über die Personalnummer (PNR), E-Mail oder Telefonnummer.
-*   **Detail-Dashboard:** Ein Klick auf einen Treffer öffnet eine umfassende Akte mit:
-    *   **Basisdaten:** Telefon (Dienst/Privat), E-Mail, Personalnummer.
-    *   **Status-Infos:** Letzter Login im Portal, Account-Status, Dienstzugehörigkeit.
-    *   **Qualifikationen:** Detaillierte Liste aller hinterlegten Skills (NFS, RS, Führerscheine, etc.) mit Gültigkeitsdaten.
-    *   **Gruppenzugehörigkeiten:** In welchen internen Gruppen ist die Person organisiert?
+*   **Erweiterte Suche:** Finde Personen über:
+    *   Namen (z.B. "Oberberger")
+    *   Personalnummer (PNR)
+    *   **NEU:** Dienstnummer (z.B. "2067" aus dem Berufstitel)
+    *   E-Mail oder Telefonnummer
+*   **Detail-Dashboard 2.0:** Komplett neu designte, übersichtliche Darstellung:
+    *   **Basisdaten:** Dienstnummer, Incode-ID, Telefon, E-Mail, Salden (Urlaub/ZA).
+    *   **Laufbahn & Rollen:** Schön formatierte Tabelle aller beruflichen Stationen und Rollen mit exakten Laufzeiten.
+    *   **Qualifikationen & Gruppen:** Übersichtliche Tabellen mit IDs und Gültigkeitszeiträumen für alle Skills und Gruppenmitgliedschaften.
+    *   **Meta-Daten:** Erstellungsdatum des Profils, letzter Login, Ursprung des Datensatzes.
 *   **Raw-Data Mode:** Für Technik-Enthusiasten gibt es per Tastendruck (`r`) den vollständigen JSON-Datensatz direkt aus der Incode-API zur Ansicht.
 
 ### 📱 Der Telegram-Bot

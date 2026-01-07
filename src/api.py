@@ -153,6 +153,12 @@ class IncodeRequests:
             # Search in Name, Personalnummer or Email
             search_text = (full_name + str(p.get('personalnummer', '')) + str(p.get('email', ''))).lower()
             
+            # Also search in occupations (for service numbers like 2067 in "2067.7 BERUF" or "206707")
+            for occ in p.get('ressourceToOccupations', []):
+                search_text += str(occ.get('name', '')).lower()
+                search_text += str(occ.get('externalId', '')).lower()
+                search_text += str(occ.get('ressourceIndicator', '')).lower()
+            
             if q in search_text:
                 # Return the full raw object, but add a convenient display name
                 p['_display_name'] = full_name
