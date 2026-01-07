@@ -1,83 +1,92 @@
-# 🚑 Incode CLI v1.8
+# incode-cli 🚑
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/Status-BETA-orange.svg)]()
-[![License](https://img.shields.io/badge/License-Internal-red.svg)]()
+A high-performance CLI tool for Red Cross staff to manage rosters, absences, and event duties. Designed for speed, reliability, and advanced analytical insights into work schedules.
 
-**Incode CLI** is a high-performance terminal interface for the Red Cross StaffPortal (Incode). It transforms a legacy web experience into a modern, automated, and feature-rich developer-grade environment.
+## 🚀 Features
 
----
-
-## ⚡ Core Engines
-
-### 🔍 The "Vacuum" GUID Discovery
-Traditional scrapers fail when Orgunits or Projects are nested or hidden in JavaScript variables. Incode CLI implements a **GUID Vacuum Engine** that recursively scans DOM trees and JS blocks for 160-bit hex patterns.
-- Automatically identifies all accessible `orgUnitDataGuids`.
-- Injects discovered IDs into API requests to bypass front-end filtering.
-- Maps IDs to human-readable names via a sibling-traversal heuristic.
-
-### 🎭 Hybrid Extraction Layer (HEL)
-The portal's JSON endpoints often provide incomplete datasets (missing event names or empty slots). HEL handles this by:
-1. **Parallel Execution:** Fetching raw JSON for data structure AND raw HTML for metadata.
-2. **DOM Reconstruction:** Rebuilding event objects by matching JSON `parentDataGuid` with HTML `data-` attributes.
-3. **Regex Overlays:** Using non-deterministic regex patterns to extract "Bedarf" (open slots) when standard parsers fail.
-
-### 📊 Statistical Intelligence
-Beyond simple display, the CLI computes:
-- **Net-Vacation Logic:** Calculates real holiday usage by applying the **Gauss Easter Algorithm** to exclude weekends and public holidays dynamically.
-- **Duty Distribution:** Cluster analysis of vehicle types and deployment locations.
+- **Personal Roster:** Real-time access to your upcoming shifts with detailed crew information.
+- **Advanced Absence Management:** Automated tracking of vacations, public holidays, and custom absence wishes.
+- **Event & Ambulanz Services:** Dedicated overview of medical services at events with open slot tracking.
+- **Live Monitor:** Continuous background tracking of current-day operations with automated Telegram notifications on changes.
+- **Smart Statistics:** Monthly hour analysis and duty distribution by vehicle type/location.
+- **Multi-Format Export:** High-quality PDF generation and iCal (ICS) calendar sync.
+- **Telegram Integration:** Built-in bot logic to receive schedules and notifications directly on your phone.
 
 ---
 
-## 🚀 Features at a Glance
+## 🛠 Technical Architecture
 
-| Feature | Description | Technical Core |
-| :--- | :--- | :--- |
-| **Mein Dienstplan** | Interactive table of future duties. | Monthly chunking, month-over-month stats. |
-| **Events / Ambulanzen** | Detailed overview of upcoming events. | card-based HTML parsing, GUID-mapping. |
-| **Live Monitor** | 24/7 terminal dashboard. | Differential state-tracking, Telegram webhooks. |
-| **Staff Search** | Complete directory lookup. | Multi-field search (PNR, Skill, Occupation). |
-| **PDF/iCal Export** | Export your life to your devices. | ReportLab vector gen, icalendar RFC5545. |
+The application is built using a modular Python-based architecture:
 
----
-
-## 🛠 Tech Stack
-
-- **Language:** Python 3.10+
-- **Terminal UI:** [Rich](https://github.com/Textualize/rich) (Live-layouts, Tables, Panels)
-- **Networking:** [Requests](https://requests.readthedocs.io/) with custom `HTTPAdapter` for aggressive retries.
-- **Parsing:** [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) with `lxml`.
-- **Bot Layer:** [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) (AsyncIO).
+- **`incode.py`:** The main entry point handling CLI arguments and the interactive UI loop.
+- **`src/api.py`:** Core logic for interacting with the StaffPortal. Uses `requests` with a custom `TimeoutHTTPAdapter` and `urllib3` retry strategies for maximum reliability.
+- **`src/ui.py`:** Rich-based TUI (Terminal User Interface) components for interactive menus, tables, and live monitors.
+- **`src/bot.py`:** Asynchronous Telegram bot implementation for notifications and document delivery.
+- **`src/pdf.py` & `src/ical.py`:** Specialized modules for generating formatted documents and calendar files.
+- **`src/utils.py`:** Shared utilities for screen management, input handling, and automatic update checks.
 
 ---
 
-## 📦 Quick Start
+## 🌴 Advanced Absence Logic (Technical Deep-Dive)
+
+The most complex part of the tool is the absence tracking logic, which reconstructs a logical timeline from disparate API data points:
+
+### 1. Multi-Source Aggregation
+Data is pulled from three distinct endpoints:
+- `absence/data/load.json`: Fixed approved roster absences.
+- `absence/data/loadWishes.json`: Pending and approved absence wishes.
+- `duties/data/load.json`: Regular duty plan (used as a fallback for specific absence markers).
+
+### 2. Intelligent Labeling & Priority
+The tool applies a priority-based daily mapping strategy:
+- **Prioritization:** Specific markers like `Urlaub`, `Krank`, or `Abwesend` always overwrite generic markers like `Freies Wochenende`.
+- **Public Holidays:** Automatically calculates Austrian public holidays using the **Gauss Easter Algorithm**.
+- **Holiday Context:** 
+    - Public holidays falling on Mon-Sat are labeled as **"Geplante Sonderabwesenheit"**.
+    - Public holidays falling on a **Sunday** are labeled as **"Abwesend"**.
+- **Special Rules (Kärnten):** Includes the 10.10. (Carinthian Referendum Day) and excludes Good Friday (Karfreitag) from holiday status (treated as vacation).
+
+### 3. Weekend Reconstruction
+To provide a complete calendar view, the tool synthetically generates weekend markers:
+- **Pre-Vacation Sunday:** If a free block (Vacation/Holiday) starts on a Monday, the preceding Sunday is labeled as **"Freies Wochenende"**.
+- **Post-Vacation Sunday:** If a free block ends on a Saturday, the following Sunday is labeled as **"Abwesend"**.
+
+---
+
+## 🔐 Security & Configuration
+
+Credentials and session data are handled securely:
+- **`.credentials.json`:** Stores username, encrypted-ish password (handled by the system keyring where possible), and org-unit GUIDs. File permissions are automatically set to `600` (read/write by owner only).
+- **`.incode_cache.json`:** Encrypted local cache for API responses to enable offline mode and reduce server load.
+- **Headers:** Automatically extracts `x-incode-*` security tokens from JavaScript assets during login to mimic an authorized browser session.
+
+---
+
+## 📦 Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/manueloberberger/incode-cli.git && cd incode-cli
+git clone https://github.com/manueloberberger/incode-cli.git
+cd incode-cli
 
-# Setup environment
+# Set up virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Run the CLI
+# Start the application
 python3 incode.py
 ```
 
-## 🤖 Bot Deployment
-To run the Telegram Bot as a background process:
-```bash
-python3 incode.py bot &
-```
+## 🤖 Bot Setup
+
+To enable Telegram notifications:
+1. Create a bot via [@BotFather](https://t.me/botfather).
+2. Obtain your Chat ID via [@userinfobot](https://t.me/userinfobot).
+3. Select "Telegram Bot" in the main menu to configure the token and ID.
 
 ---
 
-## 🛡 Security & Privacy
-- **Stateless by Default:** Sensitive cookies are kept in memory or temporary local cache only.
-- **Local Credentials:** `.credentials.json` is automatically chmodded to `600` and excluded from git tracking.
-- **No Third-Party Analytics:** Your data stays between you and the Red Cross server.
-
----
-*Developed for professionals. Built for speed.*
+*Note: This tool is an independent implementation and not an official product of the Red Cross.*

@@ -197,88 +197,6 @@ class IncodeRequests:
         except: pass
         return []
 
-    def get_project_guids(self) -> Dict[str, str]:
-        """Fetches available project GUIDs and Names from the projects page."""
-        r_proj = self.session.get(f"{self.base_url}/StaffPortal/projects.php", headers=self._get_api_headers())
-        r_dispo = self.session.get(f"{self.base_url}/StaffPortal/dispo.php", headers=self._get_api_headers())
-        guid_pattern = r'([a-f0-9]{40}(?:_\d+)+)'
-        all_raw = set(re.findall(guid_pattern, r_proj.text))
-        all_raw.update(re.findall(guid_pattern, r_dispo.text))
-        if self.org_unit_data_guid: all_raw.add(self.org_unit_data_guid)
-        if self.extra_guids: all_raw.update(self.extra_guids)
-        guids_to_try = list(all_raw) or [DEFAULT_GUID]
-        
-        project_map = {}
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'})
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                for inp in soup.find_all('input', value=True):
-                    val = inp['value']
-                    if re.match(r'^[a-f0-9]{40}(?:_\d+)+$', val) and val not in guids_to_try:
-                        name, row = "Event", inp.find_parent('tr')
-                        if row:
-                            txt = " ".join(row.get_text(separator=" ").split()).replace(val, "").strip()
-                            if len(txt) > 3: name = txt
-                        if name == "Event" and inp.get('id'):
-                            lbl = soup.find('label', attrs={'for': inp.get('id')})
-                            if lbl: name = lbl.get_text(strip=True)
-                        project_map[val] = name
-                for g in re.findall(guid_pattern, resp.text):
-                    if g not in project_map and g not in guids_to_try: project_map[g] = "Event"
-        except: pass
-        return project_map
-
-    def load_events_plan(self, date_from: datetime = None, date_to: datetime = None) -> List[Dict[str, Any]]:
-        """Loads roster for events by parsing HTML cards and augmenting with JSON data."""
-        project_map = self.get_project_guids()
-        guids_to_try = [self.org_unit_data_guid] + self.extra_guids
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'})
-            if resp.status_code == 200:
-                events = []
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                for card in soup.find_all('div', attrs={'data-role': 'incode-project'}):
-                    guid, b_s, e_s = card.get('data-dataguid'), card.get('data-begin'), card.get('data-end')
-                    if not guid or not b_s: continue
-                    b_dt, e_dt = self._fix_datetime(b_s), self._fix_datetime(e_s)
-                    if not b_dt: continue
-                    t_tag = card.find('h3', class_='card-title')
-                    events.append({'guid': guid, 'begin': b_dt, 'end': e_dt, 'vehicle': t_tag.get_text(strip=True) if t_tag else "Event", 'location': '', 'crew': {}, 'open_slots': 0})
-                if events:
-                    start, end = min(e['begin'] for e in events), max(e['end'] for e in events)
-                    guids = list(set([e['guid'] for e in events]))
-                    main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else DEFAULT_GUID)
-                    for i in range(0, len(guids), 30):
-                        r = self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': guids[i:i+30]})
-                        if r.status_code == 200:
-                            it = r.json().get('data', {}).values() if isinstance(r.json().get('data'), dict) else r.json().get('data', [])
-                            for item in it:
-                                if not isinstance(item, dict): continue
-                                pg, cb = item.get('projectDataGuid'), self._fix_datetime(item.get('begin'))
-                                if not pg or not cb: continue
-                                for e in events:
-                                    if e['guid'] == pg and e['begin'].date() == cb.date():
-                                        infos = item.get('additionalInfos', {})
-                                        rn, pn, loc = str(infos.get('ressource_name', '')).strip(), str(infos.get('project_name', '')).strip(), str(item.get('orgUnitName', '')).strip()
-                                        if pn and (e['vehicle'] == "Event" or len(pn) > len(e['vehicle'])): e['vehicle'] = pn
-                                        if loc: e['location'] = loc
-                                        eid = str(item.get('externalId', '')).upper()
-                                        if not rn or rn == '*':
-                                            if eid != "KFZ": e['open_slots'] += 1
-                                        elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
-                return events
-        except Exception as e: console.print(f"[warning]Fehler: {e}[/warning]")
-        return []
-
-    def load_my_event_duties(self) -> List[Dict[str, Any]]:
-        df, dt = datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'), (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': self.org_unit_data_guid or DEFAULT_GUID, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'})
-            if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode='include_all')
-        except: pass
-        return []
-
     def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
         now = datetime.now()
         df, dt = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z'), (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
@@ -311,8 +229,12 @@ class IncodeRequests:
         def is_h(d):
             if d.year not in holiday_cache: holiday_cache[d.year] = self._get_holidays(d.year)
             return d in holiday_cache[d.year]
+        
+        # v1.7 style body (no orgUnitDataGuid)
+        body = {'max': '1000', 'dateFrom': df_str, 'dateTo': dt_str, 'reason': '', 'form.event.onsubmit': 'searchForm'}
+        
         try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': df_str, 'dateTo': dt_str, 'reason': '', 'form.event.onsubmit': 'searchForm'})
+            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data=body)
             if resp.status_code == 200:
                 for item in resp.json().get('data', []):
                     reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
@@ -321,33 +243,67 @@ class IncodeRequests:
                     if e.hour == 0 and e.minute == 0: e -= timedelta(seconds=1)
                     curr = b.date()
                     while curr <= e.date():
-                        lbl = "Geplante Sonderabwesenheit" if "urlaub" in reason.lower() and is_h(curr) else reason
-                        daily_map[curr] = {'label': lbl, 'fixed': True}
+                        lbl = reason
+                        # Rule: Holidays are 'Geplante Sonderabwesenheit', but if they fall on a Sunday, they are just 'Abwesend'
+                        if is_h(curr):
+                            lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
+                        
+                        # Priority: Holidays and actual absences over general weekend markers
+                        if curr not in daily_map or is_h(curr) or any(w in lbl.lower() for w in ["urlaub", "abwesend", "krank"]):
+                            daily_map[curr] = {'label': lbl, 'fixed': True}
                         curr += timedelta(days=1)
         except: pass
         try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': df_str, 'dateTo': dt_str, 'reason': '', 'form.event.onsubmit': 'searchForm'})
+            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body)
             if resp.status_code == 200:
                 for item in resp.json().get('data', []):
                     try: state = int(item.get('approvalState'))
                     except: state = 0
-                    if state != 1 or item.get('withdrawn') in [1, True]: continue
+                    # state 0 = requested, state 1 = approved
+                    if state not in [0, 1] or item.get('withdrawn') in [1, True]: continue
+                    
                     reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
+                    status_text = " [yellow](Beantragt)[/yellow]" if state == 0 else " [green](Gen. / n. eingetr.)[/green]"
+                    
                     b, e = norm_start(self._fix_datetime(item.get('begin'))), self._fix_datetime(item.get('end'))
                     if not b or not e: continue
                     if e.hour == 0 and e.minute == 0: e -= timedelta(seconds=1)
                     curr = b.date()
                     while curr <= e.date():
                         if curr not in daily_map or not daily_map[curr]['fixed']:
-                            lbl = "Geplante Sonderabwesenheit" if "urlaub" in reason.lower() and is_h(curr) else reason
-                            daily_map[curr] = {'label': lbl + " [green](Gen. / n. eingetr.)[/green]", 'fixed': False}
+                            lbl = reason
+                            if is_h(curr):
+                                lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
+                            
+                            if curr not in daily_map or is_h(curr) or "urlaub" in lbl.lower():
+                                daily_map[curr] = {'label': lbl + status_text, 'fixed': False}
                         curr += timedelta(days=1)
         except: pass
+        
+        # Weekend / Sunday Logic
+        sorted_d = sorted(daily_map.keys())
+        # 1. Sunday BEFORE vacation/holiday block (if starts on Monday) -> Freies Wochenende
+        for d in sorted_d:
+            if d.weekday() == 0:
+                lbl_mon = daily_map[d]['label'].lower()
+                if "urlaub" in lbl_mon or "sonderabwesenheit" in lbl_mon:
+                    prev_sun = d - timedelta(days=1)
+                    # Use 'Freies Wochenende' even if it was previously marked as 'Abwesend'
+                    if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Abwesend":
+                        daily_map[prev_sun] = {'label': "Freies Wochenende", 'fixed': False}
+        
+        # 2. Sunday AFTER vacation (if vacation ends on/covers Saturday) -> Abwesend
+        # Refresh sorted list after potential additions
         sorted_d = sorted(daily_map.keys())
         for d in sorted_d:
             if d.weekday() == 5 and "urlaub" in daily_map[d]['label'].lower():
                 sun = d + timedelta(days=1)
-                if sun not in daily_map: daily_map[sun] = {'label': "Abwesend" + (" [green](Gen. / n. eingetr.)[/green]" if "[green]" in daily_map[d]['label'] else ""), 'fixed': False}
+                if sun not in daily_map:
+                    suffix = ""
+                    if "[yellow]" in daily_map[d]['label']: suffix = " [yellow](Beantragt)[/yellow]"
+                    elif "[green]" in daily_map[d]['label']: suffix = " [green](Gen. / n. eingetr.)[/green]"
+                    daily_map[sun] = {'label': "Abwesend" + suffix, 'fixed': False}
+                    
         if not daily_map: return []
         fd = sorted(daily_map.keys())
         curr_s, curr_e, curr_l = fd[0], fd[0], daily_map[fd[0]]['label']
@@ -361,15 +317,29 @@ class IncodeRequests:
         return results
 
     def _get_holidays(self, year: int) -> List[datetime.date]:
-        holidays = [datetime(year, 1, 1).date(), datetime(year, 1, 6).date(), datetime(year, 5, 1).date(), datetime(year, 8, 15).date(), datetime(year, 10, 26).date(), datetime(year, 11, 1).date(), datetime(year, 12, 8).date(), datetime(year, 12, 24).date(), datetime(year, 12, 25).date(), datetime(year, 12, 26).date(), datetime(year, 12, 31).date()]
+        holidays = [
+            datetime(year, 1, 1).date(), datetime(year, 1, 6).date(), 
+            datetime(year, 5, 1).date(), datetime(year, 8, 15).date(), 
+            datetime(year, 10, 10).date(), datetime(year, 10, 26).date(), 
+            datetime(year, 11, 1).date(), datetime(year, 12, 8).date(), 
+            datetime(year, 12, 24).date(), datetime(year, 12, 25).date(), 
+            datetime(year, 12, 26).date(), datetime(year, 12, 31).date()
+        ]
         a, b, c = year % 19, year // 100, year % 100
         d, e, f = b // 4, b % 4, (b + 8) // 25
-        g, h = (b - f + 1) // 3, (19 * a + b - d - g + 15) % 30
-        i, k, l = c // 4, c % 4, (32 + 2 * e + 2 * i - h - k) % 7
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i, k = c // 4, c % 4
+        l = (32 + 2 * e + 2 * i - h - k) % 7
         m = (a + 11 * h + 22 * l) // 451
         mo, dy = (h + l - 7 * m + 114) // 31, ((h + l - 7 * m + 114) % 31) + 1
         easter = datetime(year, mo, dy).date()
-        holidays.extend([easter + timedelta(days=1), easter + timedelta(days=39), easter + timedelta(days=50), easter + timedelta(days=60)])
+        # Ostersonntag (0), Ostermontag (+1), Himmelfahrt (+39), Pfingstsonntag (+49), Pfingstmontag (+50), Fronleichnam (+60)
+        holidays.extend([
+            easter, easter + timedelta(days=1), 
+            easter + timedelta(days=39), easter + timedelta(days=49), 
+            easter + timedelta(days=50), easter + timedelta(days=60)
+        ])
         return holidays
 
     def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
@@ -430,7 +400,7 @@ class IncodeRequests:
         return hydrated
 
     def _parse_personal_duties(self, data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
-        results, fw = [], ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung"]
+        results, fw = [], ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung", "dienstfrei", "ausbildung", "lehrgang"]
         for item in data.get('data', []):
             if not isinstance(item, dict): continue
             dt_name = str(item.get('dutyTypeName') or item.get('absenceTypeName') or item.get('type') or item.get('text') or "")
