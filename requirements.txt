@@ -2,3 +2,5 @@ requests
 beautifulsoup4
 rich
 reportlab
+python-telegram-bot
+icalendar

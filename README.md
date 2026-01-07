@@ -1,28 +1,33 @@
-# Incode CLI v1.0
+# Incode CLI v1.1
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-stable-success.svg)
-![Architecture](https://img.shields.io/badge/architecture-modular-orange.svg)
+![Architecture](https://img.shields.io/badge/architecture-hybrid%20async-purple.svg)
 
-Eine hochoptimierte CLI-Anwendung und ein automatisierter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
+Eine hochoptimierte CLI-Anwendung und ein reaktiver Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-Dieses Projekt vereint die Funktionalitäten eines interaktiven Terminals mit der Mobilität eines Telegram-Bots. Es wurde entwickelt, um Sanitätern und Führungskräften einen schnellen, gefilterten und übersichtlichen Zugriff auf Einsatzpläne zu ermöglichen – ohne die oft träge Weboberfläche nutzen zu müssen.
+In Version 1.1 wurde der Kern modernisiert: **Smart Caching** für sofortigen Start (auch offline), eine **asynchrone Bot-Engine** für schnellere Reaktionen und **standardkonforme Kalender-Exporte**.
 
 ## 🚀 Kernfunktionen
 
 ### 1. Interaktives Terminal-Interface (CLI)
 Das CLI ist das Herzstück für die stationäre Nutzung (z.B. auf der Dienststelle oder am PC):
-- **Dashboard:** Eine kompakte Übersicht deiner nächsten Dienste direkt beim Start.
+- **Smart Dashboard:** Zeigt sofort beim Start deine nächsten Dienste (lädt aus dem Cache, während im Hintergrund aktualisiert wird).
 - **Tagesplan-Explorer:** Durchsuche den gesamten Dienstplan für heute oder ein beliebiges Datum.
-- **Live-Monitor:** Ein spezialisierter Modus, der den Plan in Echtzeit (Auto-Refresh) anzeigt – ideal für Wachen-Monitore.
-- **Intelligente Suche:** Suche nach Kollegen, um deren Einteilungen zu sehen.
-- **Daten-Export:** Generiere PDF-Übersichten oder iCal-Dateien.
+- **Live-Monitor:** Ein spezialisierter Modus für Wachen-Monitore. Aktualisiert sich selbstständig und sendet bei Änderungen (z.B. Fahrzeugtausch) sofort eine PDF an Telegram.
+- **Intelligente Suche:** Finde heraus, wann Kollegen Dienst haben.
+- **Optimierte Exporte:** 
+  - **PDF:** Generiert saubere Übersichten mit Zeitstempel im Dateinamen (z.B. `Tagesplan_2026-01-07_14-30.pdf`).
+  - **iCal:** Vollständig standardkonforme `.ics` Dateien für Outlook, Google Kalender & Apple Calendar.
 
-### 2. Telegram Bot (Mobile Access)
-Der Bot dient als dein persönlicher Assistent für die Hosentasche:
-- **On-Demand PDF:** Sende `/dienste` oder `/tagesplan` an den Bot und erhalte sofort ein sauber formatiertes PDF.
-- **Push-Updates:** Im Live-Modus sendet der Bot bei Planänderungen automatisch Updates in den Chat.
+### 2. Modernisierter Telegram Bot v2.0
+Der Bot wurde auf eine asynchrone Architektur umgestellt (`python-telegram-bot`), was ihn deutlich stabiler und reaktiver macht.
+- **Befehle:**
+  - `/start` - Übersicht und Hilfe.
+  - `/dienste` - Sendet deinen persönlichen Dienstplan als PDF.
+  - `/tagesplan` (oder `/heute`) - Sendet den aktuellen Tagesplan der Dienststelle als PDF.
+- **Security:** Der Bot reagiert ausschließlich auf die konfigurierte `User-ID`. Fremde Anfragen werden ignoriert.
 
 ---
 
@@ -30,9 +35,9 @@ Der Bot dient als dein persönlicher Assistent für die Hosentasche:
 
 ### Voraussetzungen
 - **Python 3.8** oder neuer.
-- Ein Computer mit **Linux**, **macOS** oder Windows (via WSL).
+- Ein Computer mit **Linux**, **macOS** oder Windows.
 
-### Schnellstart
+### Installation
 
 1. **Repository klonen:**
    ```bash
@@ -40,7 +45,7 @@ Der Bot dient als dein persönlicher Assistent für die Hosentasche:
    cd incode-cli
    ```
 
-2. **Setup:**
+2. **Umgebung einrichten:**
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
@@ -52,58 +57,33 @@ Der Bot dient als dein persönlicher Assistent für die Hosentasche:
    ```bash
    ./incode
    ```
+   *Beim ersten Start wirst du nach deinen Incode-Zugangsdaten gefragt. Diese werden lokal verschlüsselt in `.credentials.json` gespeichert.*
 
-*Tipp: Verlinke das Tool global mit `ln -sf $(pwd)/incode ~/.local/bin/incode`, um es von überall zu starten.*
+4. **Bot Einrichten (Optional):**
+   Wähle im Menü "Telegram Bot" oder starte `./incode bot`. Du wirst nach deinem Bot-Token und deiner User-ID gefragt.
 
 ---
 
-## 🧠 Technical Deep Dive & Architektur
+## 🧠 Technical Deep Dive (v1.1 Update)
 
-Für Entwickler und technisch Interessierte: Ein Blick unter die Haube von Incode-CLI.
+### 1. Smart Caching Layer (`src/api.py`)
+Um die Trägheit des Incode-Servers zu umgehen, implementiert v1.1 einen lokalen Cache (`.incode_cache.json`).
+*   **Strategie:** Daten sind 15 Minuten lang gültig ("Fresh").
+*   **Offline-First:** Ist der Server nicht erreichbar oder das Login fehlgeschlagen, werden automatisch die letzten bekannten Daten aus dem Cache geladen. Das ermöglicht den Zugriff auf den Dienstplan auch ohne Internetverbindung.
 
-### 1. System-Architektur
-Das Projekt folgt einem strikten **Layer-Ansatz**, um UI, Logik und Datenhaltung zu trennen.
+### 2. Async Bot Architecture (`src/bot.py`)
+Die alte Polling-Loop wurde durch `python-telegram-bot` (asyncio) ersetzt.
+*   **Non-Blocking:** Langsame PDF-Generierungen blockieren nicht mehr den Empfang neuer Nachrichten.
+*   **Thread-Offloading:** Schwere Aufgaben (wie API-Requests oder PDF-Rendering) werden via `asyncio.to_thread` ausgelagert, um den Event-Loop flüssig zu halten.
 
-```mermaid
-graph TD
-    User((User / Terminal)) --> UI[ui.py / Rich TUI]
-    Telegram((Telegram API)) <--> Bot[bot.py]
-    UI --> Core
-    Bot --> Core
-    
-    subgraph Core Logic
-        Core[API Wrapper & Logic]
-        PDF[PDF Engine / ReportLab]
-    end
-    
-    Core -- HTTPS / Session --> Incode[Incode Web Server]
-    Core -- Read/Write --> DB[(.credentials.json)]
-```
+### 3. API Reverse Engineering
+Das Tool emuliert weiterhin einen Browser-Client, da keine öffentliche API existiert:
+*   **Session-Hijacking:** Login via `login.php`, Extraktion der `PHPSESSID`.
+*   **Token Extraction:** Automatisches Parsen von `x-incode-auth` Token und `orgUnitDataGuid` aus dem JavaScript-Quelltext der Antwortseite.
 
-### 2. API Reverse Engineering (`src/api.py`)
-Da Incode keine öffentliche API bereitstellt, emuliert dieses Tool einen Browser-Client.
-*   **Session-Hijacking:** Der Login erfolgt via POST-Request an `login.php`. Das Session-Cookie (`PHPSESSID`) wird gehalten.
-*   **Token Extraction:** Kritische Auth-Token (`x-incode-auth`) werden via RegEx direkt aus dem JavaScript-Code der Antwortseite extrahiert.
-*   **Hybrid Parsing:**
-    *   *Strukturdaten:* Werden via `BeautifulSoup` aus dem HTML geparst.
-    *   *Plandaten:* Werden über interne JSON-Endpoints (`loadPlan.json`) abgerufen, die eigentlich für das AJAX-Frontend gedacht sind.
-
-### 3. Real-Time Monitor Engine
-Der Live-Monitor (`src/ui.py`) muss stabil über Tage hinweg laufen.
-*   **Polling Loop:** Fragt konfigurierbar (z.B. alle 5 Min) den Server ab.
-*   **Delta Detection:** Vergleicht den Hash des neuen Dienstplan-Objekts mit dem letzten Zustand. Das UI wird **nur** neu gezeichnet, wenn sich Daten tatsächlich geändert haben (`if new_data != old_data`).
-*   **Transient Rendering:** Nutzt `rich.Live(transient=True)`, um Updates flackerfrei im Terminal darzustellen, ohne den Scrollback-Buffer vollzuschreiben.
-
-### 4. On-Demand PDF Engine (`src/pdf.py`)
-Statt HTML zu rendern und via Headless-Browser (langsam, schwergewichtig) zu konvertieren, nutzen wir **ReportLab**.
-*   **Vorteil:** PDFs werden als Byte-Stream direkt im RAM "gezeichnet".
-*   **Performance:** Generierung dauert < 0.1 Sekunden.
-*   **Portabilität:** Keine Systemabhängigkeiten wie `wkhtmltopdf` oder `chromium` nötig.
-
-### 5. Security Concepts
-*   **Local Storage:** Zugangsdaten liegen in `.credentials.json`.
-*   **Permission Hardening:** Beim Erstellen der Datei werden die Rechte automatisch auf `600` (Read/Write only for Owner) gesetzt.
-*   **Bot Whitelist:** Der Telegram-Bot prüft bei **jeder** eingehenden Nachricht die `user_id`. Stimmt sie nicht mit der Konfiguration überein, wird die Anfrage stumm verworfen (Silent Drop).
+### 4. PDF & iCal Engine
+*   **PDF:** Nutzung von `ReportLab` für extrem schnelle Generierung (< 0.1s) direkt im RAM. Dateinamen enthalten nun Zeitstempel zur Versionierung.
+*   **iCal:** Umstellung auf die `icalendar` Library in v1.1 garantiert, dass Umlaute, Zeitzonen und Beschreibungen in allen Kalender-Apps korrekt dargestellt werden.
 
 ---
 
@@ -111,24 +91,19 @@ Statt HTML zu rendern und via Headless-Browser (langsam, schwergewichtig) zu kon
 
 ```
 incode-cli/
-├── incode.py           # Entry Point & CLI Router
+├── incode.py           # Entry Point
+├── .credentials.json   # Lokaler Config-Storage (Git-Ignored)
+├── .incode_cache.json  # Temporärer Cache (Git-Ignored)
 ├── src/
-│   ├── api.py          # Incode Session, Auth & Data Fetching
-│   ├── bot.py          # Telegram Bot Logic & Polling
-│   ├── config.py       # Configuration & Credential Management
+│   ├── api.py          # Incode Session, Auth & Caching Logic
+│   ├── bot.py          # Async Telegram Bot
+│   ├── config.py       # Configuration & Constants
+│   ├── ical.py         # iCal Generation (icalendar lib)
 │   ├── pdf.py          # PDF Generation Engine
 │   ├── ui.py           # TUI (Rich) & Interactive Menus
-│   └── utils.py        # Helpers (Key handling, Clearscreen)
+│   └── utils.py        # Helpers
 └── requirements.txt    # Python Dependencies
 ```
-
-## ❓ Troubleshooting
-
-**Login fehlgeschlagen?**
-Lösche die Datei `.credentials.json` und starte das Tool neu, um die Daten sauber neu einzugeben.
-
-**Bot antwortet nicht?**
-Der Bot antwortet nur der konfigurierten User-ID. Prüfe deine ID via `@userinfobot` auf Telegram und vergleiche sie mit der Config.
 
 ---
 *Hinweis: Dieses Tool steht in keiner offiziellen Verbindung zum Roten Kreuz. Es ist ein Community-Projekt zur Verbesserung der Usability.*

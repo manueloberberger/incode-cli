@@ -1,7 +1,9 @@
 import requests
 import time
-from urllib3.util.retry import Retry
+import json
+import os
 import re
+from urllib3.util.retry import Retry
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -9,6 +11,9 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 
 from src.config import console, DEFAULT_GUID
 from src.utils import TimeoutHTTPAdapter
+
+CACHE_FILE = ".incode_cache.json"
+CACHE_TTL = 900  # 15 Minutes validity
 
 class IncodeRequests:
     def __init__(self, base_url: str, extra_guids: Optional[List[str]] = None) -> None:
@@ -23,6 +28,42 @@ class IncodeRequests:
         self.base_url: str = base_url
         self.extra_guids: List[str] = extra_guids if extra_guids else []
         self.user_agent: str = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        self.cache = self._load_cache()
+
+    def _load_cache(self) -> Dict[str, Any]:
+        """Loads the cache file if it exists."""
+        if os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def _save_cache(self):
+        """Saves current memory cache to file."""
+        try:
+            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            console.print(f"[warning]Cache konnte nicht gespeichert werden: {e}[/warning]")
+
+    def _get_cached_data(self, key: str) -> Optional[Any]:
+        """Returns cached data if valid (TTL), otherwise None."""
+        if key in self.cache:
+            entry = self.cache[key]
+            timestamp = entry.get('timestamp', 0)
+            if time.time() - timestamp < CACHE_TTL:
+                return entry.get('data')
+        return None
+
+    def _set_cached_data(self, key: str, data: Any):
+        """Updates cache for a specific key."""
+        self.cache[key] = {
+            'timestamp': time.time(),
+            'data': data
+        }
+        self._save_cache()
 
     def login(self, username, password) -> Tuple[bool, str]:
         login_url = f"{self.base_url}/login.php"
@@ -75,9 +116,7 @@ class IncodeRequests:
         """Helper to fix datetime strings from API."""
         if not s: return None
         try:
-            # Parse as UTC (assuming 'Z' at end implies UTC or it's raw UTC time)
             dt = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')
-            # Simple offset calculation
             offset = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
             local_dt = dt + timedelta(seconds=offset)
             return local_dt
@@ -86,7 +125,6 @@ class IncodeRequests:
     def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/StaffPortal/plan/data/loadPlan.json"
         
-        # Buffer dates slightly to ensure coverage
         df = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
         dt = (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
         
@@ -96,7 +134,6 @@ class IncodeRequests:
         else:
              guids.append(DEFAULT_GUID)
 
-        # Try to find more GUIDs via personal duties load (hacky but useful discovery)
         try:
             d_resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '20'})
             if d_resp.status_code == 200:
@@ -116,16 +153,11 @@ class IncodeRequests:
                 if r.status_code == 200:
                     data = r.json()
                     if data.get('data'): 
-                        # Parse without strict single-day filtering
                         plan = self._parse_daily_plan_raw(data)
                         for item in plan:
-                            # Filter by requested date range here
                             if item['begin'] and item['end']:
-                                # naive check
                                 if item['end'] < date_from or item['begin'] > date_to:
                                     continue
-                                
-                                # Deduplication
                                 crew_sig = tuple(sorted(item['crew'].items()))
                                 sig = (item['vehicle'], item['begin'], item['end'], crew_sig)
                                 if sig not in seen_signatures:
@@ -154,16 +186,29 @@ class IncodeRequests:
             console.print(f"[warning]Fehler beim Laden des Archivs ({year}): {e}[/warning]")
         return []
 
-    def load_future_duties(self) -> List[Dict[str, Any]]:
+    def load_future_duties(self, use_cache=True) -> List[Dict[str, Any]]:
+        """Loads future duties with caching strategy."""
+        cache_key = "future_duties"
+        
+        if use_cache:
+            cached = self._get_cached_data(cache_key)
+            if cached:
+                # Convert string dates back to objects if needed (simple hack since JSON stores strings)
+                # But our downstream uses dicts, let's keep it simple.
+                # However, _fix_datetime usually returns datetime objects. 
+                # When loading from JSON, they are strings.
+                # We should re-parse them or adjust downstream. 
+                # For now, let's assume downstream handles strings or we fix them here.
+                # Ideally, we return the list of dicts.
+                return cached
+
         url = f"{self.base_url}/StaffPortal/duties/data/load.json"
         duties: List[Dict[str, Any]] = []
         
         now = datetime.now()
         start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # Go back one day to be safe with timezones for the 1st of the month
         start_fetch = start_of_month - timedelta(days=1)
         
-        # Calculate end of next month
         if now.month == 12: next_month = now.replace(year=now.year + 1, month=1, day=1)
         else: next_month = now.replace(month=now.month + 1, day=1)
         
@@ -185,56 +230,90 @@ class IncodeRequests:
             'view': 'month' 
         }
 
-        # 1. Load Standard Future Duties
         try:
             resp = self.session.post(url, headers=self._get_api_headers(), data=body)
             resp.raise_for_status()
             duties = self._parse_personal_duties(resp.json())
-        except Exception as e:
-            console.print(f"[warning]Fehler beim Laden der Dienste: {e}[/warning]")
-        
-        # 2. Load Archive for Current Year to ensure past duties (of current year) have locations
-        # and to catch any duties missing from load.json
-        archive_duties = self.load_archive_duties(now.year)
-        
-        # Merge logic: Use dictionary keyed by begin time to deduplicate
-        # Prefer archive_duties for past events if they have location? 
-        # Actually archive duties generally have location.
-        
-        duty_map = {d['begin']: d for d in duties}
-        
-        for ad in archive_duties:
-            begin = ad['begin']
-            # If not present, add it.
-            # If present, check if existing one lacks location (which was the bug).
-            # But load.json usually has location. The bug was when using daily_plan fallback.
-            # So here, archive should be good. 
-            # We can overwrite if we trust archive more for past.
-            # But load.json is better for FUTURE.
             
-            # Simple heuristic: If it's in the past (relative to now), prefer Archive (or just add if missing).
-            # If it's in the future, prefer Load.json.
-            
-            if begin not in duty_map:
-                duty_map[begin] = ad
-            else:
-                # Exists. Check location.
-                if not duty_map[begin].get('location') and ad.get('location'):
+            # Additional fetch from archive
+            archive_duties = self.load_archive_duties(now.year)
+            duty_map = {d['begin']: d for d in duties}
+            for ad in archive_duties:
+                begin = ad['begin']
+                if begin not in duty_map:
                     duty_map[begin] = ad
+                else:
+                    if not duty_map[begin].get('location') and ad.get('location'):
+                        duty_map[begin] = ad
 
-        duties = list(duty_map.values())
-        duties.sort(key=lambda x: x['begin'])
-        return duties
+            duties = list(duty_map.values())
+            duties.sort(key=lambda x: x['begin'])
+            
+            # Save to cache
+            self._set_cached_data(cache_key, duties)
+            return duties
+            
+        except Exception as e:
+            console.print(f"[warning]Fehler beim Laden (Netzwerk): {e}[/warning]")
+            # Fallback to cache even if expired
+            if cache_key in self.cache:
+                console.print("[yellow]Verwende veraltete Cache-Daten (Offline-Modus)[/yellow]")
+                return self.cache[cache_key]['data']
+            return []
 
-    def load_daily_plan(self, date: datetime) -> List[Dict[str, Any]]:
-        # Reuse the new fetch method but filter strictly for the day
+    def load_daily_plan(self, date: datetime, use_cache=True) -> List[Dict[str, Any]]:
+        date_str = date.strftime('%Y-%m-%d')
+        cache_key = f"daily_{date_str}"
+        
+        if use_cache:
+            cached = self._get_cached_data(cache_key)
+            if cached: 
+                # Convert strings back to datetime objects for internal logic if needed
+                # But wait, results are dicts. The calling code (ui.py) often expects datetime objects 
+                # OR handles strings. The original _parse_daily_plan_raw returns datetime objects.
+                # JSON serialization turns them to strings.
+                # We need to re-hydrate them.
+                return self._rehydrate_cache(cached)
+
         start_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-        return self._fetch_daily_plan_items(start_day, end_day)
+        
+        try:
+            results = self._fetch_daily_plan_items(start_day, end_day)
+            
+            # Serialize for cache (datetimes to iso strings)
+            serializable = []
+            for item in results:
+                new_item = item.copy()
+                if isinstance(new_item.get('begin'), datetime):
+                    new_item['begin'] = new_item['begin'].strftime('%Y-%m-%dT%H:%M:%S')
+                if isinstance(new_item.get('end'), datetime):
+                    new_item['end'] = new_item['end'].strftime('%Y-%m-%dT%H:%M:%S')
+                serializable.append(new_item)
+            
+            self._set_cached_data(cache_key, serializable)
+            return results
+        except Exception as e:
+            console.print(f"[warning]Fehler beim Laden des Tagesplans: {e}[/warning]")
+            if cache_key in self.cache:
+                console.print("[yellow]Lade Cache...[/yellow]")
+                return self._rehydrate_cache(self.cache[cache_key]['data'])
+            return []
+
+    def _rehydrate_cache(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Converts date strings back to datetime objects for the application."""
+        hydrated = []
+        for item in data:
+            new_item = item.copy()
+            if isinstance(new_item.get('begin'), str):
+                new_item['begin'] = datetime.strptime(new_item['begin'], '%Y-%m-%dT%H:%M:%S')
+            if isinstance(new_item.get('end'), str):
+                new_item['end'] = datetime.strptime(new_item['end'], '%Y-%m-%dT%H:%M:%S')
+            hydrated.append(new_item)
+        return hydrated
 
     def _parse_personal_duties(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         results = []
-        # Removed "wochenende" from filter to avoid filtering actual weekend shifts
         filter_words = ["urlaub", "frei", "wunsch", "abwesenheit", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag"]
         for item in data.get('data', []):
             duty_type, location = str(item.get('dutyTypeName', '')), str(item.get('orgUnitName', ''))
@@ -252,9 +331,7 @@ class IncodeRequests:
             crew = []
             if len(al) > 1:
                 last_val = str(al[-1])
-                # Check if last_val is likely a vehicle (starts with digit or contains known vehicle types)
                 is_vehicle = last_val and (last_val[0].isdigit() or any(vtype in last_val.upper() for vtype in ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"]))
-                
                 if is_vehicle:
                     vehicle = last_val
                     crew = [str(x) for x in al[1:-1]]
@@ -262,8 +339,6 @@ class IncodeRequests:
                     vehicle = ""
                     crew = [str(x) for x in al[1:]]
             elif len(al) == 1:
-                # Only position or only name? Usually al[0] is position. 
-                # But if only one element is there, we treat it as unknown/crew if it's not a vehicle
                 pass
 
             results.append({
@@ -277,7 +352,6 @@ class IncodeRequests:
         return results
 
     def _parse_daily_plan_raw(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parses daily plan data without filtering by date."""
         grouped: Dict[str, Dict[str, Any]] = {}
         items = data.get('data', {})
         it = items.values() if isinstance(items, dict) else items

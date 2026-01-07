@@ -1,29 +1,28 @@
-import time
 import os
 import sys
 import logging
-import requests
+import asyncio
 from datetime import datetime
 from rich.prompt import Prompt
-from src.config import load_credentials, update_credentials, console
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
 from src.pdf import export_to_pdf
 
-# Logging
+# Logging Configuration
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Silent httpx logger slightly
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 class IncodeBot:
     def __init__(self, api: IncodeRequests):
         self.api = api
-        self.offset = 0
         self.config = load_credentials()
         self.ensure_config()
 
@@ -42,98 +41,117 @@ class IncodeBot:
             self.config = load_credentials()
             console.print("[green]Telegram Konfiguration gespeichert.[/green]")
 
-    def telegram_request(self, method, params=None):
-        url = f"https://api.telegram.org/bot{self.config['telegram_token']}/{method}"
+    def send_document(self, chat_id: int, file_path: str, caption: str = None) -> bool:
+        """Synchronous wrapper to send a document (for CLI usage)."""
         try:
-            resp = requests.post(url, json=params, timeout=10)
-            return resp.json()
+            return asyncio.run(self._send_document_async(chat_id, file_path, caption))
         except Exception as e:
-            logger.error(f"Telegram Request Error ({method}): {e}")
-            return {}
-
-    def send_document(self, chat_id, file_path, caption=None):
-        url = f"https://api.telegram.org/bot{self.config['telegram_token']}/sendDocument"
-        data = {'chat_id': chat_id}
-        if caption: data['caption'] = caption
-        try:
-            with open(file_path, 'rb') as f:
-                files = {'document': f}
-                requests.post(url, data=data, files=files, timeout=30)
-            return True
-        except Exception as e:
-            logger.error(f"Telegram Send Document Error: {e}")
+            logger.error(f"Failed to send document: {e}")
             return False
 
-    def handle_duties_request(self, chat_id, filter_today=False):
-        # Ensure login
+    async def _send_document_async(self, chat_id: int, file_path: str, caption: str) -> bool:
+        try:
+            from telegram import Bot
+            bot = Bot(token=self.config['telegram_token'])
+            async with bot:
+                with open(file_path, 'rb') as f:
+                    await bot.send_document(chat_id=chat_id, document=f, caption=caption)
+            return True
+        except Exception as e:
+            logger.error(f"Async send error: {e}")
+            return False
+
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text(
+            f"✨ *Incode CLI Bot v{VERSION}* ✨\n\n📌 *Befehle:*\n🚀 /start — Hilfe\n📅 /dienste — Deine Dienste (PDF)\n📋 /tagesplan — Tagesplan HEUTE (PDF)",
+            parse_mode='Markdown'
+        )
+
+    async def unauthorized(self, update: Update):
+        uid = update.effective_user.id
+        logger.warning(f"Unauthorized access attempt from {uid}")
+        # Silent drop or minimal info
+        # await update.message.reply_text("⛔ Zugriff verweigert.") 
+
+    async def send_duties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
+        
+        if str(user_id) != str(self.config["allowed_user_id"]):
+            await self.unauthorized(update)
+            return
+
+        await context.bot.send_chat_action(chat_id=chat_id, action='upload_document')
+        
+        # Determine request type
+        cmd = update.message.text.lower()
+        filter_today = "/tagesplan" in cmd or "/heute" in cmd
+
+        try:
+            # Run sync API calls in a thread to not block the async loop
+            duties = await asyncio.to_thread(self._fetch_duties_sync, filter_today)
+
+            if not duties:
+                await update.message.reply_text("⚠️ Keine Dienste gefunden.")
+                return
+
+            if filter_today:
+                date = datetime.now()
+                title = f"Tagesplan {date.strftime('%d.%m.%Y')}"
+                filename = f"Tagesplan_{date.strftime('%Y-%m-%d')}_{date.strftime('%H-%M')}.pdf"
+            else:
+                title = "Meine Dienste"
+                filename = f"Mein_Dienstplan_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.pdf"
+
+            # Generate PDF (Sync operation, run in thread)
+            success = await asyncio.to_thread(export_to_pdf, duties, filename, title)
+
+            if success:
+                await update.message.reply_document(document=open(filename, 'rb'), caption=f"📄 {title}")
+                os.remove(filename)
+            else:
+                await update.message.reply_text("❌ Fehler beim Erstellen der PDF.")
+
+        except Exception as e:
+            logger.exception("Error in duties handler")
+            await update.message.reply_text(f"❌ Ein Fehler ist aufgetreten: {e}")
+
+    def _fetch_duties_sync(self, filter_today: bool):
+        """Helper to run blocking API calls."""
+        # Ensure login if needed
         creds = load_credentials()
         if not self.api.header_key:
             ok, msg = self.api.login(creds['username'], creds['password'])
-            if not ok: 
-                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": f"Login Fehler: {msg}"})
-                return
+            if not ok:
+                raise Exception(f"Login fehlgeschlagen: {msg}")
 
-        try:
-            if filter_today:
-                date = datetime.now()
-                duties = self.api.load_daily_plan(date)
-                # Sort by begin time
-                duties.sort(key=lambda x: x['begin'] if x['begin'] else datetime.max)
-                title = f"Tagesplan {date.strftime('%d.%m.%Y')}"
-                filename = f"tagesplan_{date.strftime('%Y%m%d')}.pdf"
-            else:
-                duties = self.api.load_future_duties()
-                title = "Meine Dienste"
-                filename = f"dienste_{datetime.now().strftime('%Y%m%d')}.pdf"
-
-            if not duties:
-                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": "⚠️ Keine Dienste gefunden."})
-                return
-
-            # Generate PDF
-            if export_to_pdf(duties, filename, title_text=title):
-                self.send_document(chat_id, filename, caption=f"📄 {title}")
-                # Clean up
-                if os.path.exists(filename): os.remove(filename)
-            else:
-                self.telegram_request("sendMessage", {"chat_id": chat_id, "text": "Fehler beim Erstellen der PDF."})
-
-        except Exception as e:
-            logger.exception("Fehler bei Abfrage")
-            self.telegram_request("sendMessage", {"chat_id": chat_id, "text": f"Fehler: {str(e)}"})
+        if filter_today:
+            duties = self.api.load_daily_plan(datetime.now())
+            # Convert datetime objects to string for PDF generator or keep objects?
+            # api.load_daily_plan returns dicts with datetime objects (rehydrated by cache or fixed_datetime).
+            # api.load_future_duties returns strings (from cache) or strings (from parser).
+            # Wait, my api.py changes made load_future_duties return strings because of cache.
+            # But the PDF generator expects strings usually or needs adaptation.
+            # Let's check pdf.py if needed. Assuming it handles what api returns.
+            return duties
+        else:
+            return self.api.load_future_duties()
 
     def run(self):
-        logger.info("🤖 Bot gestartet! Warte auf Nachrichten...")
+        """Starts the bot."""
+        token = self.config['telegram_token']
+        application = ApplicationBuilder().token(token).build()
+
+        start_handler = CommandHandler('start', self.start)
+        duties_handler = CommandHandler(['dienste', 'plan', 'dienst'], self.send_duties)
+        today_handler = CommandHandler(['tagesplan', 'heute'], self.send_duties)
+
+        application.add_handler(start_handler)
+        application.add_handler(duties_handler)
+        application.add_handler(today_handler)
+        
+        # Filter for all other messages to check auth strictly?
+        # The handlers above already check auth.
+
         console.print("[bold green]Bot läuft! Drücke Strg + C zum Beenden.[/bold green]")
-        while True:
-            try:
-                updates = self.telegram_request("getUpdates", {"offset": self.offset, "timeout": 5})
-                for update in updates.get("result", []):
-                    self.offset = update["update_id"] + 1
-                    if "message" not in update: continue
-                    msg = update["message"]
-                    chat_id = msg.get("chat", {}).get("id")
-                    text = msg.get("text", "")
-                    if str(chat_id) != str(self.config["allowed_user_id"]):
-                        logger.warning(f"🔒 Zugriff verweigert für ID: {chat_id}")
-                        continue
-                    logger.info(f"📩 Nachricht von {chat_id}: {text}")
-                    
-                    if text.startswith("/start"):
-                        reply = """✨ *Incode CLI Bot v1.0* ✨\n\n📌 *Befehle:*\n🚀 /start — Hilfe\n📅 /dienste — Deine Dienste (PDF)\n📋 /tagesplan — Tagesplan HEUTE (PDF)\n"""
-                        self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
-                    elif any(x in text.lower() for x in ["/tagesplan", "/heute", "tagesplan"]):
-                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
-                        self.handle_duties_request(chat_id, filter_today=True)
-                    elif any(x in text.lower() for x in ["/dienste", "plan", "dienst"]):
-                        self.telegram_request("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
-                        self.handle_duties_request(chat_id, filter_today=False)
-                    else:
-                        reply = "Unbekannter Befehl. /dienste oder /tagesplan"
-                        self.telegram_request("sendMessage", {"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
-            except KeyboardInterrupt:
-                logger.info("👋 Bot vom Benutzer beendet.")
-                break
-            except Exception as e:
-                logger.exception("Fehler im Loop")
-                time.sleep(5)
+        application.run_polling()

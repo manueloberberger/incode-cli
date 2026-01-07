@@ -22,13 +22,15 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-BANNER = r"""
+VERSION = "1.1"
+
+BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
  [bold red] |_ _| \| |/ __|/ _ \|   \| __|     / __| |  |_ _|  [/bold red] 
  [bold white]  | || .  | (__| (_) | |) | _|     | (__| |__ | |   [/bold white] 
  [bold white] |___|_|\_|\___|\___/|___/|___|     \___|____|___|  [/bold white] 
  [bold white]                                                    [/bold white] 
- [bold white]                  >> version 1.0 <<                  [/bold white] 
+ [bold white]                  >> version {VERSION} <<                  [/bold white] 
 """
 
 DEFAULT_TIMEOUT = 10 # seconds

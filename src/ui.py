@@ -230,10 +230,17 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             k = get_key()
             if k:
                 k = k.lower()
-                ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                # Clean timestamp for filenames: YYYY-MM-DD_HH-MM
+                ts_readable = datetime.now().strftime('%Y-%m-%d_%H-%M')
+                
                 if k == 'p' or k == 't':
-                    fn = f"dienstplan_{ts}.pdf"
-                    if search_colleague: fn = f"dienstplan_colleague_{ts}.pdf"
+                    if search_colleague:
+                        # Sanitize name
+                        safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])
+                        fn = f"Dienstplan_{safe_name}_{ts_readable}.pdf"
+                    else:
+                        fn = f"Mein_Dienstplan_{ts_readable}.pdf"
+
                     if export_to_pdf(export_duties, fn):
                         if k == 't':
                             msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
@@ -242,8 +249,11 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                     wait_for_return()
                     break
                 elif k == 'c':
-                    fn = f"dienstplan_{ts}.ics"
-                    if search_colleague: fn = f"dienstplan_colleague_{ts}.ics"
+                    fn = f"Dienstplan_{ts_readable}.ics"
+                    if search_colleague: 
+                        safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])
+                        fn = f"Dienstplan_{safe_name}_{ts_readable}.ics"
+                    
                     export_to_ics(export_duties, fn)
                     wait_for_return()
                     break
@@ -320,9 +330,11 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
             k = get_key()
             if k:
                 k = k.lower()
-                ts_str = date.strftime('%Y%m%d')
+                date_iso = date.strftime('%Y-%m-%d')
+                time_iso = datetime.now().strftime('%H-%M')
+                
                 if k == 'p' or k == 't':
-                    fn = f"tagesplan_{ts_str}.pdf"
+                    fn = f"Tagesplan_{date_iso}_{time_iso}.pdf"
                     if export_to_pdf(export_duties, fn):
                         if k == 't':
                             msg = f"Tagesplan Export vom {date.strftime('%d.%m.%Y')}"
@@ -331,7 +343,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
                     wait_for_return()
                     break
                 elif k == 'c':
-                    fn = f"tagesplan_{ts_str}.ics"
+                    fn = f"Tagesplan_{date_iso}_{time_iso}.ics"
                     export_to_ics(export_duties, fn)
                     wait_for_return()
                     break
@@ -428,7 +440,8 @@ def show_live_monitor(incode: Any) -> None:
                         except: pass
                     
                     ts = datetime.now().strftime('%H:%M')
-                    fn = f"live_update_{target_date.strftime('%Y%m%d')}_{datetime.now().strftime('%H%M')}.pdf"
+                    # Optimized filename for live updates
+                    fn = f"Live_Tagesplan_{target_date.strftime('%Y-%m-%d')}_{datetime.now().strftime('%H-%M')}.pdf"
                     
                     if export_to_pdf(export_duties, fn):
                         msg_text = f"Live-Update für {target_date.strftime('%d.%m.%Y')} (Stand: {ts})"
