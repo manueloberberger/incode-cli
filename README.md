@@ -1,109 +1,66 @@
-# Incode CLI 🚑
+# Incode CLI - Advanced Staff Portal Integration
 
-**Version:** 1.7  
-**Python:** 3.8+
+Incode CLI ist ein leistungsfähiges Python-basiertes Kommandozeilen-Tool (CLI) zur Automatisierung und Visualisierung von Daten aus dem Rotes Kreuz Dienstplan-Portal (Incode StaffPortal). Es wurde entwickelt, um Einsatzkräften einen schnellen, gefilterten und funktional erweiterten Zugriff auf ihre Dienstpläne, Abwesenheiten und Veranstaltungen zu ermöglichen.
 
-Ein professionelles, terminal-basiertes Interface (TUI) für das **Incode / Maportal Dienstplan-System** des Roten Kreuzes.
+## 🚀 Kernfunktionen
 
-Dieses Tool wurde entwickelt, um die oft langsame und unübersichtliche Web-Oberfläche durch eine schnelle, lokale und automatisierbare Lösung zu ersetzen. Es bietet erweiterte Funktionen wie algorithmische Urlaubsbrechnung, PDF-Exporte und einen integrierten Telegram-Bot.
+- **📅 Mein Dienstplan:** Tabellarische Übersicht zukünftiger Dienste inklusive Stunden-Statistiken pro Monat und Dienststellen-Auswertungen. Export als PDF, iCal oder direkt per Telegram.
+- **🌴 Abwesenheiten:** Übersicht über Urlaub, Krankenstände und ZA-Wünsche. Inklusive Netto-Urlaubstage-Berechnung (exkl. Wochenenden/Feiertage).
+- **🚑 Events / Ambulanzdienste:** Aggressive Suche nach geplanten Sanitätsdiensten und Veranstaltungen über alle verfügbaren Abteilungen hinweg.
+- **📒 Mitarbeiter-Verzeichnis:** Suche nach Kontaktdaten (Telefon, E-Mail), Rollen und Qualifikationen von Kollegen.
+- **📺 Live-Monitor:** Echtzeit-Überwachung des Tagesplans mit automatischer Benachrichtigung bei Änderungen via Telegram.
+- **🤖 Telegram Bot:** Integrierter Bot zur Fernabfrage von Dienstplänen und automatischen Versendung von PDF-Exporten.
 
----
+## 🛠 Technische Details & Mechanismen
 
-## ✨ Features & Technische Highlights
+Das Tool nutzt modernste Techniken zur Datenextraktion und -verarbeitung:
 
-### 📅 Intelligenter Dienstplan & Abwesenheits-Manager
-Das Herzstück der Anwendung ist der neu entwickelte Abwesenheits-Parser (v1.7), der weit über die Standard-Anzeige hinausgeht:
+### 1. Datenextraktion (Scraping & API)
+Da das Portal keine öffentliche REST-API bietet, nutzt Incode CLI eine Kombination aus JSON-Endpunkten und direktem HTML-Parsing:
+- **GUID Vacuuming:** Das Tool scannt Portalseiten nach 160-Bit Hex-Strings (GUIDs), um alle relevanten Organisations-IDs (OrgUnits) automatisch zu identifizieren.
+- **HTML Parsing (BeautifulSoup):** Komplexe Ansichten wie das Projekt-Portal werden direkt aus dem DOM extrahiert, um Namen und freie Plätze ("Bedarf") anzuzeigen, die in den JSON-Antworten oft fehlen.
+- **Request Chunking:** Um Server-Limits zu umgehen, werden Anfragen (z.B. für Event-Details) in Batches (max. 20-30 IDs) aufgeteilt.
 
-*   **Hybrid-Datenquellen:** Kombiniert Daten aus fixierten Dienstplänen (`load.json`) mit genehmigten, aber noch nicht synchronisierten Anträgen (`loadWishes.json`).
-*   **Gap Filling Algorithmus:** Erkennt Lücken zwischen genehmigten Urlauben und dem Dienstplan und füllt diese intelligent auf.
-*   **Feiertags-Splitting:** Zerlegt Urlaubsblöcke automatisch, wenn sie gesetzliche österreichische Feiertage (inkl. variabler Osterfeiertage) enthalten, und markiert diese korrekt als "Sonderabwesenheit".
-*   **Sunday Filler:** Erkennt fehlende "Abwesend"-Einträge an Sonntagen nach einer Urlaubswoche und generiert diese automatisch für eine lückenlose Ansicht.
-*   **Netto-Urlaubsberechnung:** Berechnet den tatsächlichen Urlaubsverbrauch exklusive Wochenenden und Feiertagen.
+### 2. Authentifizierung & Sicherheit
+- **Session Management:** Nutzung von `requests.Session` mit persistierten Cookies und automatischem Re-Login bei Session-Ablauf.
+- **Security Headers:** Extraktion und Nutzung von portal-spezifischen Sicherheits-Tokens (z.B. `x-incode-xxx`), die dynamisch aus JavaScript-Files oder dem Header geparst werden.
+- **Lokale Verschlüsselung:** Zugangsdaten werden lokal in einer Konfigurationsdatei gespeichert (außerhalb der Git-Verwaltung).
 
-### 🚑 Live-Operations
-*   **Tagesplan:** Ruft den aktuellen Tagesstatus der Dienststelle ab, inkl. Fahrzeugbesatzungen und Zeiten.
-*   **Live-Monitor:** Ein Auto-Refresh Modus für Infoscreens, der bei Änderungen (z.B. Mannschaftswechsel) sofort via Telegram benachrichtigen kann.
+### 3. Logik & Algorithmen
+- **Timezone Handling:** Automatische Korrektur von Portal-Zeitstempeln basierend auf lokaler Systemzeit und Sommerzeit-Offsets.
+- **Feiertags-Engine:** Implementierung des Gaußschen Oster-Algorithmus zur dynamischen Berechnung österreichischer Feiertage für die Netto-Urlaubsstatistik.
+- **Event-Grouping:** Gruppierung von Projekt-Einträgen nach Triple-Keys `(ID, Start, Ende)`, um Serien-Events korrekt als Einzeltermine darzustellen.
 
-### 🛠️ Tooling & Export
-*   **PDF Generation:** Erstellt saubere, druckfertige Dienstpläne mittels `reportlab`.
-*   **iCal Sync:** Exportiert Dienste in das `.ics` Format zur Integration in Google Calendar / Outlook.
-*   **Mitarbeiter-Datenbank:** Durchsucht das interne Verzeichnis nach Kontaktdaten, Dienstnummern und Qualifikationen.
+## 📦 Installation
 
-### 🤖 Telegram Integration
-Ein integrierter Bot-Modus (`src/bot.py`), der auf dem Server laufen kann und auf Befehle reagiert oder proaktiv Dienstplan-Updates pusht.
+1. Repositorium klonen:
+   ```bash
+   git clone https://github.com/manueloberberger/incode-cli.git
+   cd incode-cli
+   ```
 
----
+2. Virtuelle Umgebung erstellen und Abhängigkeiten installieren:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-## 🚀 Installation
+3. Anwendung starten:
+   ```bash
+   python3 incode.py
+   ```
 
-### Voraussetzungen
-*   Python 3.8 oder höher
-*   Zugriff auf das Incode-System (Login-Daten)
+## 🏗 Projektstruktur
 
-### Setup
+- `incode.py`: Haupteinstiegspunkt und Menüführung.
+- `src/api.py`: Kernlogik für Portal-Kommunikation, Scraping und Datenverarbeitung.
+- `src/ui.py`: Interaktive Menüs, Tabellendarstellungen (Rich) und Benutzerinteraktion.
+- `src/bot.py`: Implementierung des Telegram Bots (python-telegram-bot).
+- `src/pdf.py`: PDF-Generierung mittels ReportLab.
+- `src/ical.py`: Export von Kalender-Dateien (ICS).
+- `src/config.py`: Konfigurationsmanagement und Styling.
 
-1.  **Repository klonen**
-    ```bash
-    git clone https://github.com/manueloberberger/incode-cli.git
-    cd incode-cli
-    ```
+## 📝 Lizenz
 
-2.  **Virtuelle Umgebung erstellen (Empfohlen)**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate  # Linux/Mac
-    # oder: .venv\Scripts\activate  # Windows
-    ```
-
-3.  **Abhängigkeiten installieren**
-    Das Projekt nutzt `rich` für das UI, `requests` für API-Calls und `reportlab` für PDFs.
-    ```bash
-    pip install -r requirements.txt
-    ```
-
----
-
-## 🎮 Benutzung
-
-### Start
-Starten Sie die interaktive Konsole:
-```bash
-python3 incode.py
-```
-
-Beim ersten Start werden Sie nach Ihren Zugangsdaten gefragt. Diese werden lokal in `.credentials.json` gespeichert. Das Skript setzt automatisch `chmod 600` auf diese Datei, um sie vor fremden Zugriffen zu schützen.
-
-### Bot-Modus
-Um den Telegram-Bot als Daemon laufen zu lassen:
-```bash
-python3 incode.py bot
-```
-*(Hinweis: Telegram-Token und User-ID müssen zuvor in der Config hinterlegt werden)*
-
----
-
-## 🏗️ Projektstruktur
-
-```
-incode-cli/
-├── incode.py           # Entrypoint & CLI-Routing
-├── .credentials.json   # Lokale Konfiguration (ignoriert von git)
-├── .incode_cache.json  # Temporärer API-Cache
-└── src/
-    ├── api.py          # Core-Logik: Session-Management, Retry-Logik, Parsing-Algorithmen
-    ├── ui.py           # Darstellungsschicht: Rich Tables, Panels, Interaktive Menüs
-    ├── config.py       # Globale Konstanten, Versionierung, Theme-Definitionen
-    ├── ical.py         # iCalendar Generator
-    ├── pdf.py          # PDF Report Engine
-    ├── bot.py          # Telegram Bot Implementierung
-    └── utils.py        # Hilfsfunktionen (Update-Check, Input-Handling)
-```
-
-### Caching-Strategie
-Um die Serverlast zu minimieren und die Reaktionszeit zu verbessern, implementiert `src/api.py` einen dateibasierten Cache (`.incode_cache.json`) mit einer TTL (Time To Live) von 15 Minuten für schwere Abfragen wie den monatlichen Dienstplan. Live-Daten (Tagesplan) werden nicht gecached.
-
----
-
-## ⚠️ Disclaimer
-
-Dieses Projekt ist eine private Open-Source-Entwicklung und steht in keiner offiziellen Verbindung zum Roten Kreuz oder den Herstellern der Incode-Software. Die Nutzung erfolgt auf eigene Gefahr. Es werden keine Daten an Dritte übertragen – die Kommunikation findet ausschließlich direkt zwischen Ihrem Rechner und dem Incode-Server statt.
+Dieses Projekt ist für den internen Gebrauch beim Roten Kreuz bestimmt. Die Nutzung erfolgt auf eigene Gefahr.

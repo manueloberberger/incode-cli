@@ -318,9 +318,7 @@ def get_holidays(year: int) -> List[datetime.date]:
     f = (b + 8) // 25
     g = (b - f + 1) // 3
     h = (19 * a + b - d - g + 15) % 30
-    i = c // 4
-    k = c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
+    i = c // 4; k = c % 4; l = (32 + 2 * e + 2 * i - h - k) % 7
     m = (a + 11 * h + 22 * l) // 451
     
     month = (h + l - 7 * m + 114) // 31
@@ -336,7 +334,7 @@ def get_holidays(year: int) -> List[datetime.date]:
     return holidays
 
 def show_absences(incode: Any) -> None:
-    with console.status("[bold green]Lade Abwesenheiten..."): 
+    with console.status("[bold green]Lade Abwesenheiten..."):
         # Try the dedicated endpoint first
         absences = incode.load_absences()
         
@@ -741,7 +739,8 @@ def show_live_monitor(incode: Any) -> None:
                         try:
                             cl = []
                             for r in ["FAHRER", "SANITAETER1", "SANITAETER2"]:
-                                if r in p["crew"]: cl.append(p['crew'][r])
+                                if r in p["crew"]:
+                                    cl.append(p['crew'][r])
                             export_duties.append({
                                 'begin': p['begin'].strftime('%Y-%m-%dT%H:%M:%S'),
                                 'end': p['end'].strftime('%Y-%m-%dT%H:%M:%S'),
@@ -785,3 +784,94 @@ def show_live_monitor(incode: Any) -> None:
             console.print(f"[error]Fehler im Live-Monitor Loop: {e}[/error]")
             # Wait a bit before retry to avoid spamming errors if network is down
             time.sleep(10)
+
+def show_events_menu(incode: Any) -> None:
+    options = [
+        ("📋  Meine Ambulanz-Dienste", "my"),
+        ("🗓️  Veranstaltungs-Übersicht (Alle)", "all")
+    ]
+    sel = interactive_menu(options, title="🚑  EVENTS / AMBULANZEN")
+    if not sel: return
+    
+    if sel == "my":
+        with console.status("[bold green]Lade meine Ambulanzen..."):
+            duties = incode.load_my_event_duties()
+        
+        if not duties:
+            console.print("[info]Keine eigenen Event-Dienste gefunden.[/info]")
+            wait_for_return()
+            return
+
+        table = Table(title="📋  Meine Ambulanz-Dienste", header_style="header", box=None, padding=(0,1))
+        table.add_column("Datum", style="info")
+        table.add_column("Zeit", style="info")
+        table.add_column("Veranstaltung / Ort", style="white")
+        table.add_column("Fzg/Pos", style="dim")
+        
+        for d in duties:
+            try:
+                b = datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S')
+                e = datetime.strptime(d['end'], '%Y-%m-%dT%H:%M:%S')
+                
+                loc = d.get('location', '')
+                info = d.get('duty_type', '') 
+                
+                table.add_row(
+                    b.strftime('%d.%m.%Y'),
+                    f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
+                    loc or info,
+                    d.get('vehicle', '') or info
+                )
+            except: pass
+        console.print(table)
+        wait_for_return()
+        
+    elif sel == "all":
+        with console.status("[bold green]Lade Veranstaltungs-Plan..."):
+            # Load 3 months by default
+            plan = incode.load_events_plan()
+            
+        if not plan:
+            console.print("[info]Keine Veranstaltungen gefunden (oder keine Berechtigung).[/info]")
+            wait_for_return()
+            return
+            
+        # Group by Date
+        plan.sort(key=lambda x: x['begin'] if x['begin'] else datetime.min)
+        
+        table = Table(title="🗓️  Veranstaltungs-Kalender", header_style="header", box=None, padding=(0,1))
+        table.add_column("Datum", style="bold")
+        table.add_column("Zeit", style="dim")
+        table.add_column("Veranstaltung / Ort", style="white")
+        table.add_column("Besatzung", style="crew")
+        
+        for p in plan:
+            b, e = p['begin'], p['end']
+            if not b or not e: continue
+            
+            crew_list = []
+            # 'crew' is now a dict with unique keys, values are names
+            for name in p.get('crew', {}).values():
+                crew_list.append(name)
+            
+            # Add open slots info
+            open_slots = p.get('open_slots', 0)
+            if open_slots > 0:
+                crew_list.append(f"[red]Noch {open_slots} Plätze !!![/red]")
+            
+            event_name = p.get('vehicle', 'Event')
+            location = p.get('location', '')
+            
+            display_name = event_name
+            if location and location not in event_name:
+                display_name += f"\n[dim]({location})[/dim]"
+            
+            table.add_row(
+                b.strftime('%d.%m.%Y'),
+                f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
+                display_name,
+                ", ".join(crew_list) or "[dim]-[/dim]"
+            )
+            
+        console.print(table)
+        wait_for_return()
