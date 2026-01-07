@@ -3,14 +3,19 @@ import sys
 import time
 from datetime import datetime
 
-    from rich.prompt import Prompt
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from rich.prompt import Prompt
+from rich.console import Console
+try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu
     from src.utils import clear_screen, check_for_updates, update_app, wait_for_return
     from src.bot import IncodeBot
 except ImportError as e:
-# ... (rest of imports)
+    print(f"Fehler: Abhängigkeiten konnten nicht geladen werden ({e}).")
+    print("Bitte führe 'pip install -r requirements.txt' aus.")
+    sys.exit(1)
 
 def setup_auth():
     creds = load_credentials()
