@@ -1,4 +1,4 @@
-# Incode CLI & Bot v1.4
+# Incode CLI & Bot v1.5
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -7,13 +7,23 @@
 
 Eine hochoptimierte CLI-Anwendung und ein intelligenter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-**Neu in Version 1.4:** Automatische Update-Prüfung und intelligenter Dependency-Check beim Start. Der Telegram-Bot ist weiterhin vollständig interaktiv und bietet verbesserte Stabilität.
+**Neu in Version 1.5:** Einführung des **Mitarbeiter-Verzeichnisses (BETA)**. Durchsuche das gesamte Personalverzeichnis deiner Dienststelle nach Kontaktdaten, Qualifikationen und Detail-Infos – direkt aus dem Terminal.
 
 ---
 
 ## 🚀 Kern-Features
 
-### 📱 Der Telegram-Bot (v1.4)
+### 📒 NEU: Mitarbeiter-Verzeichnis (v1.5)
+Ein mächtiges Werkzeug, um schnell Kontaktinformationen oder Details zu Kollegen zu finden.
+*   **Intelligente Suche:** Finde Personen nicht nur über den Namen, sondern auch über die Personalnummer (PNR), E-Mail oder Telefonnummer.
+*   **Detail-Dashboard:** Ein Klick auf einen Treffer öffnet eine umfassende Akte mit:
+    *   **Basisdaten:** Telefon (Dienst/Privat), E-Mail, Personalnummer.
+    *   **Status-Infos:** Letzter Login im Portal, Account-Status, Dienstzugehörigkeit.
+    *   **Qualifikationen:** Detaillierte Liste aller hinterlegten Skills (NFS, RS, Führerscheine, etc.) mit Gültigkeitsdaten.
+    *   **Gruppenzugehörigkeiten:** In welchen internen Gruppen ist die Person organisiert?
+*   **Raw-Data Mode:** Für Technik-Enthusiasten gibt es per Tastendruck (`r`) den vollständigen JSON-Datensatz direkt aus der Incode-API zur Ansicht.
+
+### 📱 Der Telegram-Bot
 Dein persönlicher Dienstplan-Assistent, der 24/7 erreichbar ist. Er wurde entwickelt, um die wichtigsten Informationen mit minimalem Datenverbrauch und maximaler Geschwindigkeit bereitzustellen.
 
 *   **Vollständig Interaktiv:** Starte die Konversation einfach mit `/start`. Intuitive Buttons führen dich durch alle Funktionen – kein Auswendiglernen von Befehlen nötig.
@@ -34,7 +44,7 @@ Die mächtige Zentrale für Power-User und Wachen-Rechner:
     *   **Auto-Refresh:** Aktualisiert die Daten selbstständig in konfigurierbaren Intervallen.
     *   **Change-Detection:** Erkennt Änderungen im Dienstplan (z.B. kurzfristiger Fahrzeugtausch oder Personaländerungen) sofort.
     *   **Push-Benachrichtigungen:** Sendet bei relevanten Änderungen automatisch eine Benachrichtigung inkl. aktualisiertem PDF an deinen Telegram-Bot.
-*   **Umfangreiche Suche:** Finde schnell heraus, wann Kollegen Dienst haben, um Dienste zu tauschen oder Fahrgemeinschaften zu bilden.
+*   **Gemeinsame Dienste:** Finde heraus, wann du mit bestimmten Kollegen gemeinsam Dienst hast ("Wann fahre ich wieder mit Max?").
 *   **Export-Optionen:**
     *   **PDF-Export:** Professionell formatierte Pläne mit automatischem Zeitstempel (z.B. `Tagesplan_2026-01-08_14-30.pdf`).
     *   **iCal-Synchronisation:** Generiert `.ics` Dateien, die du direkt in Outlook, Google Calendar oder Apple Calendar importieren kannst.
@@ -87,6 +97,9 @@ Um deinen privaten Bot einzurichten, folge diesen drei einfachen Schritten:
 2.  **User-ID ermitteln:** Suche nach [@userinfobot](https://t.me/userinfobot), um deine numerische **User ID** zu erfahren. Nur diese ID erhält Zugriff auf deinen Bot.
 3.  **Einrichtung abschließen:** Starte `./incode bot`. Das Programm wird dich nach dem Token und deiner ID fragen und diese für die Zukunft speichern.
 
+### 💡 Tipp: Bot als System-Dienst (Linux)
+Für den 24/7 Betrieb auf einem Server oder Raspberry Pi kann der Bot als `systemd` Service eingerichtet werden. Eine Anleitung dazu findest du in der Dokumentation oder frage den Entwickler.
+
 ---
 
 ## 🧠 Technik & Architektur
@@ -94,7 +107,7 @@ Um deinen privaten Bot einzurichten, folge diesen drei einfachen Schritten:
 *   **Hybrid Async Core:** Der Bot nutzt das `python-telegram-bot` Framework im asynchronen Modus. Zeitintensive Aufgaben wie PDF-Rendering oder API-Abfragen werden in separate Worker-Threads ausgelagert, damit das User-Interface niemals blockiert.
 *   **Smart Caching Engine:** Um die Last auf den Incode-Servern zu minimieren, werden Daten in der `.incode_cache.json` mit einer Time-to-Live (TTL) von 15 Minuten zwischengespeichert.
 *   **High-Speed PDF Rendering:** Statt schwerfälliger HTML-zu-PDF Konverter nutzt Incode-CLI die `ReportLab`-Engine. PDFs werden direkt im Arbeitsspeicher gezeichnet und sind in weniger als 100ms bereit für den Versand.
-*   **Sicherheit:** Alle sensiblen Daten verbleiben lokal auf deinem Rechner. Es findet keine Übertragung an Drittserver statt (außer direkt zu Incode und Telegram).
+*   **Reverse Engineering:** Da keine offizielle API existiert, emuliert das Tool die Anfragen eines Webbrowsers. Neue Features wie das Mitarbeiter-Verzeichnis nutzen undokumentierte Endpunkte (`getStaff.json`), um Daten zu aggregieren, die im Web-Frontend oft über mehrere Seiten verteilt sind.
 
 ---
 
