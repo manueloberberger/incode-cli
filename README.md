@@ -1,66 +1,83 @@
-# Incode CLI - Advanced Staff Portal Integration
+# 🚑 Incode CLI v1.8
 
-Incode CLI ist ein leistungsfähiges Python-basiertes Kommandozeilen-Tool (CLI) zur Automatisierung und Visualisierung von Daten aus dem Rotes Kreuz Dienstplan-Portal (Incode StaffPortal). Es wurde entwickelt, um Einsatzkräften einen schnellen, gefilterten und funktional erweiterten Zugriff auf ihre Dienstpläne, Abwesenheiten und Veranstaltungen zu ermöglichen.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Status](https://img.shields.io/badge/Status-BETA-orange.svg)]()
+[![License](https://img.shields.io/badge/License-Internal-red.svg)]()
 
-## 🚀 Kernfunktionen
+**Incode CLI** is a high-performance terminal interface for the Red Cross StaffPortal (Incode). It transforms a legacy web experience into a modern, automated, and feature-rich developer-grade environment.
 
-- **📅 Mein Dienstplan:** Tabellarische Übersicht zukünftiger Dienste inklusive Stunden-Statistiken pro Monat und Dienststellen-Auswertungen. Export als PDF, iCal oder direkt per Telegram.
-- **🌴 Abwesenheiten:** Übersicht über Urlaub, Krankenstände und ZA-Wünsche. Inklusive Netto-Urlaubstage-Berechnung (exkl. Wochenenden/Feiertage).
-- **🚑 Events / Ambulanzdienste:** Aggressive Suche nach geplanten Sanitätsdiensten und Veranstaltungen über alle verfügbaren Abteilungen hinweg.
-- **📒 Mitarbeiter-Verzeichnis:** Suche nach Kontaktdaten (Telefon, E-Mail), Rollen und Qualifikationen von Kollegen.
-- **📺 Live-Monitor:** Echtzeit-Überwachung des Tagesplans mit automatischer Benachrichtigung bei Änderungen via Telegram.
-- **🤖 Telegram Bot:** Integrierter Bot zur Fernabfrage von Dienstplänen und automatischen Versendung von PDF-Exporten.
+---
 
-## 🛠 Technische Details & Mechanismen
+## ⚡ Core Engines
 
-Das Tool nutzt modernste Techniken zur Datenextraktion und -verarbeitung:
+### 🔍 The "Vacuum" GUID Discovery
+Traditional scrapers fail when Orgunits or Projects are nested or hidden in JavaScript variables. Incode CLI implements a **GUID Vacuum Engine** that recursively scans DOM trees and JS blocks for 160-bit hex patterns.
+- Automatically identifies all accessible `orgUnitDataGuids`.
+- Injects discovered IDs into API requests to bypass front-end filtering.
+- Maps IDs to human-readable names via a sibling-traversal heuristic.
 
-### 1. Datenextraktion (Scraping & API)
-Da das Portal keine öffentliche REST-API bietet, nutzt Incode CLI eine Kombination aus JSON-Endpunkten und direktem HTML-Parsing:
-- **GUID Vacuuming:** Das Tool scannt Portalseiten nach 160-Bit Hex-Strings (GUIDs), um alle relevanten Organisations-IDs (OrgUnits) automatisch zu identifizieren.
-- **HTML Parsing (BeautifulSoup):** Komplexe Ansichten wie das Projekt-Portal werden direkt aus dem DOM extrahiert, um Namen und freie Plätze ("Bedarf") anzuzeigen, die in den JSON-Antworten oft fehlen.
-- **Request Chunking:** Um Server-Limits zu umgehen, werden Anfragen (z.B. für Event-Details) in Batches (max. 20-30 IDs) aufgeteilt.
+### 🎭 Hybrid Extraction Layer (HEL)
+The portal's JSON endpoints often provide incomplete datasets (missing event names or empty slots). HEL handles this by:
+1. **Parallel Execution:** Fetching raw JSON for data structure AND raw HTML for metadata.
+2. **DOM Reconstruction:** Rebuilding event objects by matching JSON `parentDataGuid` with HTML `data-` attributes.
+3. **Regex Overlays:** Using non-deterministic regex patterns to extract "Bedarf" (open slots) when standard parsers fail.
 
-### 2. Authentifizierung & Sicherheit
-- **Session Management:** Nutzung von `requests.Session` mit persistierten Cookies und automatischem Re-Login bei Session-Ablauf.
-- **Security Headers:** Extraktion und Nutzung von portal-spezifischen Sicherheits-Tokens (z.B. `x-incode-xxx`), die dynamisch aus JavaScript-Files oder dem Header geparst werden.
-- **Lokale Verschlüsselung:** Zugangsdaten werden lokal in einer Konfigurationsdatei gespeichert (außerhalb der Git-Verwaltung).
+### 📊 Statistical Intelligence
+Beyond simple display, the CLI computes:
+- **Net-Vacation Logic:** Calculates real holiday usage by applying the **Gauss Easter Algorithm** to exclude weekends and public holidays dynamically.
+- **Duty Distribution:** Cluster analysis of vehicle types and deployment locations.
 
-### 3. Logik & Algorithmen
-- **Timezone Handling:** Automatische Korrektur von Portal-Zeitstempeln basierend auf lokaler Systemzeit und Sommerzeit-Offsets.
-- **Feiertags-Engine:** Implementierung des Gaußschen Oster-Algorithmus zur dynamischen Berechnung österreichischer Feiertage für die Netto-Urlaubsstatistik.
-- **Event-Grouping:** Gruppierung von Projekt-Einträgen nach Triple-Keys `(ID, Start, Ende)`, um Serien-Events korrekt als Einzeltermine darzustellen.
+---
 
-## 📦 Installation
+## 🚀 Features at a Glance
 
-1. Repositorium klonen:
-   ```bash
-   git clone https://github.com/manueloberberger/incode-cli.git
-   cd incode-cli
-   ```
+| Feature | Description | Technical Core |
+| :--- | :--- | :--- |
+| **Mein Dienstplan** | Interactive table of future duties. | Monthly chunking, month-over-month stats. |
+| **Events / Ambulanzen** | Detailed overview of upcoming events. | card-based HTML parsing, GUID-mapping. |
+| **Live Monitor** | 24/7 terminal dashboard. | Differential state-tracking, Telegram webhooks. |
+| **Staff Search** | Complete directory lookup. | Multi-field search (PNR, Skill, Occupation). |
+| **PDF/iCal Export** | Export your life to your devices. | ReportLab vector gen, icalendar RFC5545. |
 
-2. Virtuelle Umgebung erstellen und Abhängigkeiten installieren:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+---
 
-3. Anwendung starten:
-   ```bash
-   python3 incode.py
-   ```
+## 🛠 Tech Stack
 
-## 🏗 Projektstruktur
+- **Language:** Python 3.10+
+- **Terminal UI:** [Rich](https://github.com/Textualize/rich) (Live-layouts, Tables, Panels)
+- **Networking:** [Requests](https://requests.readthedocs.io/) with custom `HTTPAdapter` for aggressive retries.
+- **Parsing:** [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) with `lxml`.
+- **Bot Layer:** [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) (AsyncIO).
 
-- `incode.py`: Haupteinstiegspunkt und Menüführung.
-- `src/api.py`: Kernlogik für Portal-Kommunikation, Scraping und Datenverarbeitung.
-- `src/ui.py`: Interaktive Menüs, Tabellendarstellungen (Rich) und Benutzerinteraktion.
-- `src/bot.py`: Implementierung des Telegram Bots (python-telegram-bot).
-- `src/pdf.py`: PDF-Generierung mittels ReportLab.
-- `src/ical.py`: Export von Kalender-Dateien (ICS).
-- `src/config.py`: Konfigurationsmanagement und Styling.
+---
 
-## 📝 Lizenz
+## 📦 Quick Start
 
-Dieses Projekt ist für den internen Gebrauch beim Roten Kreuz bestimmt. Die Nutzung erfolgt auf eigene Gefahr.
+```bash
+# Clone the repository
+git clone https://github.com/manueloberberger/incode-cli.git && cd incode-cli
+
+# Setup environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Run the CLI
+python3 incode.py
+```
+
+## 🤖 Bot Deployment
+To run the Telegram Bot as a background process:
+```bash
+python3 incode.py bot &
+```
+
+---
+
+## 🛡 Security & Privacy
+- **Stateless by Default:** Sensitive cookies are kept in memory or temporary local cache only.
+- **Local Credentials:** `.credentials.json` is automatically chmodded to `600` and excluded from git tracking.
+- **No Third-Party Analytics:** Your data stays between you and the Red Cross server.
+
+---
+*Developed for professionals. Built for speed.*
