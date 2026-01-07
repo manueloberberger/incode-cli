@@ -1,66 +1,109 @@
-# Incode CLI - Rotes Kreuz Dienstplan Tool 🚑
+# Incode CLI 🚑
 
-Ein interaktives Kommandozeilen-Tool (CLI) für den Zugriff auf das Incode/Maportal Dienstplan-System (Rotes Kreuz).
+**Version:** 1.7  
+**Python:** 3.8+
 
-## ✨ Features
+Ein professionelles, terminal-basiertes Interface (TUI) für das **Incode / Maportal Dienstplan-System** des Roten Kreuzes.
 
-*   **📅 Mein Dienstplan:** Übersicht aller kommenden Dienste mit Details zu Fahrzeug und Besatzung.
-*   **🌴 Meine Abwesenheiten (BETA):** Detaillierte Liste aller Urlaube, freien Wochenenden und Feiertage.
-    *   **Intelligente Logik:** Erkennt Feiertage in Urlaubsblöcken ("Geplante Sonderabwesenheit").
-    *   **Lückenlos:** Ergänzt automatisch fehlende Sonntage nach Urlaubswochen.
-    *   **Vorschau:** Zeigt genehmigte Wünsche an, auch wenn sie noch nicht fix im Dienstplan stehen (`[Gen. / n. eingetr.]`).
-    *   **Urlaubs-Saldo:** Berechnet die tatsächlichen Netto-Urlaubstage (ohne Sonn-/Feiertage).
-*   **🚑 Tagesplan:** Wer fährt heute wo? Live-Ansicht der Dienststelle mit Fahrzeugen und Besatzung.
-*   **📺 Live-Monitor:** Automatisch aktualisierende Ansicht für Infoscreens in der Dienststelle.
-*   **📒 Mitarbeiter-Suche:** Schnelles Finden von Kontaktdaten, Dienstnummern und Qualifikationen von Kollegen.
-*   **🔍 Gemeinsame Dienste:** Finde heraus, wann du mit einer bestimmten Person Dienst hast.
-*   **📤 Export:**
-    *   **PDF:** Sauber formatierte Dienstpläne zum Ausdrucken oder Versenden.
-    *   **iCal:** Export für deinen digitalen Kalender (Google, Outlook, etc.).
-*   **🤖 Telegram Bot:** Integrierter Bot, um Dienstpläne und Updates direkt aufs Handy zu bekommen.
+Dieses Tool wurde entwickelt, um die oft langsame und unübersichtliche Web-Oberfläche durch eine schnelle, lokale und automatisierbare Lösung zu ersetzen. Es bietet erweiterte Funktionen wie algorithmische Urlaubsbrechnung, PDF-Exporte und einen integrierten Telegram-Bot.
+
+---
+
+## ✨ Features & Technische Highlights
+
+### 📅 Intelligenter Dienstplan & Abwesenheits-Manager
+Das Herzstück der Anwendung ist der neu entwickelte Abwesenheits-Parser (v1.7), der weit über die Standard-Anzeige hinausgeht:
+
+*   **Hybrid-Datenquellen:** Kombiniert Daten aus fixierten Dienstplänen (`load.json`) mit genehmigten, aber noch nicht synchronisierten Anträgen (`loadWishes.json`).
+*   **Gap Filling Algorithmus:** Erkennt Lücken zwischen genehmigten Urlauben und dem Dienstplan und füllt diese intelligent auf.
+*   **Feiertags-Splitting:** Zerlegt Urlaubsblöcke automatisch, wenn sie gesetzliche österreichische Feiertage (inkl. variabler Osterfeiertage) enthalten, und markiert diese korrekt als "Sonderabwesenheit".
+*   **Sunday Filler:** Erkennt fehlende "Abwesend"-Einträge an Sonntagen nach einer Urlaubswoche und generiert diese automatisch für eine lückenlose Ansicht.
+*   **Netto-Urlaubsberechnung:** Berechnet den tatsächlichen Urlaubsverbrauch exklusive Wochenenden und Feiertagen.
+
+### 🚑 Live-Operations
+*   **Tagesplan:** Ruft den aktuellen Tagesstatus der Dienststelle ab, inkl. Fahrzeugbesatzungen und Zeiten.
+*   **Live-Monitor:** Ein Auto-Refresh Modus für Infoscreens, der bei Änderungen (z.B. Mannschaftswechsel) sofort via Telegram benachrichtigen kann.
+
+### 🛠️ Tooling & Export
+*   **PDF Generation:** Erstellt saubere, druckfertige Dienstpläne mittels `reportlab`.
+*   **iCal Sync:** Exportiert Dienste in das `.ics` Format zur Integration in Google Calendar / Outlook.
+*   **Mitarbeiter-Datenbank:** Durchsucht das interne Verzeichnis nach Kontaktdaten, Dienstnummern und Qualifikationen.
+
+### 🤖 Telegram Integration
+Ein integrierter Bot-Modus (`src/bot.py`), der auf dem Server laufen kann und auf Befehle reagiert oder proaktiv Dienstplan-Updates pusht.
+
+---
 
 ## 🚀 Installation
 
-Voraussetzung: Python 3.8 oder neuer.
+### Voraussetzungen
+*   Python 3.8 oder höher
+*   Zugriff auf das Incode-System (Login-Daten)
 
-1.  Repository klonen:
+### Setup
+
+1.  **Repository klonen**
     ```bash
     git clone https://github.com/manueloberberger/incode-cli.git
     cd incode-cli
     ```
 
-2.  Abhängigkeiten installieren (am besten in einem Virtual Environment):
+2.  **Virtuelle Umgebung erstellen (Empfohlen)**
     ```bash
     python3 -m venv .venv
-    source .venv/bin/activate
+    source .venv/bin/activate  # Linux/Mac
+    # oder: .venv\Scripts\activate  # Windows
+    ```
+
+3.  **Abhängigkeiten installieren**
+    Das Projekt nutzt `rich` für das UI, `requests` für API-Calls und `reportlab` für PDFs.
+    ```bash
     pip install -r requirements.txt
     ```
 
+---
+
 ## 🎮 Benutzung
 
-Starte das Tool einfach über:
+### Start
+Starten Sie die interaktive Konsole:
 ```bash
 python3 incode.py
 ```
 
-### Erste Schritte
-Beim ersten Start wirst du nach deinen Zugangsdaten gefragt:
-1.  **Benutzername** (Incode Login)
-2.  **Passwort**
+Beim ersten Start werden Sie nach Ihren Zugangsdaten gefragt. Diese werden lokal in `.credentials.json` gespeichert. Das Skript setzt automatisch `chmod 600` auf diese Datei, um sie vor fremden Zugriffen zu schützen.
 
-Diese Daten werden lokal und sicher (Dateirechte 600) in einer `.credentials.json` gespeichert.
+### Bot-Modus
+Um den Telegram-Bot als Daemon laufen zu lassen:
+```bash
+python3 incode.py bot
+```
+*(Hinweis: Telegram-Token und User-ID müssen zuvor in der Config hinterlegt werden)*
 
-### Steuerung
-*   Nutze die **Pfeiltasten** (⬆/⬇), um im Menü zu navigieren.
-*   Bestätige mit **Enter** (↵).
-*   Gehe zurück oder beende das Programm mit **ESC** oder **q**.
+---
 
-## 🛠️ Technische Details
+## 🏗️ Projektstruktur
 
-*   **Version:** 1.7
-*   **Cache:** Um die Serverlast zu minimieren und die Geschwindigkeit zu erhöhen, werden Daten kurzzeitig (15 Min) lokal in `.incode_cache.json` zwischengespeichert.
-*   **Export:** PDF-Dateien werden im aktuellen Verzeichnis gespeichert.
+```
+incode-cli/
+├── incode.py           # Entrypoint & CLI-Routing
+├── .credentials.json   # Lokale Konfiguration (ignoriert von git)
+├── .incode_cache.json  # Temporärer API-Cache
+└── src/
+    ├── api.py          # Core-Logik: Session-Management, Retry-Logik, Parsing-Algorithmen
+    ├── ui.py           # Darstellungsschicht: Rich Tables, Panels, Interaktive Menüs
+    ├── config.py       # Globale Konstanten, Versionierung, Theme-Definitionen
+    ├── ical.py         # iCalendar Generator
+    ├── pdf.py          # PDF Report Engine
+    ├── bot.py          # Telegram Bot Implementierung
+    └── utils.py        # Hilfsfunktionen (Update-Check, Input-Handling)
+```
+
+### Caching-Strategie
+Um die Serverlast zu minimieren und die Reaktionszeit zu verbessern, implementiert `src/api.py` einen dateibasierten Cache (`.incode_cache.json`) mit einer TTL (Time To Live) von 15 Minuten für schwere Abfragen wie den monatlichen Dienstplan. Live-Daten (Tagesplan) werden nicht gecached.
+
+---
 
 ## ⚠️ Disclaimer
 
-Dies ist ein inoffizielles Tool. Es steht in keiner direkten Verbindung zum Roten Kreuz oder den Entwicklern der Incode-Software. Nutzung auf eigene Verantwortung.
+Dieses Projekt ist eine private Open-Source-Entwicklung und steht in keiner offiziellen Verbindung zum Roten Kreuz oder den Herstellern der Incode-Software. Die Nutzung erfolgt auf eigene Gefahr. Es werden keine Daten an Dritte übertragen – die Kommunikation findet ausschließlich direkt zwischen Ihrem Rechner und dem Incode-Server statt.
