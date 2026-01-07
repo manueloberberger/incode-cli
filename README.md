@@ -1,4 +1,4 @@
-# Incode CLI & Bot v1.3
+# Incode CLI & Bot v1.4
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -7,13 +7,13 @@
 
 Eine hochoptimierte CLI-Anwendung und ein intelligenter Telegram-Bot zur effizienten Interaktion mit dem **Incode-Dienstplansystem des Roten Kreuzes**.
 
-**Neu in Version 1.3:** Der Telegram-Bot ist jetzt vollständig interaktiv! Navigiere durch Menüs, wähle Daten per Button-Klick und erhalte PDFs in Sekundenschnelle – ganz ohne kryptische Befehle.
+**Neu in Version 1.4:** Automatische Update-Prüfung und intelligenter Dependency-Check beim Start. Der Telegram-Bot ist weiterhin vollständig interaktiv!
 
 ---
 
 ## 🚀 Features
 
-### 📱 Telegram Bot (v1.3)
+### 📱 Telegram Bot (v1.4)
 Der Bot ist dein persönlicher Dienstplan-Assistent für die Hosentasche.
 *   **Interaktives Menü:** Starte mit `/start` und steuere alles über Buttons.
 *   **Smart Date Picker:**
