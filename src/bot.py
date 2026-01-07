@@ -82,7 +82,7 @@ class IncodeBot:
         
         await update.message.reply_text(
             f"✨ *Incode CLI Bot v{VERSION}* ✨\n\n"
-            f"Hallo! Was möchtest du tun ???",
+            f"Hallo! Was möchtest du tun?",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
@@ -224,7 +224,7 @@ class IncodeBot:
                 ]
                 await context.bot.send_message(
                     chat_id=chat_id, 
-                    text="Was möchtest du als nächstes tun ???", 
+                    text="Was möchtest du als nächstes tun?", 
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             else:
