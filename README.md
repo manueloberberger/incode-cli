@@ -81,22 +81,30 @@ The CLI maintains its own lifecycle.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/incode-cli.git
+git clone https://github.com/manueloberberger/incode-cli.git
 cd incode-cli
 
-# 2. Create Virtual Environment
+# 2. Create Virtual Environment & Install Dependencies
 python3 -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
-
-# 3. Install Dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Run
-python3 incode.py
+# 3. Make the launcher executable
+chmod +x incode
 ```
 
-*Note: Credentials are requested on the first run and stored securely (`chmod 600`) in `.credentials.json`. They are never transmitted anywhere except the official Incode servers.*
+## 🚀 Usage
+
+Once installed, you can launch the application directly using the provided wrapper script. This script automatically uses the virtual environment, so you don't have to activate it manually:
+
+```bash
+./incode
+```
+
+Or run the Telegram Bot mode directly:
+```bash
+./incode bot
+```
 
 ---
 
