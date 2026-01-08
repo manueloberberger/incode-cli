@@ -7,6 +7,9 @@ from urllib3.util.retry import Retry
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.spinner import Spinner
+from rich.live import Live
+from rich.align import Align
 from typing import Optional, List, Dict, Any, Tuple, Union
 
 from src.config import console, DEFAULT_GUID
@@ -44,7 +47,7 @@ class IncodeRequests:
             with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            console.print(f"[warning]Cache konnte nicht gespeichert werden: {e}[/warning]")
+            console.print(Align.center(f"[warning]Cache konnte nicht gespeichert werden: {e}[/warning]"))
 
     def _get_cached_data(self, key: str) -> Optional[Any]:
         if key in self.cache:
@@ -70,8 +73,7 @@ class IncodeRequests:
             Tuple[bool, str]: (Success, Message)
         """
         login_url = f"{self.base_url}/login.php"
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
-            progress.add_task(description="Authentifizierung...", total=None)
+        with Live(Align.center(Spinner("dots", text="Authentifizierung ...")), console=console, transient=True):
             login_headers = {'User-Agent': self.user_agent, 'Content-Type': 'application/x-www-form-urlencoded'}
             login_body = {'client': 'dienstplan', 'login': username, 'password': password}
             try:
@@ -204,7 +206,7 @@ class IncodeRequests:
                                         elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
                 return events
         except Exception as e:
-            console.print(f"[dim red]Fehler beim Laden der Events: {e}[/dim red]")
+            console.print(Align.center(f"[dim red]Fehler beim Laden der Events: {e}[/dim red]"))
         return []
 
     def load_my_event_duties(self) -> List[Dict[str, Any]]:
@@ -346,7 +348,7 @@ class IncodeRequests:
                             daily_map[curr] = {'label': lbl, 'fixed': True}
                         curr += timedelta(days=1)
         except Exception as e:
-            console.print(f"[dim red]Fehler beim Laden der Abwesenheiten: {e}[/dim red]")
+            console.print(Align.center(f"[dim red]Fehler beim Laden der Abwesenheiten: {e}[/dim red]"))
 
         try:
             resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body)
@@ -374,7 +376,7 @@ class IncodeRequests:
                                 daily_map[curr] = {'label': lbl + status_text, 'fixed': False}
                         curr += timedelta(days=1)
         except Exception as e:
-            console.print(f"[dim red]Fehler beim Laden der Wünsche: {e}[/dim red]")
+            console.print(Align.center(f"[dim red]Fehler beim Laden der Wünsche: {e}[/dim red]"))
         
         # Weekend / Sunday Logic
         sorted_d = sorted(daily_map.keys())
@@ -493,7 +495,7 @@ class IncodeRequests:
             self._set_cached_data(cache_key, duties)
             return duties
         except Exception as e:
-            console.print(f"[dim red]Fehler beim Laden der Dienste: {e}[/dim red]")
+            console.print(Align.center(f"[dim red]Fehler beim Laden der Dienste: {e}[/dim red]"))
             if cache_key in self.cache: return self.cache[cache_key]['data']
             return []
 

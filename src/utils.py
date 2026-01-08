@@ -184,7 +184,7 @@ def update_app() -> bool:
         stashed = False
         
         if status:
-            console.print("[yellow]Lokale Änderungen erkannt. Sichere Arbeitsstand (git stash)...[/yellow]")
+            console.print(Align.center("[yellow]Lokale Änderungen erkannt. Sichere Arbeitsstand (git stash) ...[/yellow]"))
             subprocess.run(["git", "stash"], check=True, stdout=subprocess.DEVNULL)
             stashed = True
         
@@ -192,16 +192,16 @@ def update_app() -> bool:
         current_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         
         # 2. Git Pull
-        console.print("[info]Lade Updates von GitHub (git pull)...[/info]")
+        console.print(Align.center("[info]Lade Updates von GitHub (git pull) ...[/info]"))
         subprocess.run(["git", "pull"], check=True)
         
         # 3. Restore Stash (if any)
         if stashed:
-            console.print("[info]Stelle lokale Änderungen wieder her (git stash pop)...[/info]")
+            console.print(Align.center("[info]Stelle lokale Änderungen wieder her (git stash pop) ...[/info]"))
             pop_res = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
             if pop_res.returncode != 0:
-                console.print("[bold red]Warnung: Konflikte beim Wiederherstellen der Änderungen![/bold red]")
-                console.print("Deine Änderungen sind im 'git stash' gespeichert.")
+                console.print(Align.center("[bold red]Warnung: Konflikte beim Wiederherstellen der Änderungen !!![/bold red]"))
+                console.print(Align.center("Deine Änderungen sind im 'git stash' gespeichert."))
         
         # 4. Smart Dependency Check
         # Check if requirements.txt changed between old HEAD and new HEAD
@@ -218,7 +218,7 @@ def update_app() -> bool:
                 needs_pip = True
         
         if needs_pip:
-            with console.status("[bold blue]Aktualisiere Python-Abhängigkeiten (pip install)...[/bold blue]", spinner="dots"):
+            with Live(Align.center(Spinner("dots", text="[bold blue]Aktualisiere Python-Abhängigkeiten (pip install) ...[/bold blue]")), console=console, transient=True):
                 # Use sys.executable to ensure we use the same python/venv
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
@@ -226,24 +226,28 @@ def update_app() -> bool:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE
                 )
-            console.print("[dim]Abhängigkeiten aktualisiert.[/dim]")
+            console.print(Align.center("[dim]Abhängigkeiten aktualisiert.[/dim]"))
         else:
-            console.print("[dim]Keine neuen Abhängigkeiten. Überspringe pip install.[/dim]")
+            console.print(Align.center("[dim]Keine neuen Abhängigkeiten. Überspringe pip install.[/dim]"))
         
-        console.print("[success]Update erfolgreich abgeschlossen![/success]")
+        console.print(Align.center("[success]Update erfolgreich abgeschlossen !!![/success]"))
         return True
         
     except subprocess.CalledProcessError as e:
-        console.print(f"[error]Fehler beim Update-Prozess (Exit Code {e.returncode}).[/error]")
+        console.print(Align.center(f"[error]Fehler beim Update-Prozess (Exit Code {e.returncode}).[/error]"))
         if e.stderr:
-            console.print(f"[dim]{e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr}[/dim]")
+            console.print(Align.center(f"[dim]{e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr}[/dim]"))
         return False
     except Exception as e:
-        console.print(f"[error]Ein unerwarteter Fehler ist aufgetreten: {e}[/error]")
+        console.print(Align.center(f"[error]Ein unerwarteter Fehler ist aufgetreten: {e}[/error]"))
         return False
 
+from rich.align import Align
+from rich.spinner import Spinner
+from rich.live import Live
+
 def wait_for_return() -> Optional[str]:
-    console.print("\n[dim]Beliebige Taste drücken um fortzufahren...[/dim]")
+    console.print(Align.center("\n[dim]Beliebige Taste drücken um fortzufahren ...[/dim]"))
     flush_input()
     while True:
         k = get_key()

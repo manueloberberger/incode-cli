@@ -11,7 +11,10 @@ from typing import List, Tuple, Optional, Any, Dict
 from rich.table import Table
 from rich.prompt import Prompt
 from rich.live import Live
+from rich.spinner import Spinner
 from rich.console import Group
+from rich.align import Align
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from src.config import console, BANNER, load_credentials
 from src.utils import get_key, wait_for_return, clear_screen, flush_input, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP_ALT, KEY_DOWN_ALT, KEY_LEFT, KEY_RIGHT, KEY_LEFT_ALT, KEY_RIGHT_ALT
@@ -42,7 +45,7 @@ def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
         console.print(f"[error]Fehler beim Bot-Versand: {e}[/error]")
         return False
 
-def interactive_menu(options: List[Tuple[str, str]], title: str = "HAUPTMENÜ") -> Optional[str]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ") -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
@@ -53,16 +56,20 @@ def interactive_menu(options: List[Tuple[str, str]], title: str = "HAUPTMENÜ") 
     
     while True:
         clear_screen()
-        console.print(BANNER)
-        console.print(f"\n[header]{title}[/header]\n")
+        console.print(Align.center(BANNER))
+        console.print(Align.center(f"[header]{title}[/header]\n"))
+        
+        menu_grid = Table.grid(padding=(0, 0))
+        menu_grid.add_column()
         
         for idx, (label, _) in enumerate(options):
             if idx == selected_idx:
-                console.print(f"[bold green]> {label}[/bold green]")
+                menu_grid.add_row(f"[bold green]> {label}[/bold green]")
             else:
-                console.print(f"  {label}")
+                menu_grid.add_row(f"  {label}")
         
-        console.print("\n[dim]⬆/⬇ Navigieren • ↵ Auswählen • ESC Zurück/Beenden[/dim]")
+        console.print(Align.center(menu_grid))
+        console.print(Align.center(f"\n[dim]⬆/⬇ Navigieren • ↵ Auswählen • ESC Zurück/Beenden[/dim]\n"))
 
         key = get_key()
         
@@ -84,8 +91,8 @@ def select_date_interactive() -> Optional[datetime]:
     
     while True:
         clear_screen()
-        console.print(BANNER)
-        console.print(f"\n[header]DATUMS-AUSWAHL[/header]")
+        console.print(Align.center(BANNER))
+        console.print(Align.center(f"[header]DATUMS-AUSWAHL[/header]\n"))
         
         year, month = selected_date.year, selected_date.month
         cal = calendar.monthcalendar(year, month)
@@ -110,8 +117,8 @@ def select_date_interactive() -> Optional[datetime]:
                         row.append(d_str)
             table.add_row(*row)
             
-        console.print(table)
-        console.print("\n[dim]Pfeiltasten zum Navigieren • ↵ Auswählen • ESC Abbrechen[/dim]")
+        console.print(Align.center(table))
+        console.print(Align.center(f"\n[dim]Pfeiltasten zum Navigieren • ↵ Auswählen • ESC Abbrechen[/dim]"))
         
         key = get_key()
         
@@ -137,33 +144,101 @@ from rich.text import Text
 from rich.align import Align
 from rich import box
 
+class CenteredPrompt(Prompt):
+
+    prompt_suffix = ""
+
+    def make_prompt(self, default: Any) -> Text:
+
+        return self.prompt
+
+
+
 def show_staff_search(incode: Any) -> None:
-    query = Prompt.ask("Name, PNR oder Kürzel eingeben")
-    if not query: return
+
+
+
+    clear_screen()
+
+
+
+    console.print(Align.center(BANNER))
+
+
+
+    console.print() # Spacer
+
+
+
+    console.print(Align.center("[bold header]MITARBEITER-VERZEICHNIS[/bold header]"))
+
+
+
+    console.print() # Spacer
+
+
+
     
-    with console.status(f"[bold green]Suche im Verzeichnis nach '{query}'..."):
+
+
+
+    console.print(Align.center("[dim]Suche nach Name, PNR oder Kürzel ist möglich ...[/dim]"))
+
+
+
+    console.print() # Added blank line
+
+
+
+    
+
+
+
+    width = shutil.get_terminal_size().columns
+
+
+
+    padding = (width // 2) - 4
+
+
+
+    query = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+
+
+
+    if not query: return
+
+
+
+    
+
+
+
+    console.print() # Spacer
+
+
+
+    with Live(Align.center(Spinner("dots", text=f" Suche nach '{query}' ...")), console=console, transient=True):
+
+
+
         results = incode.search_staff_contact(query)
         
     if not results:
-        console.print(f"[warning]Nichts gefunden für '{query}'.[/warning]")
+        console.print(Align.center(f"\n[warning]Nichts gefunden für '{query}'.[/warning]"))
         wait_for_return()
         return
 
-    # If multiple results, let user choose (simple list first)
+    # If multiple results, let user choose interactively
     selected_person = results[0]
     if len(results) > 1:
-        table = Table(title=f"Mehrere Treffer ({len(results)})", box=None)
-        table.add_column("#", style="dim"); table.add_column("Name"); table.add_column("PNR")
-        for idx, r in enumerate(results):
-            table.add_row(str(idx+1), r.get('_display_name'), str(r.get('personalnummer', '')))
-        console.print(table)
+        options = []
+        for r in results:
+            label = f"{r.get('_display_name')} [dim]({r.get('personalnummer', 'n.a.')})[/dim]"
+            options.append((label, r))
         
-        try:
-            sel_idx = int(Prompt.ask("Nummer wählen", default="1")) - 1
-            if 0 <= sel_idx < len(results):
-                selected_person = results[sel_idx]
-            else: return
-        except: return
+        selected_person = interactive_menu(options, title=f"TREFFER-AUSWAHL ({len(results)})")
+        if not selected_person: return
 
     # Show FULL DETAILS for the selected person
     p = selected_person
@@ -188,7 +263,7 @@ def show_staff_search(incode: Any) -> None:
 
     while True:
         clear_screen()
-        console.print(BANNER)
+        console.print(Align.center(BANNER))
         console.print(f"\n[bold header]   {p.get('_display_name')}   [/bold header]\n", justify="center")
         
         # Try to extract Service Number (Dienstnummer) from Occupations
@@ -240,7 +315,7 @@ def show_staff_search(incode: Any) -> None:
             if val and val != "None" and val != "-":
                 grid_basic.add_row(label + ":", str(val))
         
-        console.print(Panel(Align.center(grid_basic), title="[bold]Kontakt & Basisdaten[/bold]", border_style="blue", padding=(1, 2)))
+        console.print(Align.center(Panel(Align.center(grid_basic), title="[bold]Kontakt & Basisdaten[/bold]", border_style="blue", padding=(1, 2), expand=False)))
 
         # --- BALANCES (Stats) ---
         saldo_u = p.get('saldo_urlaub')
@@ -262,7 +337,7 @@ def show_staff_search(incode: Any) -> None:
                 f"[bold]Urlaub:[/bold] [{u_color}]{saldo_u or '0'}h[/{u_color}]",
                 f"[bold]Zeitausgleich:[/bold] [{za_color}]{saldo_za or '0'}h[/{za_color}]"
             )
-            console.print(Panel(stats_grid, title="Salden (Live)", border_style="yellow"))
+            console.print(Align.center(Panel(stats_grid, title="Salden (Live)", border_style="yellow", expand=False)))
 
         # --- DETAILS ---
         if show_details:
@@ -292,7 +367,7 @@ def show_staff_search(incode: Any) -> None:
                     has_ext = True
             
             if has_ext:
-                console.print(Panel(Align.center(grid_ext), title="System-Daten", border_style="dim"))
+                console.print(Align.center(Panel(Align.center(grid_ext), title="System-Daten", border_style="dim", expand=False)))
 
             # Roles Table
             if occs:
@@ -303,7 +378,7 @@ def show_staff_search(incode: Any) -> None:
                 for o in occs:
                     period = f"{fmt_date(o.get('begin'))} - {fmt_date(o.get('end'))}"
                     t_occ.add_row(o.get('name', '-'), period, o.get('externalId', ''))
-                console.print(t_occ)
+                console.print(Align.center(t_occ))
                 console.print("")
 
             # Skills
@@ -316,7 +391,7 @@ def show_staff_search(incode: Any) -> None:
                     name = s.get('name') or s.get('text') or s.get('externalId', '-')
                     period = f"{fmt_date(s.get('begin'))} - {fmt_date(s.get('end'))}"
                     t_skill.add_row(name, period)
-                console.print(t_skill)
+                console.print(Align.center(t_skill))
                 console.print("")
 
             # Groups
@@ -329,11 +404,11 @@ def show_staff_search(incode: Any) -> None:
                     name = g.get('name') or g.get('text') or (g.get('groupDataGuid', '')[:30] + "...")
                     period = f"{fmt_date(g.get('begin'))} - {fmt_date(g.get('end'))}"
                     t_grp.add_row(name, period)
-                console.print(t_grp)
+                console.print(Align.center(t_grp))
 
         # Footer
-        toggle_txt = "Details ausblenden" if show_details else "Details anzeigen"
-        console.print(f"\n[dim]Drücke 'd' für {toggle_txt}, 'r' für RAW Dump, oder ENTER zum Beenden...[/dim]")
+        toggle_txt = "weniger Details" if show_details else "mehr Details"
+        console.print(Align.center(f"\n[dim]Drücke 'd' für {toggle_txt}, 'r' für RAW Dump, oder ENTER zum Beenden ...[/dim]"))
         
         k = get_key()
         if k and k.lower() == 'd':
@@ -384,7 +459,8 @@ def get_holidays(year: int) -> List[datetime.date]:
     return holidays
 
 def show_absences(incode: Any) -> None:
-    with console.status("[bold green]Lade Abwesenheiten..."):
+    console.print()
+    with Live(Align.center(Spinner("dots", text=" Lade Abwesenheiten ...")), console=console, transient=True):
         # Try the dedicated endpoint first (this was the v1.7 behavior)
         absences = incode.load_absences()
         
@@ -393,7 +469,7 @@ def show_absences(incode: Any) -> None:
              absences = incode.load_future_duties(filter_mode='only_absences')
 
     if not absences: 
-        console.print("[info]Keine geplanten Abwesenheiten gefunden.[/info]")
+        console.print(Align.center("\n[info]Keine geplanten Abwesenheiten gefunden.[/info]"))
         wait_for_return()
         return
 
@@ -456,14 +532,22 @@ def show_absences(incode: Any) -> None:
             table.add_row(date_str, reason, dur_str)
         except Exception: pass
         
-    console.print(table)
-    console.print(Panel(f"[bold]Verbrauchter Urlaub:[/bold] [cyan]{total_vacation_days} Tage[/cyan] (Netto, ohne So/Feiertage)", style="white", expand=False))
+    console.print(Align.center(table))
+    
+    if total_vacation_days > 0:
+        console.print(Align.center(f"\n[bold green]Gesamtanspruch Urlaub: {total_vacation_days} Tage[/bold green]"))
+
     wait_for_return()
 
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
-    with console.status("[bold green]Lade Dienstplan..."): duties = incode.load_future_duties()
+    console.print()
+    with Live(Align.center(Spinner("dots", text=" Lade Dienstplan ...")), console=console, transient=True):
+        duties = incode.load_future_duties()
     if not duties: 
-        console.print("[info]Keine Fahrdienste.[/info]")
+        if search_colleague:
+            console.print(Align.center(f"\n[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]"))
+        else:
+            console.print(Align.center("\n[info]Keine Dienste gefunden.[/info]"))
         wait_for_return()
         return
 
@@ -498,17 +582,17 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
 
     if not found_any: 
         if search_colleague:
-            console.print(f"[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]")
+            console.print(Align.center(f"\n[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]"))
         else:
-            console.print("[info]Keine Dienste gefunden.[/info]")
+            console.print(Align.center("\n[info]Keine Dienste gefunden.[/info]"))
         wait_for_return()
     else:
         from rich import box
         table.box = box.SIMPLE_HEAD
-        console.print(table)
+        console.print(Align.center(table))
         
         if not search_colleague:
-            console.print("\n" + "─" * 50 + "\n") # Separator line
+            console.print(Align.center("\n" + "─" * 50 + "\n")) # Separator line
             
             # Hours Statistics
             stats_table = Table(title="[bold blue]Stunden-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
@@ -556,10 +640,8 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                 loc_table.add_row(k, f"{v}x")
 
             # Display tables side by side or neatly stacked
-            console.print(Columns([stats_table, count_table, loc_table], equal=True, expand=True))
-        
         opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
-        console.print(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste...[/dim]")
+        console.print(Align.center(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste ...[/dim]"))
         
         flush_input()
         while True:
@@ -581,7 +663,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                         if k == 't':
                             msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
                             if send_pdf_via_bot(incode, fn, msg):
-                                console.print("[success]PDF erfolgreich per Telegram gesendet![/success]")
+                                console.print("[success]PDF erfolgreich per Telegram gesendet !!![/success]")
                     wait_for_return()
                     break
                 elif k == 'c':
@@ -597,6 +679,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                     break
 
 def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool = False, override_plan: Optional[List[Any]] = None) -> Optional[List[Any]]:
+    if not is_live: console.print()
     if not date: date = datetime.now()
     
     plan = None
@@ -604,18 +687,21 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
         plan = override_plan
     else:
         if not is_live:
-            with console.status("[bold green]Lade Gesamten Tagesplan..."):
+            with Live(Align.center(Spinner("dots", text=" Lade Gesamten Tagesplan ...")), console=console, transient=True):
                 plan = incode.load_daily_plan(date)
         else:
             plan = incode.load_daily_plan(date)
         
     if not plan:
         if not is_live: 
-            console.print(f"[info]Kein Plan für {date.strftime('%d.%m.%Y')}.[/info]")
+            console.print(Align.center(f"\n[info]Kein Plan für {date.strftime('%d.%m.%Y')}.[/info]"))
             wait_for_return()
         return None
+    
+    console.print(Align.center(f"[bold]🚑  Gesamter Tagesplan {date.strftime('%d.%m.%Y')}[/bold]"))
+    console.print()
         
-    table = Table(title=f"🚑  Gesamter Tagesplan {date.strftime('%d.%m.%Y')}", header_style="header", expand=False, box=None, padding=(0, 1))
+    table = Table(header_style="header", expand=False, box=None, padding=(0, 1))
     table.add_column("Zeit", style="info"); table.add_column("Fzg", style="success"); table.add_column("Besatzung")
     
     # Prepare data for export logic later
@@ -647,19 +733,22 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
         
     if is_live:
         clear_screen()
-        console.print(BANNER)
+        console.print(Align.center(BANNER))
         # print('\a') # Bell sound removed
-        console.print(f"[live]● LIVE MODUS[/live]  [dim]Letztes Update: {datetime.now().strftime('%H:%M:%S')}[/dim]")
+        console.print(Align.center(f"[live]● LIVE MODUS[/live]  [dim]Letztes Update: {datetime.now().strftime('%H:%M:%S')}[/dim]"))
+        console.print() # Added blank line
         if override_plan is not None:
              # If we are in live mode and updated, maybe show a small indicator
              pass
-        console.print(table)
+        console.print(Align.center(table))
+        console.print()
         return plan
     else: 
-        console.print(table)
+        console.print(Align.center(table))
+        console.print()
         
         opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
-        console.print(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste...[/dim]")
+        console.print(Align.center(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste ...[/dim]"))
         
         flush_input()
         while True:
@@ -675,7 +764,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
                         if k == 't':
                             msg = f"Tagesplan Export vom {date.strftime('%d.%m.%Y')}"
                             if send_pdf_via_bot(incode, fn, msg):
-                                console.print("[success]PDF erfolgreich per Telegram gesendet![/success]")
+                                console.print("[success]PDF erfolgreich per Telegram gesendet !!![/success]")
                     wait_for_return()
                     break
                 elif k == 'c':
@@ -706,9 +795,10 @@ def show_live_monitor(incode: Any) -> None:
     creds = load_credentials()
     has_telegram = creds and creds.get("telegram_token") and creds.get("allowed_user_id")
     
+    console.print() # Spacer
     if has_telegram:
-        console.print("Telegram-Benachrichtigungen aktivieren (PDF bei Start & Änderung)?")
-        console.print("[dim][j] Ja  •  [n] Nein  •  ESC Abbrechen[/dim]")
+        console.print(Align.center("Telegram-Benachrichtigungen aktivieren (PDF bei Start & Änderung)?"))
+        console.print(Align.center("[dim][j] Ja  •  [n] Nein  •  ESC Abbrechen[/dim]"))
         while True:
             k = get_key()
             if not k: continue
@@ -722,12 +812,16 @@ def show_live_monitor(incode: Any) -> None:
             elif k == KEY_ESC or k == 'q':
                 return
     else:
-        console.print("[dim]Telegram nicht konfiguriert - Benachrichtigungen deaktiviert.[/dim]")
+        console.print(Align.center("[dim]Telegram nicht konfiguriert - Benachrichtigungen deaktiviert.[/dim]"))
         time.sleep(1)
     
     # 3. Refresh Interval
     try:
-        min_str = Prompt.ask("Aktualisierungs-Intervall (Minuten)", default="5")
+        console.print() # Spacer
+        console.print(Align.center("Aktualisierungs-Intervall (Minuten):"))
+        width = shutil.get_terminal_size().columns
+        padding = (width // 2) - 4
+        min_str = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ", default="5")
         refresh_interval = int(min_str) * 60
         if refresh_interval < 60: refresh_interval = 60
     except:
@@ -736,7 +830,9 @@ def show_live_monitor(incode: Any) -> None:
     last_plan = None
     
     clear_screen()
-    console.print(f"[bold]Starte Monitor für {target_date.strftime('%d.%m.%Y')}...[/bold]")
+    console.print(Align.center(BANNER))
+    console.print(Align.center(f"[bold]Starte Monitor für {target_date.strftime('%d.%m.%Y')}...[/bold]"))
+    console.print()
     
     first_run = True
 
@@ -786,11 +882,11 @@ def show_live_monitor(incode: Any) -> None:
                             msg_text = f"Live-Monitor gestartet für {target_date.strftime('%d.%m.%Y')} (Stand: {ts})"
                         
                         try:
-                            console.print(f"[dim]Sende Telegram Update...[/dim]")
+                            console.print(Align.center(f"[dim]Sende Telegram Update...[/dim]"))
                             send_pdf_via_bot(incode, fn, msg_text)
-                            console.print(f"[success]Telegram gesendet.[/success]")
+                            console.print(Align.center(f"[success]Telegram gesendet.[/success]"))
                         except Exception as e:
-                            console.print(f"[error]Telegram Fehler: {e}[/error]")
+                            console.print(Align.center(f"[error]Telegram Fehler: {e}[/error]"))
                         finally:
                             if os.path.exists(fn):
                                 os.remove(fn)
@@ -799,21 +895,22 @@ def show_live_monitor(incode: Any) -> None:
             
             # Countdown loop
             start_time = time.time()
-            with Live(transient=True) as live:
+            with Live(transient=True, console=console) as live:
                 while time.time() - start_time < refresh_interval:
                     remaining = int(refresh_interval - (time.time() - start_time))
-                    live.update(f"\n[dim]Aktualisierung in {remaining}s. ESC zum Beenden...[/dim]")
+                    live.update(Align.center(f"[dim]Aktualisierung in {remaining}s. ESC zum Beenden ...[/dim]"))
                     
                     k = get_key(timeout=0.1)
                     if k == '\x1b' or (k and k.lower() == 'q'):
                         return
 
         except Exception as e:
-            console.print(f"[error]Fehler im Live-Monitor Loop: {e}[/error]")
+            console.print(Align.center(f"[error]Fehler im Live-Monitor Loop: {e}[/error]"))
             # Wait a bit before retry to avoid spamming errors if network is down
             time.sleep(10)
 
 def show_events_menu(incode: Any) -> None:
+    console.print()
     options = [
         ("📋  Meine Ambulanz-Dienste", "my"),
         ("🗓️  Veranstaltungs-Übersicht (Alle)", "all")
@@ -822,11 +919,11 @@ def show_events_menu(incode: Any) -> None:
     if not sel: return
     
     if sel == "my":
-        with console.status("[bold green]Lade meine Ambulanzen..."):
+        with Live(Align.center(Spinner("dots", text=" Lade meine Ambulanzen ...")), console=console, transient=True):
             duties = incode.load_my_event_duties()
         
         if not duties:
-            console.print("[info]Keine eigenen Event-Dienste gefunden.[/info]")
+            console.print(Align.center("\n[info]Keine eigenen Event-Dienste gefunden.[/info]"))
             wait_for_return()
             return
 
@@ -851,23 +948,26 @@ def show_events_menu(incode: Any) -> None:
                     d.get('vehicle', '') or info
                 )
             except: pass
-        console.print(table)
+        console.print(Align.center(table))
         wait_for_return()
         
     elif sel == "all":
-        with console.status("[bold green]Lade Veranstaltungs-Plan..."):
+        with Live(Align.center(Spinner("dots", text=" Lade Veranstaltungs-Plan ...")), console=console, transient=True):
             # Load 3 months by default
             plan = incode.load_events_plan()
             
         if not plan:
-            console.print("[info]Keine Veranstaltungen gefunden (oder keine Berechtigung).[/info]")
+            console.print(Align.center("\n[info]Keine Veranstaltungen gefunden (oder keine Berechtigung).[/info]"))
             wait_for_return()
             return
             
         # Group by Date
         plan.sort(key=lambda x: x['begin'] if x['begin'] else datetime.min)
         
-        table = Table(title="🗓️  Veranstaltungs-Kalender", header_style="header", box=None, padding=(0,1))
+        console.print(Align.center("[bold]🗓️  Veranstaltungs-Kalender[/bold]"))
+        console.print()
+        
+        table = Table(header_style="header", box=None, padding=(0,1))
         table.add_column("Datum", style="bold")
         table.add_column("Zeit", style="dim")
         table.add_column("Veranstaltung / Ort", style="white")
@@ -901,5 +1001,5 @@ def show_events_menu(incode: Any) -> None:
                 ", ".join(crew_list) or "[dim]-[/dim]"
             )
             
-        console.print(table)
+        console.print(Align.center(table))
         wait_for_return()

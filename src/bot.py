@@ -6,6 +6,7 @@ import re
 import warnings
 from datetime import datetime, timedelta
 from rich.prompt import Prompt
+from rich.align import Align
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ConversationHandler
 from telegram.warnings import PTBUserWarning
@@ -18,14 +19,7 @@ from src.api import IncodeRequests
 from src.pdf import export_to_pdf
 
 # Logging Configuration
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
 logger = logging.getLogger(__name__)
-
-# Silent httpx logger slightly
-logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # States for ConversationHandler
 WAITING_FOR_DATE = 1
@@ -39,17 +33,17 @@ class IncodeBot:
     def ensure_config(self):
         """Ensures Telegram config exists."""
         if not self.config or not self.config.get("telegram_token") or not self.config.get("allowed_user_id"):
-            console.print("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]")
+            console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
             token = Prompt.ask("Telegram Bot Token")
             try:
                 user_id = int(Prompt.ask("Deine Telegram User ID (Zahlen)"))
             except ValueError:
-                console.print("[red]User ID muss eine Zahl sein.[/red]")
+                console.print(Align.center("[red]User ID muss eine Zahl sein.[/red]"))
                 sys.exit(1)
             
             update_credentials({"telegram_token": token, "allowed_user_id": user_id})
             self.config = load_credentials()
-            console.print("[green]Telegram Konfiguration gespeichert.[/green]")
+            console.print(Align.center("[green]Telegram Konfiguration gespeichert.[/green]"))
 
     def send_document(self, chat_id: int, file_path: str, caption: str = None) -> bool:
         """Synchronous wrapper to send a document (for CLI usage)."""
@@ -251,9 +245,25 @@ class IncodeBot:
         else:
             return self.api.load_future_duties()
 
-    def run(self):
+    def run(self, debug=False):
         """Starts the bot."""
         token = self.config['telegram_token']
+        
+        if debug:
+            # Configure logging to use Rich for better integration when debugging
+            from rich.logging import RichHandler
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(message)s",
+                datefmt="[%X]",
+                handlers=[RichHandler(console=console, show_path=False)]
+            )
+            logger.info("Debug-Modus aktiviert. Zeige technische Meldungen ...")
+        else:
+            # Silence technical logs to keep UI clean
+            logging.getLogger("telegram").setLevel(logging.WARNING)
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+        
         application = ApplicationBuilder().token(token).build()
 
         # Conversation Handler for Date Selection
@@ -278,6 +288,7 @@ class IncodeBot:
 
         application.add_handler(conv_handler)
         
-        console.print("[bold green]Bot läuft! Drücke Strg + C zum Beenden.[/bold green]")
-        logger.info("Bot is polling...")
+        console.print(Align.center("[bold green]Telegram Bot läuft !!! Drücke STRG + C zum Beenden ...[/bold green]"))
+        console.print()
+        
         application.run_polling(allowed_updates=Update.ALL_TYPES)
