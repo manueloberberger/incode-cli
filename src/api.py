@@ -200,11 +200,31 @@ class IncodeRequests:
     def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
         now = datetime.now()
         df, dt = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z'), (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': self.org_unit_data_guid or DEFAULT_GUID, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
-            if resp.status_code == 200: return self._parse_staff_contact(resp.json(), query_name)
-        except: pass
-        return []
+        
+        guids = set()
+        if self.org_unit_data_guid: guids.add(self.org_unit_data_guid)
+        if self.extra_guids: guids.update(self.extra_guids)
+        guids.add(DEFAULT_GUID)
+        
+        all_results = {}
+        
+        for guid in guids:
+            if not guid: continue
+            try:
+                resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
+                if resp.status_code == 200: 
+                    found = self._parse_staff_contact(resp.json(), query_name)
+                    for p in found:
+                        pnr = p.get('personalnummer')
+                        # Use PNR as unique key, or Name if PNR missing
+                        key = pnr if pnr else p.get('_display_name')
+                        if key and key not in all_results:
+                            all_results[key] = p
+            except: pass
+            
+        results = list(all_results.values())
+        results.sort(key=lambda x: x.get('_display_name', ''))
+        return results
 
     def _parse_staff_contact(self, data: Dict[str, Any], query_name: str) -> List[Dict[str, Any]]:
         results, staff_list, q = [], data.get('data', []), query_name.lower()
