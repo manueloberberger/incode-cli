@@ -197,10 +197,16 @@ def show_staff_search(incode: Any) -> None:
         grid_basic.add_column(style="bold cyan", justify="right")
         grid_basic.add_column(style="white")
         
+        # Helper for Role
+        def fmt_role(person):
+            role = person.get('maportal_role', '')
+            if role == 'dutytype_active': return "Aktiv"
+            return role
+
         basic_fields = [
             ("Dienstnummer", lambda _: service_number),
             ("Incode-ID (PNR)", 'personalnummer'),
-            ("Rolle (Maportal)", 'maportal_role'),
+            ("Rolle (Maportal)", fmt_role),
             ("Telefon (Dienst)", 'telefon'),
             ("Telefon (Privat)", 'telefon_privat'),
             ("Email", 'email')
