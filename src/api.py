@@ -215,10 +215,12 @@ class IncodeRequests:
         if self.extra_guids: guids.update(self.extra_guids)
         guids.add(DEFAULT_GUID)
         
-        # Sort guids to ensure deterministic order, though scoring handles quality
         sorted_guids = sorted([g for g in guids if g])
         
-        all_results = {}
+        # Intermediate storage for merging
+        pnr_to_best_record = {}
+        name_to_pnr = {}
+        name_no_pnr_to_best_record = {}
         
         for guid in sorted_guids:
             try:
@@ -226,23 +228,39 @@ class IncodeRequests:
                 if resp.status_code == 200: 
                     found = self._parse_staff_contact(resp.json(), query_name)
                     for p in found:
+                        name = p.get('_display_name')
                         pnr = p.get('personalnummer')
-                        # Use PNR as unique key, or Name if PNR missing
-                        key = pnr if pnr else p.get('_display_name')
+                        score = self._calculate_staff_score(p)
+                        p['_score'] = score
                         
-                        if key:
-                            new_score = self._calculate_staff_score(p)
-                            if key not in all_results:
-                                p['_score'] = new_score
-                                all_results[key] = p
+                        if pnr:
+                            # We have a PNR. 
+                            name_to_pnr[name] = pnr
+                            if pnr not in pnr_to_best_record or score > pnr_to_best_record[pnr].get('_score', 0):
+                                pnr_to_best_record[pnr] = p
+                            # If we previously had this person as name-only, they will be cleaned up in the final step
+                        else:
+                            # No PNR. Check if we already know a PNR for this name
+                            known_pnr = name_to_pnr.get(name)
+                            if known_pnr:
+                                # Merge with the PNR record
+                                if score > pnr_to_best_record[known_pnr].get('_score', 0):
+                                    # Update info but keep the PNR from the existing best
+                                    p['personalnummer'] = known_pnr
+                                    pnr_to_best_record[known_pnr] = p
                             else:
-                                existing_score = all_results[key].get('_score', 0)
-                                if new_score > existing_score:
-                                    p['_score'] = new_score
-                                    all_results[key] = p
+                                # Truly no PNR yet. Store by name
+                                if name not in name_no_pnr_to_best_record or score > name_no_pnr_to_best_record[name].get('_score', 0):
+                                    name_no_pnr_to_best_record[name] = p
             except: pass
             
-        results = list(all_results.values())
+        # Final aggregation: records with PNR + records with NO PNR that aren't duplicates
+        results_map = {**pnr_to_best_record}
+        for name, record in name_no_pnr_to_best_record.items():
+            if name not in name_to_pnr: # Don't add if we now have a PNR version
+                results_map[f"no_pnr_{name}"] = record
+                
+        results = list(results_map.values())
         results.sort(key=lambda x: x.get('_display_name', ''))
         return results
 
