@@ -227,7 +227,9 @@ def show_staff_search(incode: Any) -> None:
             ("Rolle (Maportal)", fmt_role),
             ("Telefon (Dienst)", lambda x: fmt_phone(x.get('telefon'))),
             ("Telefon (Privat)", lambda x: fmt_phone(x.get('telefon_privat'))),
+            ("Mobil", lambda x: fmt_phone(x.get('handy') or x.get('mobile'))),
             ("Email", 'email'),
+            ("Email (Privat)", 'email_privat'),
             ("Adresse", lambda _: address_str)
         ]
         

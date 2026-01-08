@@ -268,8 +268,16 @@ class IncodeRequests:
         results, staff_list, q = [], data.get('data', []), query_name.lower()
         for p in staff_list:
             full_name = f"{str(p.get('vorname', '')).strip()} {str(p.get('nachname', '')).strip()}".strip() or str(p.get('name', '')).strip()
+            
+            # Build comprehensive search text
             search_text = (full_name + str(p.get('personalnummer', '')) + str(p.get('email', ''))).lower()
+            # Add extra contact fields to search
+            for k in ['telefon', 'telefon_privat', 'handy', 'mobile', 'email_privat']:
+                val = p.get(k)
+                if val: search_text += str(val).lower()
+            
             for occ in p.get('ressourceToOccupations', []): search_text += (str(occ.get('name', '')) + str(occ.get('externalId', '')) + str(occ.get('ressourceIndicator', ''))).lower()
+            
             if q in search_text: p['_display_name'] = full_name; results.append(p)
         results.sort(key=lambda x: x.get('_display_name', ''))
         return results
