@@ -187,7 +187,10 @@ def update_app() -> bool:
             console.print("[yellow]Lokale Änderungen erkannt. Sichere Arbeitsstand (git stash)...[/yellow]")
             subprocess.run(["git", "stash"], check=True, stdout=subprocess.DEVNULL)
             stashed = True
-            
+        
+        # Capture current HEAD before pulling to check changes later
+        current_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        
         # 2. Git Pull
         console.print("[info]Lade Updates von GitHub (git pull)...[/info]")
         subprocess.run(["git", "pull"], check=True)
@@ -200,15 +203,32 @@ def update_app() -> bool:
                 console.print("[bold red]Warnung: Konflikte beim Wiederherstellen der Änderungen![/bold red]")
                 console.print("Deine Änderungen sind im 'git stash' gespeichert.")
         
-        # 4. Update Dependencies
-        console.print("[info]Aktualisiere Python-Abhängigkeiten (pip install)...[/info]")
-        # Use sys.executable to ensure we use the same python/venv
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE
-        )
+        # 4. Smart Dependency Check
+        # Check if requirements.txt changed between old HEAD and new HEAD
+        new_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        
+        needs_pip = False
+        if current_head != new_head:
+            diff = subprocess.run(
+                ["git", "diff", "--name-only", current_head, new_head], 
+                capture_output=True, 
+                text=True
+            ).stdout
+            if "requirements.txt" in diff:
+                needs_pip = True
+        
+        if needs_pip:
+            with console.status("[bold blue]Aktualisiere Python-Abhängigkeiten (pip install)...[/bold blue]", spinner="dots"):
+                # Use sys.executable to ensure we use the same python/venv
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE
+                )
+            console.print("[dim]Abhängigkeiten aktualisiert.[/dim]")
+        else:
+            console.print("[dim]Keine neuen Abhängigkeiten. Überspringe pip install.[/dim]")
         
         console.print("[success]Update erfolgreich abgeschlossen![/success]")
         return True
