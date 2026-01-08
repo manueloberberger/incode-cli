@@ -125,7 +125,12 @@ class IncodeRequests:
         all_raw = set(re.findall(guid_pattern, r_proj.text))
         if self.org_unit_data_guid: all_raw.add(self.org_unit_data_guid)
         if self.extra_guids: all_raw.update(self.extra_guids)
-        guids_to_try = list(all_raw) or [DEFAULT_GUID]
+        guids_to_try = list(all_raw)
+        if DEFAULT_GUID:
+            guids_to_try.append(DEFAULT_GUID)
+        if not guids_to_try:
+             # Fallback if really nothing found, maybe empty list is fine or handle error
+             pass
         project_map = {}
         try:
             resp = self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'})
@@ -166,6 +171,8 @@ class IncodeRequests:
                     start, end = min(e['begin'] for e in events), max(e['end'] for e in events)
                     guids = list(set([e['guid'] for e in events]))
                     main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else DEFAULT_GUID)
+                    if not main_org and DEFAULT_GUID is None:
+                        main_org = "" # Avoid None
                     for i in range(0, len(guids), 30):
                         r = self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': guids[i:i+30]})
                         if r.status_code == 200:
@@ -192,7 +199,9 @@ class IncodeRequests:
     def load_my_event_duties(self) -> List[Dict[str, Any]]:
         df, dt = datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'), (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
         try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': self.org_unit_data_guid or DEFAULT_GUID, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'})
+            guid = self.org_unit_data_guid or DEFAULT_GUID
+            if not guid: return []
+            resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'})
             if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode='include_all')
         except: pass
         return []
@@ -213,7 +222,7 @@ class IncodeRequests:
         guids = set()
         if self.org_unit_data_guid: guids.add(self.org_unit_data_guid)
         if self.extra_guids: guids.update(self.extra_guids)
-        guids.add(DEFAULT_GUID)
+        if DEFAULT_GUID: guids.add(DEFAULT_GUID)
         
         sorted_guids = sorted([g for g in guids if g])
         
@@ -518,7 +527,10 @@ class IncodeRequests:
 
     def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
-        guids = list(set([self.org_unit_data_guid] + self.extra_guids + [DEFAULT_GUID]))
+        guids = set([self.org_unit_data_guid] + self.extra_guids)
+        if DEFAULT_GUID: guids.add(DEFAULT_GUID)
+        guids = list(guids)
+        
         try:
             d_resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '20'})
             if d_resp.status_code == 200:

@@ -36,7 +36,7 @@ BANNER = rf"""
 DEFAULT_TIMEOUT = 10 # seconds
 CREDENTIALS_FILE = '.credentials.json'
 BASE_URL_DEFAULT = "https://dienstplan.k.roteskreuz.at"
-DEFAULT_GUID = '0612f4321d9f3bb974db663770e9e1a01593a377_2_1702968855_1605'
+DEFAULT_GUID = None
 
 def load_credentials() -> Optional[Dict[str, Any]]:
     if os.path.exists(CREDENTIALS_FILE):
@@ -49,7 +49,7 @@ def load_credentials() -> Optional[Dict[str, Any]]:
 
 def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
     if extra_guids is None:
-        extra_guids = [DEFAULT_GUID]
+        extra_guids = []
     
     data = {
         'username': username,
