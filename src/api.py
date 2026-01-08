@@ -197,6 +197,15 @@ class IncodeRequests:
         except: pass
         return []
 
+    def _calculate_staff_score(self, p: Dict[str, Any]) -> int:
+        score = 0
+        if p.get('telefon'): score += 10
+        if p.get('email'): score += 10
+        if p.get('ressourceToOccupations'): score += 5 * len(p.get('ressourceToOccupations', []))
+        if p.get('maportal_role') and p.get('maportal_role') != 'dutytype_active': score += 5
+        score += len(str(p.get('_display_name', '')))
+        return score
+
     def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
         now = datetime.now()
         df, dt = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z'), (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
@@ -206,10 +215,12 @@ class IncodeRequests:
         if self.extra_guids: guids.update(self.extra_guids)
         guids.add(DEFAULT_GUID)
         
+        # Sort guids to ensure deterministic order, though scoring handles quality
+        sorted_guids = sorted([g for g in guids if g])
+        
         all_results = {}
         
-        for guid in guids:
-            if not guid: continue
+        for guid in sorted_guids:
             try:
                 resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
                 if resp.status_code == 200: 
@@ -218,8 +229,17 @@ class IncodeRequests:
                         pnr = p.get('personalnummer')
                         # Use PNR as unique key, or Name if PNR missing
                         key = pnr if pnr else p.get('_display_name')
-                        if key and key not in all_results:
-                            all_results[key] = p
+                        
+                        if key:
+                            new_score = self._calculate_staff_score(p)
+                            if key not in all_results:
+                                p['_score'] = new_score
+                                all_results[key] = p
+                            else:
+                                existing_score = all_results[key].get('_score', 0)
+                                if new_score > existing_score:
+                                    p['_score'] = new_score
+                                    all_results[key] = p
             except: pass
             
         results = list(all_results.values())
