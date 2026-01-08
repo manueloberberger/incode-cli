@@ -496,7 +496,12 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             table.add_row(b.strftime('%d.%m.%Y'), f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')} ({h:g}h) ", loc, d['vehicle'] or "-", crew_str)
         except Exception: pass
 
-    if not found_any: console.print(f"[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]")
+    if not found_any: 
+        if search_colleague:
+            console.print(f"[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]")
+        else:
+            console.print("[info]Keine Dienste gefunden.[/info]")
+        wait_for_return()
     else:
         from rich import box
         table.box = box.SIMPLE_HEAD
