@@ -121,5 +121,3 @@ Or run the Telegram Bot mode directly:
 This software is an independent, open-source project and is **not affiliated with, endorsed by, or supported by the Austrian Red Cross or Incode GmbH**. Use it at your own risk.
 
 ---
-
-*Engineered by Manuel Oberberger*
