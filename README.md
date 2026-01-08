@@ -1,93 +1,107 @@
-# incode-cli 🚑
+# Incode CLI 🚑
 
-A high-performance CLI tool for Red Cross staff to manage rosters, absences, and event duties. Designed for speed, reliability, and advanced analytical insights into work schedules.
+![Version](https://img.shields.io/badge/version-1.9.0-blue) ![Python](https://img.shields.io/badge/python-3.9%2B-green) ![Status](https://img.shields.io/badge/status-active-success)
+
+**Incode CLI** ist ein hochperformantes, Terminal-basiertes Interface für das Dienstplansystem des Roten Kreuzes (Incode / StaffPortal). Es wurde entwickelt, um die langsame und oft unübersichtliche Weboberfläche durch eine schnelle, tastaturgesteuerte TUI (Terminal User Interface) zu ersetzen und bietet Funktionen, die im Originalsystem fehlen oder schwer zugänglich sind.
+
+```text
+   ___ _  _  ___  ___  ___  ___       ___ _    ___   
+  |_ _| \| |/ __|/ _ \|   \| __|     / __| |  |_ _|  
+   | || .  | (__| (_) | |) | _|     | (__| |__ | |   
+  |___|_|\_|\___|\___/|___/|___|     \___|____|___|  
+```
+
+---
+
+## 🛠 Technische Architektur
+
+Das Projekt ist modular in Python aufgebaut und nutzt modernes Reverse Engineering, um mit der Incode-Backend-API zu kommunizieren.
+
+### 1. API-Interface & Session Management (`src/api.py`)
+Der Kern der Anwendung ist die `IncodeRequests` Klasse. Da es keine öffentliche API gibt, simuliert der Client einen vollwertigen Browser.
+
+*   **Authentifizierung:** Der Login erfolgt via POST-Request an `/login.php`. Die Session-Cookies (`PHPSESSID`) werden persistiert.
+*   **Header-Spoofing:** Das System verlangt dynamische Header. Der Client extrahiert reguläre Ausdrücke (`x-incode-*`) aus dem HTML/JS-Sourcecode der Startseite, um gültige Requests zu signieren.
+*   **GUID Discovery:** Incode nutzt Global Unique IDs (GUIDs) für Organisationseinheiten und Projekte. Der Client scrapt diese GUIDs rekursiv (`StaffPortal/dispo.php`, `projects.php`) und speichert sie, um auch dienstellenübergreifende Abfragen zu ermöglichen.
+*   **Caching:** Um die Latenz zu minimieren, werden API-Antworten (wie der Dienstplan) in `.incode_cache.json` mit einer TTL (Time To Live) von 15 Minuten gecacht.
+
+### 2. Intelligente Datenverarbeitung
+
+#### A. Abwesenheits-Logik & Feiertags-Matrix
+Das Originalsystem liefert oft unklare Daten für "freie Tage" in Urlaubsblöcken. Incode CLI implementiert eine eigene Heuristik:
+*   **Holiday-Engine:** Berechnet österreichische Feiertage (inkl. variabler Oster-Termine) dynamisch.
+*   **Sandwich-Logik:** Ein Sonntag wird normalerweise als "Freies Wochenende" markiert. Die CLI prüft jedoch den Freitag davor und den Montag danach. Sind beide Urlaubstage, wird der Sonntag technisch korrekt als "Abwesend" (Urlaubsbestandteil) klassifiziert.
+*   **Priorisierung:** Echte Abwesenheiten (Krank, Urlaub, Pflegefreistellung) überschreiben immer generische "Frei"-Marker.
+
+#### B. Mitarbeiter-Verzeichnis & Deduplizierung
+Die Suche (`search_staff_contact`) aggregiert Daten aus *allen* verfügbaren Organisationseinheiten.
+*   **Merge-Algorithmus:** Mitarbeiter existieren oft doppelt (einmal im Stammbezirk mit PNR, einmal im Gastbezirk ohne PNR).
+*   **Scoring:** Ein heuristisches Scoring-System bewertet jeden Datensatz (Punkte für vorhandene Telefonnummer, E-Mail, zugewiesene Rollen). Dubletten werden basierend auf Name und PNR zusammengeführt, wobei immer der Datensatz mit dem höchsten "Informationsgehalt" gewinnt.
+
+### 3. User Interface (`src/ui.py`)
+Das UI basiert auf der `rich` Library für modernes Terminal-Rendering.
+*   **Responsive Layouts:** Tabellen und Panels passen sich dynamisch der Terminalbreite an.
+*   **Live Monitor:** Ein Loop fragt in einstellbaren Intervallen den Tagesplan ab und aktualisiert die Ansicht bei Änderungen sofort (Polling).
+
+### 4. Telegram Bot Integration (`src/bot.py`)
+Ein asynchroner Bot (basierend auf `python-telegram-bot`) läuft im Hintergrund oder als Standalone-Modus.
+*   Er fungiert als Bridge, um generierte PDFs (Dienstpläne) direkt an das Smartphone des Users zu pushen.
+*   Nutzt die gleiche API-Instanz wie die CLI, spart somit erneute Logins.
+
+---
 
 ## 🚀 Features
 
-- **Personal Roster:** Real-time access to your upcoming shifts with detailed crew information.
-- **Advanced Absence Management:** Automated tracking of vacations, public holidays, and custom absence wishes.
-- **Event & Ambulanz Services:** Dedicated overview of medical services at events with open slot tracking.
-- **Live Monitor:** Continuous background tracking of current-day operations with automated Telegram notifications on changes.
-- **Smart Statistics:** Monthly hour analysis and duty distribution by vehicle type/location.
-- **Multi-Format Export:** High-quality PDF generation and iCal (ICS) calendar sync.
-- **Telegram Integration:** Built-in bot logic to receive schedules and notifications directly on your phone.
-- **Auto-Update:** Automatically detects new versions, performs `git pull` and updates dependencies via `pip`.
+*   **Dienstplan-Übersicht:** Zukünftige Dienste, inkl. Statistik (Stunden pro Monat, Dienste pro Typ).
+*   **Tagesplan (Live):** Echtzeit-Ansicht aller Fahrzeuge und Besatzungen des aktuellen Tages.
+*   **PDF & iCal Export:** Generiert saubere PDFs (`reportlab`) und Kalenderdateien (`icalendar`) für den Import in Google/Apple Kalender.
+*   **Mitarbeiter-Suche:** Detaillierte Infos (Telefon, Skills, Gruppen, Salden) mit intelligenter Zusammenführung.
+*   **Auto-Update:** Selbst-aktualisierend via Git (`src/utils.py`), inkl. Stash-Schutz für lokale Änderungen.
 
 ---
 
-## 🛠 Technical Architecture
+## 📦 Installation & Setup
 
-The application is built using a modular Python-based architecture:
+### Voraussetzungen
+*   Python 3.9 oder höher
+*   Git
 
-- **`incode.py`:** The main entry point handling CLI arguments and the interactive UI loop.
-- **`src/api.py`:** Core logic for interacting with the StaffPortal. Uses `requests` with a custom `TimeoutHTTPAdapter` and `urllib3` retry strategies for maximum reliability.
-- **`src/ui.py`:** Rich-based TUI (Terminal User Interface) components for interactive menus, tables, and live monitors.
-- **`src/bot.py`:** Asynchronous Telegram bot implementation for notifications and document delivery.
-- **`src/pdf.py` & `src/ical.py`:** Specialized modules for generating formatted documents and calendar files.
-- **`src/utils.py`:** Shared utilities for screen management, input handling, and automatic update checks.
+### Schritt-für-Schritt
 
----
+1.  **Repository klonen:**
+    ```bash
+    git clone https://github.com/DEIN_USER/incode-cli.git
+    cd incode-cli
+    ```
 
-## 🌴 Advanced Absence Logic (Technical Deep-Dive)
+2.  **Abhängigkeiten installieren:**
+    Es wird empfohlen, ein Virtual Environment zu nutzen.
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
 
-The most complex part of the tool is the absence tracking logic, which reconstructs a logical timeline from disparate API data points:
-
-### 1. Multi-Source Aggregation
-Data is pulled from three distinct endpoints:
-- `absence/data/load.json`: Fixed approved roster absences.
-- `absence/data/loadWishes.json`: Pending and approved absence wishes.
-- `duties/data/load.json`: Regular duty plan (used as a fallback for specific absence markers).
-
-### 2. Intelligent Labeling & Priority
-The tool applies a priority-based daily mapping strategy:
-- **Prioritization:** Specific markers like `Urlaub`, `Krank`, or `Abwesend` always overwrite generic markers like `Freies Wochenende`.
-- **Public Holidays:** Automatically calculates Austrian public holidays using the **Gauss Easter Algorithm**.
-- **Holiday Context:** 
-    - Public holidays falling on Mon-Sat are labeled as **"Geplante Sonderabwesenheit"**.
-    - Public holidays falling on a **Sunday** are labeled as **"Abwesend"**.
-- **Special Rules (Kärnten):** Includes the 10.10. (Carinthian Referendum Day) and excludes Good Friday (Karfreitag) from holiday status (treated as vacation).
-
-### 3. Weekend Reconstruction
-To provide a complete calendar view, the tool synthetically generates weekend markers:
-- **Pre-Vacation Sunday:** If a free block (Vacation/Holiday) starts on a Monday, the preceding Sunday is labeled as **"Freies Wochenende"**.
-- **Post-Vacation Sunday:** If a free block ends on a Saturday, the following Sunday is labeled as **"Abwesend"**.
+3.  **Starten:**
+    ```bash
+    python3 incode.py
+    ```
+    *Beim ersten Start fragt die CLI nach deinen Zugangsdaten (Benutzername/Passwort) und speichert diese lokal verschlüsselt (chmod 600) in `.credentials.json`.*
 
 ---
 
-## 🔐 Security & Configuration
+## 🔧 Konfiguration
 
-Credentials and session data are handled securely:
-- **`.credentials.json`:** Stores username, encrypted-ish password (handled by the system keyring where possible), and org-unit GUIDs. File permissions are automatically set to `600` (read/write by owner only).
-- **`.incode_cache.json`:** Encrypted local cache for API responses to enable offline mode and reduce server load.
-- **Headers:** Automatically extracts `x-incode-*` security tokens from JavaScript assets during login to mimic an authorized browser session.
-
----
-
-## 📦 Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/manueloberberger/incode-cli.git
-cd incode-cli
-
-# Set up virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the application
-python3 incode.py
-```
-
-## 🤖 Bot Setup
-
-To enable Telegram notifications:
-1. Create a bot via [@BotFather](https://t.me/botfather).
-2. Obtain your Chat ID via [@userinfobot](https://t.me/userinfobot).
-3. Select "Telegram Bot" in the main menu to configure the token and ID.
+Die Konfiguration liegt in `src/config.py` und `.credentials.json`.
+*   **credentials.json:** Speichert Auth-Token und die `allowed_user_id` für den Telegram Bot.
+*   **Themes:** Farben für die TUI können in `src/config.py` im `theme`-Objekt angepasst werden.
 
 ---
 
-*Note: This tool is an independent implementation and not an official product of the Red Cross.*
+## ⚠️ Disclaimer
+
+Dieses Tool ist **keine offizielle Software** des Roten Kreuzes oder der Incode GmbH. Es handelt sich um ein privates Hobby-Projekt zur Verbesserung der Usability für Mitarbeiter. Die Nutzung erfolgt auf eigene Gefahr.
+
+---
+
+*Developed with ❤️ & ☕ by Manuel Oberberger*
