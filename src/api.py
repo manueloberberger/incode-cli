@@ -282,15 +282,30 @@ class IncodeRequests:
         
         # Weekend / Sunday Logic
         sorted_d = sorted(daily_map.keys())
-        # 1. Sunday BEFORE vacation/holiday block (if starts on Monday) -> Freies Wochenende
+        # 1. Sunday BEFORE vacation/holiday block (if starts on Monday)
         for d in sorted_d:
             if d.weekday() == 0:
                 lbl_mon = daily_map[d]['label'].lower()
                 if "urlaub" in lbl_mon or "sonderabwesenheit" in lbl_mon:
                     prev_sun = d - timedelta(days=1)
-                    # Use 'Freies Wochenende' even if it was previously marked as 'Abwesend'
-                    if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Abwesend":
-                        daily_map[prev_sun] = {'label': "Freies Wochenende", 'fixed': False}
+                    prev_fri = d - timedelta(days=3)
+                    
+                    # Check if Friday was also Urlaub (Continuous vacation)
+                    is_connecting = False
+                    if prev_fri in daily_map:
+                        lbl_fri = daily_map[prev_fri]['label'].lower()
+                        if "urlaub" in lbl_fri or "sonderabwesenheit" in lbl_fri:
+                            is_connecting = True
+                    
+                    if is_connecting:
+                        # Connecting weekend -> Should be Abwesend
+                        if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Freies Wochenende":
+                            daily_map[prev_sun] = {'label': "Abwesend", 'fixed': False}
+                    else:
+                        # Start of vacation -> Pre-vacation Sunday is Free
+                        # Use 'Freies Wochenende' even if it was previously marked as 'Abwesend'
+                        if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Abwesend":
+                            daily_map[prev_sun] = {'label': "Freies Wochenende", 'fixed': False}
         
         # 2. Sunday AFTER vacation (if vacation ends on/covers Saturday) -> Abwesend
         # Refresh sorted list after potential additions
