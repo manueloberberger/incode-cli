@@ -156,7 +156,7 @@ def check_for_updates() -> bool:
     
     try:
         # Fetch latest changes silently (timeout to prevent hanging)
-        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
         
         # Check if behind upstream
         # HEAD..@{u} calculates commits reachable from upstream but not from HEAD
@@ -164,7 +164,7 @@ def check_for_updates() -> bool:
             ["git", "rev-list", "--count", "HEAD..@{u}"], 
             capture_output=True, 
             text=True, 
-            timeout=2
+            timeout=5
         )
         
         if res.returncode == 0 and res.stdout.strip().isdigit():
@@ -177,19 +177,49 @@ def check_for_updates() -> bool:
     return False
 
 def update_app() -> bool:
-    """Performs git pull and pip install. Returns True if successful."""
+    """Performs safe git pull (with stash) and pip install. Returns True if successful."""
     try:
-        console.print("[info]Führe 'git pull' aus...[/info]")
+        # 1. Check for local changes
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+        stashed = False
+        
+        if status:
+            console.print("[yellow]Lokale Änderungen erkannt. Sichere Arbeitsstand (git stash)...[/yellow]")
+            subprocess.run(["git", "stash"], check=True, stdout=subprocess.DEVNULL)
+            stashed = True
+            
+        # 2. Git Pull
+        console.print("[info]Lade Updates von GitHub (git pull)...[/info]")
         subprocess.run(["git", "pull"], check=True)
         
-        console.print("[info]Aktualisiere Abhängigkeiten (pip install)...[/info]")
+        # 3. Restore Stash (if any)
+        if stashed:
+            console.print("[info]Stelle lokale Änderungen wieder her (git stash pop)...[/info]")
+            pop_res = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
+            if pop_res.returncode != 0:
+                console.print("[bold red]Warnung: Konflikte beim Wiederherstellen der Änderungen![/bold red]")
+                console.print("Deine Änderungen sind im 'git stash' gespeichert.")
+        
+        # 4. Update Dependencies
+        console.print("[info]Aktualisiere Python-Abhängigkeiten (pip install)...[/info]")
         # Use sys.executable to ensure we use the same python/venv
-        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE
+        )
         
         console.print("[success]Update erfolgreich abgeschlossen![/success]")
         return True
+        
+    except subprocess.CalledProcessError as e:
+        console.print(f"[error]Fehler beim Update-Prozess (Exit Code {e.returncode}).[/error]")
+        if e.stderr:
+            console.print(f"[dim]{e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr}[/dim]")
+        return False
     except Exception as e:
-        console.print(f"[error]Update fehlgeschlagen: {e}[/error]")
+        console.print(f"[error]Ein unerwarteter Fehler ist aufgetreten: {e}[/error]")
         return False
 
 def wait_for_return() -> Optional[str]:
