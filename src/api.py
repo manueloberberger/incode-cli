@@ -59,6 +59,16 @@ class IncodeRequests:
         self._save_cache()
 
     def login(self, username, password) -> Tuple[bool, str]:
+        """
+        Authenticates against the web portal.
+        
+        1. Posts credentials to /login.php
+        2. Scrapes the response to find the 'orgUnitDataGuid' and custom 'x-incode' headers
+           required for subsequent JSON API calls.
+        
+        Returns:
+            Tuple[bool, str]: (Success, Message)
+        """
         login_url = f"{self.base_url}/login.php"
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
             progress.add_task(description="Authentifizierung...", total=None)
@@ -193,7 +203,8 @@ class IncodeRequests:
                                             if eid != "KFZ": e['open_slots'] += 1
                                         elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
                 return events
-        except: pass
+        except Exception as e:
+            console.print(f"[dim red]Fehler beim Laden der Events: {e}[/dim red]")
         return []
 
     def load_my_event_duties(self) -> List[Dict[str, Any]]:
@@ -296,6 +307,13 @@ class IncodeRequests:
         return ", ".join(roles) if roles else "-"
 
     def load_absences(self) -> List[Dict[str, Any]]:
+        """
+        Loads absences and wishes from the backend.
+        
+        Merges actual absences (sickness, vacation) with requested wishes.
+        Applies logic to handle weekends (e.g. 'Freies Wochenende' vs 'Abwesend') based on 
+        surrounding vacation blocks.
+        """
         results, daily_map, now = [], {}, datetime.now()
         start_date, end_date = now - timedelta(days=30), now + timedelta(days=400)
         df_str, dt_str = start_date.strftime('%Y-%m-%dT00:00:00.000Z'), end_date.strftime('%Y-%m-%dT23:59:59.000Z')
@@ -327,7 +345,9 @@ class IncodeRequests:
                         if curr not in daily_map or is_h(curr) or any(w in lbl.lower() for w in ["urlaub", "abwesend", "krank"]):
                             daily_map[curr] = {'label': lbl, 'fixed': True}
                         curr += timedelta(days=1)
-        except: pass
+        except Exception as e:
+            console.print(f"[dim red]Fehler beim Laden der Abwesenheiten: {e}[/dim red]")
+
         try:
             resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body)
             if resp.status_code == 200:
@@ -353,7 +373,8 @@ class IncodeRequests:
                             if curr not in daily_map or is_h(curr) or "urlaub" in lbl.lower():
                                 daily_map[curr] = {'label': lbl + status_text, 'fixed': False}
                         curr += timedelta(days=1)
-        except: pass
+        except Exception as e:
+            console.print(f"[dim red]Fehler beim Laden der Wünsche: {e}[/dim red]")
         
         # Weekend / Sunday Logic
         sorted_d = sorted(daily_map.keys())
@@ -440,6 +461,16 @@ class IncodeRequests:
         return []
 
     def load_future_duties(self, use_cache=True, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
+        """
+        Loads future duties from the monthly view.
+        
+        Args:
+            use_cache (bool): Whether to use cached data (valid for 15m).
+            filter_mode (str): 'exclude_absences', 'only_absences', or 'include_all'.
+        
+        Returns:
+            List[Dict[str, Any]]: List of duties sorted by date.
+        """
         cache_key = f"future_duties_{filter_mode}"
         if use_cache:
             cached = self._get_cached_data(cache_key)
@@ -461,7 +492,8 @@ class IncodeRequests:
             duties = sorted(d_map.values(), key=lambda x: x['begin'])
             self._set_cached_data(cache_key, duties)
             return duties
-        except:
+        except Exception as e:
+            console.print(f"[dim red]Fehler beim Laden der Dienste: {e}[/dim red]")
             if cache_key in self.cache: return self.cache[cache_key]['data']
             return []
 
