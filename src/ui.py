@@ -133,6 +133,8 @@ def select_date_interactive() -> Optional[datetime]:
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.pretty import Pretty
+from rich.text import Text
+from rich import box
 
 def show_staff_search(incode: Any) -> None:
     query = Prompt.ask("Name, PNR oder Kürzel eingeben")
@@ -176,7 +178,7 @@ def show_staff_search(incode: Any) -> None:
     while True:
         clear_screen()
         console.print(BANNER)
-        console.print(f"\n[bold header]👤 {p.get('_display_name')}[/bold header]\n")
+        console.print(f"\n[bold header]   {p.get('_display_name')}   [/bold header]\n", justify="center")
         
         # Try to extract Service Number (Dienstnummer) from Occupations
         service_number = "-"
@@ -210,21 +212,41 @@ def show_staff_search(incode: Any) -> None:
             if val and val != "None" and val != "-":
                 grid_basic.add_row(label + ":", str(val))
         
-        console.print(Panel(grid_basic, title="Kontakt & Basisdaten", border_style="blue"))
+        console.print(Panel(grid_basic, title="[bold]Kontakt & Basisdaten[/bold]", border_style="blue", padding=(1, 2)))
+
+        # --- BALANCES (Stats) ---
+        saldo_u = p.get('saldo_urlaub')
+        saldo_za = p.get('saldo_za')
+        
+        if saldo_u or saldo_za:
+            stats_grid = Table.grid(expand=True, padding=(0, 4))
+            stats_grid.add_column(justify="center", ratio=1)
+            stats_grid.add_column(justify="center", ratio=1)
+            
+            try:
+                u_color = "green" if float(str(saldo_u or 0).replace(',', '.')) > 0 else "red"
+                za_color = "green" if float(str(saldo_za or 0).replace(',', '.')) > 0 else "red"
+            except:
+                u_color = "white"
+                za_color = "white"
+            
+            stats_grid.add_row(
+                f"[bold]Urlaub:[/bold] [{u_color}]{saldo_u or '0'}h[/{u_color}]",
+                f"[bold]Zeitausgleich:[/bold] [{za_color}]{saldo_za or '0'}h[/{za_color}]"
+            )
+            console.print(Panel(stats_grid, title="Salden (Live)", border_style="yellow"))
 
         # --- DETAILS ---
         if show_details:
             # Extended Attributes
             grid_ext = Table.grid(expand=True, padding=(0, 2))
-            grid_ext.add_column(style="bold cyan", justify="right")
-            grid_ext.add_column(style="white")
+            grid_ext.add_column(style="dim cyan", justify="right")
+            grid_ext.add_column(style="dim white")
 
             ext_fields = [
                 ("Benutzername", 'maportal_manualName'),
                 ("Geburtsdatum", lambda x: fmt_date(x.get('birthdate'))),
                 ("Letzter Login", lambda x: fmt_date(x.get('maportal_lastLogin'))),
-                ("Urlaubssaldo", 'saldo_urlaub'),
-                ("ZA-Saldo", 'saldo_za'),
                 ("Gültig ab", lambda x: fmt_date(x.get('validFrom'))),
                 ("Gültig bis", lambda x: fmt_date(x.get('validTo'))),
                 ("Erstellt", 'created'),
@@ -242,41 +264,41 @@ def show_staff_search(incode: Any) -> None:
                     has_ext = True
             
             if has_ext:
-                console.print(Panel(grid_ext, title="Weitere Details", border_style="dim"))
+                console.print(Panel(grid_ext, title="System-Daten", border_style="dim"))
 
-            from rich import box
-            
             # Roles Table
             if occs:
-                t_occ = Table(title="Rollen / Beschäftigung", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+                t_occ = Table(title="Rollen / Beschäftigung", box=None, show_edge=False, padding=(0,1), expand=True, header_style="bold white on black")
                 t_occ.add_column("Bezeichnung", style="bold white")
-                t_occ.add_column("Beginn", style="dim")
-                t_occ.add_column("Ende", style="dim")
+                t_occ.add_column("Zeitraum", style="dim")
                 t_occ.add_column("Ext. ID", style="dim")
                 for o in occs:
-                    t_occ.add_row(o.get('name', '-'), fmt_date(o.get('begin')), fmt_date(o.get('end')), o.get('externalId', ''))
+                    period = f"{fmt_date(o.get('begin'))} - {fmt_date(o.get('end'))}"
+                    t_occ.add_row(o.get('name', '-'), period, o.get('externalId', ''))
                 console.print(t_occ)
+                console.print("")
 
             # Skills
             skills = p.get('staffToSkills', [])
             if skills:
-                t_skill = Table(title=f"Qualifikationen ({len(skills)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
-                t_skill.add_column("Skill", style="cyan") # Using ExternalID as name proxy
-                t_skill.add_column("Beginn", style="white")
-                t_skill.add_column("Ende", style="dim")
+                t_skill = Table(title=f"Qualifikationen ({len(skills)})", box=None, show_edge=False, padding=(0,1), expand=True, header_style="bold white on black")
+                t_skill.add_column("Skill", style="cyan") 
+                t_skill.add_column("Zeitraum", style="dim")
                 for s in skills:
-                    t_skill.add_row(s.get('externalId', '-'), fmt_date(s.get('begin')), fmt_date(s.get('end')))
+                    period = f"{fmt_date(s.get('begin'))} - {fmt_date(s.get('end'))}"
+                    t_skill.add_row(s.get('externalId', '-'), period)
                 console.print(t_skill)
+                console.print("")
 
             # Groups
             groups = p.get('ressourceToGroups', [])
             if groups:
-                t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+                t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=None, show_edge=False, padding=(0,1), expand=True, header_style="bold white on black")
                 t_grp.add_column("Gruppen GUID", style="dim")
-                t_grp.add_column("Beginn", style="white")
-                t_grp.add_column("Ende", style="dim")
+                t_grp.add_column("Zeitraum", style="dim")
                 for g in groups:
-                    t_grp.add_row(g.get('groupDataGuid', '')[:25] + "...", fmt_date(g.get('begin')), fmt_date(g.get('end')))
+                    period = f"{fmt_date(g.get('begin'))} - {fmt_date(g.get('end'))}"
+                    t_grp.add_row(g.get('groupDataGuid', '')[:30] + "...", period)
                 console.print(t_grp)
 
         # Footer
