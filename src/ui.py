@@ -175,6 +175,16 @@ def show_staff_search(incode: Any) -> None:
             return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
         except: return s
 
+    # Helper for phone numbers
+    def fmt_phone(s):
+        if not s: return ""
+        s = str(s).strip()
+        if s.startswith("00"): s = "+" + s[2:]
+        if s.startswith("+43") and len(s) > 4:
+            # Simple formatting: +43 664 1234567
+            return f"{s[:3]} {s[3:6]} {s[6:]}"
+        return s
+
     while True:
         clear_screen()
         console.print(BANNER)
@@ -197,6 +207,14 @@ def show_staff_search(incode: Any) -> None:
         grid_basic.add_column(style="bold cyan", justify="right")
         grid_basic.add_column(style="white")
         
+        # Address Construction
+        addr_parts = []
+        if p.get('street'): addr_parts.append(p.get('street'))
+        if p.get('zip') or p.get('city'): 
+            city_line = f"{p.get('zip', '')} {p.get('city', '')}".strip()
+            if city_line: addr_parts.append(city_line)
+        address_str = ", ".join(addr_parts) if addr_parts else None
+
         # Helper for Role
         def fmt_role(person):
             role = person.get('maportal_role', '')
@@ -207,9 +225,10 @@ def show_staff_search(incode: Any) -> None:
             ("Dienstnummer", lambda _: service_number),
             ("Incode-ID (PNR)", 'personalnummer'),
             ("Rolle (Maportal)", fmt_role),
-            ("Telefon (Dienst)", 'telefon'),
-            ("Telefon (Privat)", 'telefon_privat'),
-            ("Email", 'email')
+            ("Telefon (Dienst)", lambda x: fmt_phone(x.get('telefon'))),
+            ("Telefon (Privat)", lambda x: fmt_phone(x.get('telefon_privat'))),
+            ("Email", 'email'),
+            ("Adresse", lambda _: address_str)
         ]
         
         for label, key in basic_fields:
@@ -291,8 +310,9 @@ def show_staff_search(incode: Any) -> None:
                 t_skill.add_column("Skill", style="cyan") 
                 t_skill.add_column("Zeitraum", style="dim")
                 for s in skills:
+                    name = s.get('name') or s.get('text') or s.get('externalId', '-')
                     period = f"{fmt_date(s.get('begin'))} - {fmt_date(s.get('end'))}"
-                    t_skill.add_row(s.get('externalId', '-'), period)
+                    t_skill.add_row(name, period)
                 console.print(t_skill)
                 console.print("")
 
@@ -300,11 +320,12 @@ def show_staff_search(incode: Any) -> None:
             groups = p.get('ressourceToGroups', [])
             if groups:
                 t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=None, show_edge=False, padding=(0,1), expand=True, header_style="bold white on black")
-                t_grp.add_column("Gruppen GUID", style="dim")
+                t_grp.add_column("Gruppen", style="dim")
                 t_grp.add_column("Zeitraum", style="dim")
                 for g in groups:
+                    name = g.get('name') or g.get('text') or (g.get('groupDataGuid', '')[:30] + "...")
                     period = f"{fmt_date(g.get('begin'))} - {fmt_date(g.get('end'))}"
-                    t_grp.add_row(g.get('groupDataGuid', '')[:30] + "...", period)
+                    t_grp.add_row(name, period)
                 console.print(t_grp)
 
         # Footer
