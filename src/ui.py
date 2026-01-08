@@ -164,8 +164,7 @@ def show_staff_search(incode: Any) -> None:
 
     # Show FULL DETAILS for the selected person
     p = selected_person
-    clear_screen()
-    console.print(BANNER)
+    show_details = False
     
     # Helper for nice dates
     def fmt_date(s):
@@ -174,123 +173,124 @@ def show_staff_search(incode: Any) -> None:
             return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
         except: return s
 
-    # 1. Header Info
-    console.print(f"\n[bold header]👤 {p.get('_display_name')}[/bold header]\n")
-    
-    # 2. Key-Value Table for Basic Info
-    grid = Table.grid(expand=True, padding=(0, 2))
-    grid.add_column(style="bold cyan", justify="right")
-    grid.add_column(style="white")
-    
-    # Try to extract Service Number (Dienstnummer) from Occupations
-    service_number = "-"
-    occs = p.get('ressourceToOccupations', [])
-    for o in occs:
-        name = str(o.get('name', ''))
-        parts = name.split('.')
-        if parts and parts[0].isdigit():
-            service_number = parts[0]
-            break
-        if name.split(' ')[0].isdigit():
-             service_number = name.split(' ')[0]
-
-    # Counts
-    skill_count = len(p.get('staffToSkills', []))
-    group_count = len(p.get('ressourceToGroups', []))
-
-    # Extract interesting scalar fields
-    fields = [
-        ("Dienstnummer", lambda _: service_number),
-        ("Incode-ID (PNR)", 'personalnummer'),
-        ("Benutzername", 'maportal_manualName'),
-        ("Rolle (Maportal)", 'maportal_role'),
-        ("Telefon (Dienst)", 'telefon'),
-        ("Telefon (Privat)", 'telefon_privat'),
-        ("Email", 'email'),
-        ("Geburtsdatum", lambda x: fmt_date(x.get('birthdate'))),
-        ("Letzter Login", lambda x: fmt_date(x.get('maportal_lastLogin'))),
-        ("Urlaubssaldo", 'saldo_urlaub'),
-        ("ZA-Saldo", 'saldo_za'),
-        ("Gültig ab", lambda x: fmt_date(x.get('validFrom'))),
-        ("Gültig bis", lambda x: fmt_date(x.get('validTo'))),
-        ("Erstellt", 'created'),
-        ("Bearbeitet", 'updated'),
-        ("Ursprung", 'origin'),
-        ("Info", 'info')
-    ]
-    
-    for label, key in fields:
-        if callable(key):
-            val = key(p)
-        else:
-            val = str(p.get(key, ''))
-            
-        if val and val != "None" and val != "-":
-            grid.add_row(label + ":", str(val))
-            
-    console.print(Panel(grid, title="Basisdaten", border_style="blue"))
-    
-    from rich import box
-    
-    # 3. Occupations Table (Rollen)
-    if occs:
-        t_occ = Table(title="Rollen / Beschäftigung", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
-        t_occ.add_column("Bezeichnung", style="bold white")
-        t_occ.add_column("Beginn", style="dim")
-        t_occ.add_column("Ende", style="dim")
-        t_occ.add_column("Ext. ID", style="dim")
+    while True:
+        clear_screen()
+        console.print(BANNER)
+        console.print(f"\n[bold header]👤 {p.get('_display_name')}[/bold header]\n")
         
+        # Try to extract Service Number (Dienstnummer) from Occupations
+        service_number = "-"
+        occs = p.get('ressourceToOccupations', [])
         for o in occs:
-            t_occ.add_row(
-                o.get('name', '-'), 
-                fmt_date(o.get('begin')), 
-                fmt_date(o.get('end')),
-                o.get('externalId', '')
-            )
-        console.print(t_occ)
+            name = str(o.get('name', ''))
+            parts = name.split('.')
+            if parts and parts[0].isdigit():
+                service_number = parts[0]
+                break
+            if name.split(' ')[0].isdigit():
+                 service_number = name.split(' ')[0]
 
-    # 4. Skills (Qualifikationen)
-    skills = p.get('staffToSkills', [])
-    if skills:
-        t_skill = Table(title=f"Qualifikationen ({len(skills)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
-        t_skill.add_column("External ID", style="cyan")
-        t_skill.add_column("Skill GUID", style="dim")
-        t_skill.add_column("Beginn", style="white")
-        t_skill.add_column("Ende", style="dim")
+        # --- BASIC INFO ---
+        grid_basic = Table.grid(expand=True, padding=(0, 2))
+        grid_basic.add_column(style="bold cyan", justify="right")
+        grid_basic.add_column(style="white")
         
-        for s in skills:
-            t_skill.add_row(
-                s.get('externalId', '-'),
-                s.get('skillDataGuid', '')[:15] + "...",
-                fmt_date(s.get('begin')),
-                fmt_date(s.get('end'))
-            )
-        console.print(t_skill)
-
-    # 5. Groups (Gruppen)
-    groups = p.get('ressourceToGroups', [])
-    if groups:
-        t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
-        t_grp.add_column("Gruppen GUID", style="dim")
-        t_grp.add_column("Beginn", style="white")
-        t_grp.add_column("Ende", style="dim")
+        basic_fields = [
+            ("Dienstnummer", lambda _: service_number),
+            ("Incode-ID (PNR)", 'personalnummer'),
+            ("Rolle (Maportal)", 'maportal_role'),
+            ("Telefon (Dienst)", 'telefon'),
+            ("Telefon (Privat)", 'telefon_privat'),
+            ("Email", 'email')
+        ]
         
-        for g in groups:
-            t_grp.add_row(
-                g.get('groupDataGuid', '')[:25] + "...",
-                fmt_date(g.get('begin')),
-                fmt_date(g.get('end'))
-            )
-        console.print(t_grp)
+        for label, key in basic_fields:
+            if callable(key): val = key(p)
+            else: val = str(p.get(key, ''))
+            if val and val != "None" and val != "-":
+                grid_basic.add_row(label + ":", str(val))
+        
+        console.print(Panel(grid_basic, title="Kontakt & Basisdaten", border_style="blue"))
 
-    # 6. Raw Dump Option
-    console.print("\n[dim]Drücke 'r' für RAW JSON Dump, oder ENTER weiter...[/dim]")
-    k = get_key()
-    if k and k.lower() == 'r':
-        console.print(Pretty(p))
-        wait_for_return()
-    elif k == KEY_ENTER:
-        return
+        # --- DETAILS ---
+        if show_details:
+            # Extended Attributes
+            grid_ext = Table.grid(expand=True, padding=(0, 2))
+            grid_ext.add_column(style="bold cyan", justify="right")
+            grid_ext.add_column(style="white")
+
+            ext_fields = [
+                ("Benutzername", 'maportal_manualName'),
+                ("Geburtsdatum", lambda x: fmt_date(x.get('birthdate'))),
+                ("Letzter Login", lambda x: fmt_date(x.get('maportal_lastLogin'))),
+                ("Urlaubssaldo", 'saldo_urlaub'),
+                ("ZA-Saldo", 'saldo_za'),
+                ("Gültig ab", lambda x: fmt_date(x.get('validFrom'))),
+                ("Gültig bis", lambda x: fmt_date(x.get('validTo'))),
+                ("Erstellt", 'created'),
+                ("Bearbeitet", 'updated'),
+                ("Ursprung", 'origin'),
+                ("Info", 'info')
+            ]
+            
+            has_ext = False
+            for label, key in ext_fields:
+                if callable(key): val = key(p)
+                else: val = str(p.get(key, ''))
+                if val and val != "None" and val != "-":
+                    grid_ext.add_row(label + ":", str(val))
+                    has_ext = True
+            
+            if has_ext:
+                console.print(Panel(grid_ext, title="Weitere Details", border_style="dim"))
+
+            from rich import box
+            
+            # Roles Table
+            if occs:
+                t_occ = Table(title="Rollen / Beschäftigung", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+                t_occ.add_column("Bezeichnung", style="bold white")
+                t_occ.add_column("Beginn", style="dim")
+                t_occ.add_column("Ende", style="dim")
+                t_occ.add_column("Ext. ID", style="dim")
+                for o in occs:
+                    t_occ.add_row(o.get('name', '-'), fmt_date(o.get('begin')), fmt_date(o.get('end')), o.get('externalId', ''))
+                console.print(t_occ)
+
+            # Skills
+            skills = p.get('staffToSkills', [])
+            if skills:
+                t_skill = Table(title=f"Qualifikationen ({len(skills)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+                t_skill.add_column("Skill", style="cyan") # Using ExternalID as name proxy
+                t_skill.add_column("Beginn", style="white")
+                t_skill.add_column("Ende", style="dim")
+                for s in skills:
+                    t_skill.add_row(s.get('externalId', '-'), fmt_date(s.get('begin')), fmt_date(s.get('end')))
+                console.print(t_skill)
+
+            # Groups
+            groups = p.get('ressourceToGroups', [])
+            if groups:
+                t_grp = Table(title=f"Gruppen-Zugehörigkeit ({len(groups)})", box=box.ROUNDED, show_edge=True, padding=(0,1), expand=True)
+                t_grp.add_column("Gruppen GUID", style="dim")
+                t_grp.add_column("Beginn", style="white")
+                t_grp.add_column("Ende", style="dim")
+                for g in groups:
+                    t_grp.add_row(g.get('groupDataGuid', '')[:25] + "...", fmt_date(g.get('begin')), fmt_date(g.get('end')))
+                console.print(t_grp)
+
+        # Footer
+        toggle_txt = "Details ausblenden" if show_details else "Details anzeigen"
+        console.print(f"\n[dim]Drücke 'd' für {toggle_txt}, 'r' für RAW Dump, oder ENTER zum Beenden...[/dim]")
+        
+        k = get_key()
+        if k and k.lower() == 'd':
+            show_details = not show_details
+        elif k and k.lower() == 'r':
+            console.print(Pretty(p))
+            wait_for_return()
+        elif k == KEY_ENTER or (k and k.lower() == 'q') or k == KEY_ESC:
+            return
 
 def get_holidays(year: int) -> List[datetime.date]:
     """Returns a list of Austrian holidays for the given year."""

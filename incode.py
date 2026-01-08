@@ -74,11 +74,11 @@ def run_cli():
     
     menu_options = [
         ("📅  Mein Dienstplan", "future"),
-        ("🌴  Meine Abwesenheiten (BETA)", "absences"),
-        ("🚑  Events / Ambulanzdienste (BETA)", "events"),
+        ("🌴  Meine Abwesenheiten", "absences"),
+        ("🚑  Events / Ambulanzdienste", "events"),
         ("🚑  Tagesplan (Heute)", "today"),
         ("📆  Tagesplan (Datum wählen)", "date"),
-        ("📒  Mitarbeiter-Verzeichnis (BETA)", "staff"),
+        ("📒  Mitarbeiter-Verzeichnis", "staff"),
         ("🔍  Gemeinsame Dienste suchen", "colleague"),
         ("📺  Live-Monitor", "live"),
         ("🤖  Telegram Bot", "bot"),
