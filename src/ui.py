@@ -134,6 +134,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.pretty import Pretty
 from rich.text import Text
+from rich.align import Align
 from rich import box
 
 def show_staff_search(incode: Any) -> None:
@@ -203,7 +204,7 @@ def show_staff_search(incode: Any) -> None:
                  service_number = name.split(' ')[0]
 
         # --- BASIC INFO ---
-        grid_basic = Table.grid(expand=True, padding=(0, 2))
+        grid_basic = Table.grid(expand=False, padding=(0, 2))
         grid_basic.add_column(style="bold cyan", justify="right")
         grid_basic.add_column(style="white")
         
@@ -239,7 +240,7 @@ def show_staff_search(incode: Any) -> None:
             if val and val != "None" and val != "-":
                 grid_basic.add_row(label + ":", str(val))
         
-        console.print(Panel(grid_basic, title="[bold]Kontakt & Basisdaten[/bold]", border_style="blue", padding=(1, 2)))
+        console.print(Panel(Align.center(grid_basic), title="[bold]Kontakt & Basisdaten[/bold]", border_style="blue", padding=(1, 2)))
 
         # --- BALANCES (Stats) ---
         saldo_u = p.get('saldo_urlaub')
@@ -266,7 +267,7 @@ def show_staff_search(incode: Any) -> None:
         # --- DETAILS ---
         if show_details:
             # Extended Attributes
-            grid_ext = Table.grid(expand=True, padding=(0, 2))
+            grid_ext = Table.grid(expand=False, padding=(0, 2))
             grid_ext.add_column(style="dim cyan", justify="right")
             grid_ext.add_column(style="dim white")
 
@@ -291,7 +292,7 @@ def show_staff_search(incode: Any) -> None:
                     has_ext = True
             
             if has_ext:
-                console.print(Panel(grid_ext, title="System-Daten", border_style="dim"))
+                console.print(Panel(Align.center(grid_ext), title="System-Daten", border_style="dim"))
 
             # Roles Table
             if occs:
