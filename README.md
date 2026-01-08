@@ -1,8 +1,10 @@
 # Incode CLI 🚑
 
-![Version](https://img.shields.io/badge/version-1.9.0-blue) ![Python](https://img.shields.io/badge/python-3.9%2B-green) ![Status](https://img.shields.io/badge/status-active-success)
+![Version](https://img.shields.io/badge/version-1.9.0-blue) ![Python](https://img.shields.io/badge/python-3.9%2B-green) ![Architecture](https://img.shields.io/badge/architecture-modular-orange)
 
-**Incode CLI** ist das ultimative Power-User-Tool für das Dienstplansystem des Roten Kreuzes. Es ersetzt die träge Weboberfläche durch ein blitzschnelles Terminal-Interface und erweitert das System um intelligente Funktionen, Analysen und Automatisierungen, die im Standard-Client nicht existieren.
+**Incode CLI** is a high-performance, reverse-engineered Terminal User Interface (TUI) for the Red Cross Austria's duty roster system ("Incode" / "StaffPortal").
+
+It serves as a drop-in replacement for the legacy web interface, providing power users with speed, keyboard-centric navigation, and advanced data aggregation features that are technically impossible in the standard web client.
 
 ```text
    ___ _  _  ___  ___  ___  ___       ___ _    ___   
@@ -13,99 +15,103 @@
 
 ---
 
-## ✨ Haupt-Features im Detail
+## 🏗 Technical Architecture
 
-### 📅 Next-Gen Dienstplan & Statistik
-Vergiss unübersichtliche Monatsansichten. Incode CLI liefert dir genau das, was zählt.
-*   **Klare Listenansicht:** Alle zukünftigen Dienste, sortiert und gefiltert.
-*   **Integrierte Analytics:** Das Tool berechnet automatisch:
-    *   **Stunden-Statistik:** Summiert deine Dienststunden pro Monat.
-    *   **Dienst-Typen:** Wie oft fährst du RTW vs. KTW?
-    *   **Dienststellen:** Wo bist du am häufigsten eingeteilt?
-*   **Team-Radar:** Suche nach Diensten, die du gemeinsam mit einem bestimmten Kollegen fährst (`🔍 Gemeinsame Dienste`).
+The application is built on **Python 3** and utilizes a modular architecture designed for resilience and performance. It operates by emulating a full web browser session to communicate with the undocumented backend API.
 
-### 👥 Intelligentes Mitarbeiter-Verzeichnis
-Die mächtigste Funktion der CLI. Das System durchsucht nicht nur deine Stammdienststelle, sondern **alle** verknüpften Organisationseinheiten.
-*   **Cross-District Search:** Findet Kollegen auch in anderen Bezirken, wo sie z.B. nur gastweise tätig sind.
-*   **Auto-Merge Algorithmus:** Das System erkennt Duplikate (z.B. User einmal mit PNR, einmal ohne) und verschmilzt sie zu einem einzigen, vollständigen "Golden Record".
-*   **Detail-View (Taste 'd'):**
-    *   Zeigt formatierte Telefonnummern (mobil/privat) und Adressen.
-    *   Listet alle Qualifikationen (NFS, NK, Fahrerlaubnis...) und Gruppenzugehörigkeiten.
-    *   **Live-Salden:** Zeigt den aktuellen Urlaubs- und Zeitausgleichs-Saldo farblich codiert (Grün/Rot) an.
+### 1. Core API & Reverse Engineering (`src/api.py`)
+Since Incode does not expose a public API, the CLI acts as a headless client.
 
-### 🌴 Smartes Abwesenheits-Management
-Das System korrigiert die oft fehlerhafte Darstellung von "freien Tagen" im Web-Portal.
-*   **Netto-Urlaubstage:** Berechnet exakt, wie viele Urlaubstage eine Abwesenheit tatsächlich "kostet" (exklusive Wochenenden und Feiertage).
-*   **Sandwich-Logik:** Erkennt automatisch, ob ein Sonntag ein "echter" freier Tag ist oder Teil eines durchgehenden Urlaubsblocks (wichtig für die Abrechnung).
-*   **Feiertags-Engine:** Kennt alle österreichischen Feiertage inkl. variabler Ostertermine bis in die Zukunft.
+*   **Header Spoofing & Session Management:**
+    The backend requires dynamic, rotating security headers (`x-incode-*`). The CLI authenticates via `/login.php`, captures the `PHPSESSID`, and uses Regular Expressions to extract these dynamic tokens from the embedded JavaScript of the landing page to sign subsequent requests.
+*   **Recursive GUID Discovery:**
+    Data in Incode is siloed by "Organizational Units" (districts/departments), identified by GUIDs.
+    The CLI recursively scrapes these GUIDs (`StaffPortal/dispo.php`, `projects.php`) to build a complete map of the user's access rights. This enables **cross-departmental queries**, allowing the user to find staff members or shifts in guest districts that are normally hidden.
+*   **Caching Layer:**
+    To ensure instantaneous UI rendering, API responses are serialized and stored in a local JSON cache (`.incode_cache.json`) with a strict TTL (Time-To-Live) of 15 minutes.
 
-### 🏥 Live-Monitor & Tagesplan
-Für die Leitstelle oder den Wachen-Monitor.
-*   **Echtzeit-Ansicht:** Zeigt alle Fahrzeuge und Besatzungen des heutigen Tages.
-*   **Auto-Refresh:** Aktualisiert die Ansicht automatisch alle X Minuten.
-*   **Telegram-Alerts:** Kann bei Änderungen im Tagesplan (z.B. Krankmeldung -> Umbesetzung) sofort ein PDF in deinen Telegram-Chat pushen.
+### 2. Algorithmic Data Processing
 
-### 📤 Export & Synchronisation
-*   **PDF-Generator:** Erstellt saubere, druckfertige Dienstpläne direkt im Terminal.
-*   **iCal-Sync:** Exportiert deine Dienste als `.ics` Datei für den direkten Import in Google Calendar, Outlook oder Apple Kalender.
-*   **Telegram-Push:** Sende dir den aktuellen Plan mit einem Tastendruck (`t`) direkt aufs Handy.
+#### The "Sandwich" Absence Logic
+The web interface often mislabels days within a vacation block as generic "Free Weekends," causing payroll confusion.
+*   **Heuristic:** The CLI analyzes the timeline. If a Sunday is sandwiched between a vacation Friday/Saturday and a vacation Monday, the algorithm reclassifies the Sunday as a "Vacation Day" (part of the continuous block).
+*   **Holiday Engine:** A custom engine calculates Austrian holidays (including variable Easter dates) to correctly prioritize "Holiday" status over "Vacation" or "Free" statuses.
+
+#### Weighted Staff Deduplication
+Staff records are often fragmented across multiple organizational units (e.g., a "Skeleton" record in a guest district vs. a "Full" record in the home district).
+*   **Merging Strategy:** The `search_staff_contact` function aggregates records from *all* discovered GUIDs.
+*   **Scoring System:** It applies a weighted scoring algorithm to duplicates (matched by Name or PNR).
+    *   `+10` points for a phone number.
+    *   `+10` points for an email address.
+    *   `+5` points for assigned roles.
+    The system automatically merges these records, presenting the user with a single, "Golden Record" containing the most complete dataset available.
+
+### 3. TUI & Event Loop (`src/ui.py`)
+The interface is built using the **Rich** library for rendering.
+*   **Responsive Layout engine:** Tables and Panels utilize `expand=False` and `Align.center` strategies to render cleanly on everything from small laptop screens to ultrawide monitors.
+*   **Custom Input Handling:** A cross-platform input wrapper (`src/utils.py`) handles `msvcrt` (Windows) and `termios/tty` (Linux/macOS) to provide a lag-free, non-blocking event loop for keyboard navigation.
+
+### 4. Robust Auto-Update (`src/utils.py`)
+The CLI maintains its own lifecycle.
+*   **Atomic Updates:**
+    1.  Checks for upstream changes (`git fetch`).
+    2.  **Stashes** any local modifications (`git stash`) to prevent merge conflicts.
+    3.  Pulls the latest code (`git pull`).
+    4.  Silently updates dependencies (`pip install`).
+    5.  Restores local modifications (`git stash pop`).
 
 ---
 
-## 🛠 Unter der Haube (Technical Deep Dive)
+## ⚡ Features & Capabilities
 
-Das Projekt ist modular in Python aufgebaut und nutzt Reverse Engineering, um direkt mit dem Incode-Backend zu kommunizieren.
-
-### API & Session Management (`src/api.py`)
-Da Incode keine öffentliche API besitzt, emuliert die CLI einen vollwertigen Browser-Client.
-*   **Header-Spoofing:** Extrahiert dynamische Security-Token (`x-incode-*`) mittels RegEx aus dem JavaScript-Quelltext der Login-Seite.
-*   **GUID Discovery:** Scrapt rekursiv alle verfügbaren Organisations-GUIDs (`orgUnitDataGuid`), um Zugriff auf Daten außerhalb der eigenen Stamm-Dienststelle zu erhalten.
-*   **Performance Caching:** Speichert API-Responses (`.incode_cache.json`) mit einer TTL von 15 Minuten, um Latenzen bei wiederholten Abfragen zu eliminieren.
-
-### UI Architektur (`src/ui.py`)
-Basierend auf der `rich` Library für modernes TUI-Rendering.
-*   **Responsive Layouts:** Tabellen und Panels passen sich dynamisch der Terminalbreite an.
-*   **Event Loop:** Tastatur-Inputs werden plattformübergreifend (Windows `msvcrt` / Unix `termios`) abgefangen, um eine App-ähnliche Navigation zu ermöglichen.
-
-### Robustes Auto-Update (`src/utils.py`)
-Die CLI hält sich selbst aktuell.
-*   **Git Stash Protection:** Vor einem Update prüft das System auf lokale Änderungen, sichert diese (`git stash`), zieht das Update (`git pull`), installiert neue Abhängigkeiten (`pip install`) und stellt die Änderungen wieder her (`git stash pop`).
+*   **Global Staff Directory:** Search across all organizational units with phone number formatting (+43...) and deep linking of skills/groups.
+*   **Live Roster Monitor:** Real-time polling of the daily plan (`/StaffPortal/plan/data/loadPlan.json`). Ideal for station monitors.
+*   **Telegram Bridge:** An asynchronous bot (`src/bot.py`) that can push PDF rosters or live alerts directly to the user's smartphone.
+*   **PDF & iCal Generation:** Client-side generation of roster files using `reportlab` (PDF) and `icalendar` (ICS) for offline usage and calendar integration.
 
 ---
 
 ## 📦 Installation
 
-### Voraussetzungen
+### Prerequisites
 *   Python 3.9+
 *   Git
 
-### Quick Start
+### Setup
 
-1.  **Klonen:**
-    ```bash
-    git clone https://github.com/DEIN_USER/incode-cli.git
-    cd incode-cli
-    ```
+```bash
+# 1. Clone the repository
+git clone https://github.com/YOUR_USERNAME/incode-cli.git
+cd incode-cli
 
-2.  **Setup:**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate  # Windows: .venv\Scripts\activate
-    pip install -r requirements.txt
-    ```
+# 2. Create Virtual Environment
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 
-3.  **Start:**
-    ```bash
-    python3 incode.py
-    ```
-    *(Deine Zugangsdaten werden beim ersten Start lokal und sicher gespeichert.)*
+# 3. Install Dependencies
+pip install -r requirements.txt
 
----
+# 4. Run
+python3 incode.py
+```
 
-## ⚠️ Disclaimer
-
-Dieses Tool ist **keine offizielle Software** des Roten Kreuzes oder der Incode GmbH. Es ist ein privates Open-Source Projekt zur Verbesserung der Usability und Effizienz. Nutzung auf eigene Gefahr.
+*Note: Credentials are requested on the first run and stored securely (`chmod 600`) in `.credentials.json`. They are never transmitted anywhere except the official Incode servers.*
 
 ---
 
-*Developed with ❤️ & ☕ by Manuel Oberberger*
+## 🔒 Security & Privacy
+
+*   **Zero-Knowledge:** The CLI does not track usage or send telemetry.
+*   **Local Storage:** Credentials and Cache are stored strictly locally and added to `.gitignore`.
+*   **Direct Communication:** All traffic goes directly from your client to `https://dienstplan.k.roteskreuz.at`. There is no middleman server.
+
+---
+
+## ⚖️ Disclaimer
+
+This software is an independent, open-source project and is **not affiliated with, endorsed by, or supported by the Austrian Red Cross or Incode GmbH**. Use it at your own risk.
+
+---
+
+*Engineered by Manuel Oberberger*
