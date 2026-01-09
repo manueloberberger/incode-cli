@@ -22,7 +22,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "1.9.1"
+VERSION = "1.9.2"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -30,7 +30,7 @@ BANNER = rf"""
  [bold white]  | || .  | (__| (_) | |) | _|     | (__| |__ | |   [/bold white] 
  [bold white] |___|_|\_|\___|\___/|___/|___|     \___|____|___|  [/bold white] 
  [bold white]                                                    [/bold white] 
- [bold white]                  >> version {VERSION} <<                  [/bold white] 
+ [bold white]                >> version {VERSION} <<                 [/bold white] 
 """
 
 DEFAULT_TIMEOUT = 10 # seconds
