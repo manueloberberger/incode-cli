@@ -3,12 +3,14 @@ import sys
 import time
 import shutil
 from datetime import datetime
+from typing import Any
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from rich.prompt import Prompt
 from rich.console import Console
 from rich.align import Align
 from rich.table import Table
+from rich.text import Text
 try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
