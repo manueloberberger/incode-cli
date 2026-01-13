@@ -45,7 +45,7 @@ def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
         console.print(f"[error]Fehler beim Bot-Versand: {e}[/error]")
         return False
 
-def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ") -> Optional[Any]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None) -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
@@ -57,6 +57,11 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ") 
     while True:
         clear_screen()
         console.print(Align.center(BANNER))
+        
+        # Render Dashboard if present
+        if dashboard_data:
+            render_next_duty_panel(dashboard_data)
+        
         console.print(Align.center(f"[header]{title}[/header]\n"))
         
         menu_grid = Table.grid(padding=(0, 0))
@@ -143,6 +148,60 @@ from rich.pretty import Pretty
 from rich.text import Text
 from rich.align import Align
 from rich import box
+
+def render_next_duty_panel(duty: Any) -> None:
+    if not duty: return
+
+    # Format Date
+    now = datetime.now()
+    d_date = duty.begin.date()
+    days_diff = (d_date - now.date()).days
+    
+    day_name = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][d_date.weekday()]
+    date_str = f"{day_name}, {d_date.strftime('%d.%m.')}"
+    
+    relative_str = ""
+    if days_diff == 0: relative_str = " (Heute)"
+    elif days_diff == 1: relative_str = " (Morgen)"
+    elif days_diff == 2: relative_str = " (Übermorgen)"
+    elif days_diff < 7: relative_str = f" (in {days_diff} Tagen)"
+    
+    # Format Times
+    time_str = f"{duty.begin.strftime('%H:%M')} - {duty.end.strftime('%H:%M')}"
+    dur_str = f"({duty.duration_hours:g}h)"
+    
+    # Format Location / Vehicle
+    loc = duty.location or "Unbekannt"
+    veh = duty.vehicle or "Dienst"
+    
+    # Format Crew (Top 2 + count)
+    crew_list = duty.crew
+    crew_str = ", ".join(crew_list[:2])
+    if len(crew_list) > 2: crew_str += f" +{len(crew_list)-2}"
+    if not crew_str: crew_str = "-"
+    
+    # Build Grid
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(justify="left")
+    grid.add_column(justify="left")
+    
+    # Row 1: Date & Location
+    grid.add_row(f"🚑  [bold white]{date_str}[/bold white][dim]{relative_str}[/dim]", f"📍  {loc}")
+    # Row 2: Time & Crew
+    grid.add_row(f"🕒  {time_str} [dim]{dur_str}[/dim]", f"👥  {crew_str}")
+    # Row 3 (Optional): Vehicle if present
+    if duty.vehicle:
+        grid.add_row(f"🚗  {veh}", "")
+        
+    p = Panel(
+        Align.center(grid),
+        title="[bold green]Nächster Dienst[/bold green]",
+        border_style="green",
+        expand=False,
+        padding=(1, 2)
+    )
+    console.print(Align.center(p))
+    console.print() # Spacer
 
 class CenteredPrompt(Prompt):
 

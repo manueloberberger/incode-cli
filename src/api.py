@@ -521,6 +521,26 @@ class IncodeRequests:
             if cache_key in self.cache: return self._rehydrate_cache(self.cache[cache_key]['data'])
             return []
 
+    @handle_api_errors(None)
+    def get_next_duty(self) -> Optional[Duty]:
+        """
+        Efficiently retrieves the very next duty from cache or short-term fetch.
+        Does not force a full reload if cache is reasonably fresh.
+        """
+        # 1. Try Cache first (future duties are often cached)
+        cached_duties = self.load_future_duties(use_cache=True)
+        now = datetime.now()
+        
+        if cached_duties:
+            for d in cached_duties:
+                if d.begin > now:
+                    return d
+        
+        # 2. If nothing in cache or cache empty, we might need to fetch
+        # But load_future_duties already fetches if cache is missing/expired.
+        # So if we are here, it means we have no future duties in the current month/view.
+        return None
+
     def _rehydrate_cache(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         hydrated = []
         for item in data:

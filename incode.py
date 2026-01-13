@@ -141,6 +141,9 @@ def run_cli():
             if os.path.exists('.credentials.json'): os.remove('.credentials.json')
         return
     
+    # Pre-fetch next duty for dashboard
+    next_duty = incode.get_next_duty()
+    
     menu_options = [
         ("📅  Mein Dienstplan", "future"),
         ("🌴  Meine Abwesenheiten", "absences"),
@@ -155,10 +158,16 @@ def run_cli():
     ]
 
     while True:
-        selection = interactive_menu(menu_options)
+        # Pass dashboard data to interactive_menu via callback or modification
+        # Since interactive_menu is in ui.py and we don't want to change its signature too much,
+        # we can just render the dashboard inside interactive_menu if we pass it.
+        # Let's modify ui.py interactive_menu to accept optional 'dashboard_data'
+        
+        selection = interactive_menu(menu_options, dashboard_data=next_duty)
         
         if selection == "future":
             show_future_duties(incode)
+            next_duty = incode.get_next_duty() # Refresh
         elif selection == "absences":
             show_absences(incode)
         elif selection == "events":
