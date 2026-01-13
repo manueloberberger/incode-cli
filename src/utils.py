@@ -179,6 +179,8 @@ def check_for_updates() -> bool:
 def update_app() -> bool:
     """Performs safe git pull (with stash) and pip install. Returns True if successful."""
     try:
+        console.print() # Initial Spacer
+        
         # 1. Check for local changes
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
         stashed = False
@@ -192,8 +194,9 @@ def update_app() -> bool:
         current_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         
         # 2. Git Pull
-        console.print(Align.center("[info]Lade Updates von GitHub (git pull) ...[/info]"))
-        subprocess.run(["git", "pull"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        with Live(Align.center(Spinner("dots", text="[bold blue]Lade Updates von GitHub (git pull) ...[/bold blue]")), console=console, transient=True):
+            subprocess.run(["git", "pull"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        console.print(Align.center("[dim]Updates heruntergeladen.[/dim]"))
         
         # 3. Restore Stash (if any)
         if stashed:
@@ -217,6 +220,8 @@ def update_app() -> bool:
             if "requirements.txt" in diff:
                 needs_pip = True
         
+        console.print() # Spacer before dependency check output
+        
         if needs_pip:
             with Live(Align.center(Spinner("dots", text="[bold blue]Aktualisiere Python-Abhängigkeiten (pip install) ...[/bold blue]")), console=console, transient=True):
                 # Use sys.executable to ensure we use the same python/venv
@@ -230,7 +235,9 @@ def update_app() -> bool:
         else:
             console.print(Align.center("[dim]Keine neuen Abhängigkeiten. Überspringe pip install.[/dim]"))
         
+        console.print() # Spacer before success message
         console.print(Align.center("[success]Update erfolgreich abgeschlossen !!![/success]"))
+        console.print() # Final Spacer
         return True
         
     except subprocess.CalledProcessError as e:
