@@ -68,9 +68,8 @@ def run_cli():
             console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
             # Custom centered prompt logic for update
             width = shutil.get_terminal_size().columns
-            padding = (width // 2) - 30 # Approx center
             
-            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren?"))
+            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren? [bold cyan][j/n] (j)[/bold cyan]"))
             ans = CenteredPrompt.ask(" " * max(0, (width // 2) - 2) + "[bold green]>[/bold green] ", choices=["j", "n"], default="j")
             
             if ans == "j":
