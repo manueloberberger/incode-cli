@@ -245,6 +245,47 @@ def update_app() -> bool:
 from rich.align import Align
 from rich.spinner import Spinner
 from rich.live import Live
+from datetime import date, datetime, timedelta
+from typing import List
+
+def get_holidays(year: int) -> List[date]:
+    """Returns a list of Austrian holidays for the given year."""
+    # Fixed
+    holidays = [
+        datetime(year, 1, 1).date(),
+        datetime(year, 1, 6).date(),
+        datetime(year, 5, 1).date(),
+        datetime(year, 8, 15).date(),
+        datetime(year, 10, 10).date(),
+        datetime(year, 10, 26).date(),
+        datetime(year, 11, 1).date(),
+        datetime(year, 12, 8).date(),
+        datetime(year, 12, 24).date(),
+        datetime(year, 12, 25).date(),
+        datetime(year, 12, 26).date(),
+        datetime(year, 12, 31).date()
+    ]
+    
+    # Variable (Easter based)
+    a = year % 19; b = year // 100; c = year % 100
+    d = b // 4; e = b % 4; f = (b + 8) // 25
+    g = (b - f + 1) // 3; h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mo = (h + l - 7 * m + 114) // 31
+    dy = ((h + l - 7 * m + 114) % 31) + 1
+    easter = datetime(year, mo, dy).date()
+    
+    # Ostersonntag (0), Ostermontag (+1), Himmelfahrt (+39), Pfingstsonntag (+49), Pfingstmontag (+50), Fronleichnam (+60)
+    holidays.append(easter)                      # Easter Sunday
+    holidays.append(easter + timedelta(days=1))  # Easter Monday
+    holidays.append(easter + timedelta(days=39)) # Ascension
+    holidays.append(easter + timedelta(days=49)) # Whit Sunday
+    holidays.append(easter + timedelta(days=50)) # Whit Monday
+    holidays.append(easter + timedelta(days=60)) # Corpus Christi
+    
+    return holidays
 
 def wait_for_return() -> Optional[str]:
     console.print(Align.center("\n[dim]Beliebige Taste drücken um fortzufahren ...[/dim]"))

@@ -11,9 +11,10 @@ from rich.spinner import Spinner
 from rich.live import Live
 from rich.align import Align
 from typing import Optional, List, Dict, Any, Tuple, Union
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.config import console, DEFAULT_GUID
-from src.utils import TimeoutHTTPAdapter
+from src.utils import TimeoutHTTPAdapter, get_holidays
 
 CACHE_FILE = ".incode_cache.json"
 CACHE_TTL = 900  # 15 Minutes validity
@@ -244,38 +245,43 @@ class IncodeRequests:
         name_to_pnr = {}
         name_no_pnr_to_best_record = {}
         
-        for guid in sorted_guids:
+        def fetch_guid(guid):
             try:
                 resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
                 if resp.status_code == 200: 
-                    found = self._parse_staff_contact(resp.json(), query_name)
-                    for p in found:
-                        name = p.get('_display_name')
-                        pnr = p.get('personalnummer')
-                        score = self._calculate_staff_score(p)
-                        p['_score'] = score
-                        
-                        if pnr:
-                            # We have a PNR. 
-                            name_to_pnr[name] = pnr
-                            if pnr not in pnr_to_best_record or score > pnr_to_best_record[pnr].get('_score', 0):
-                                pnr_to_best_record[pnr] = p
-                            # If we previously had this person as name-only, they will be cleaned up in the final step
+                    return self._parse_staff_contact(resp.json(), query_name)
+            except Exception: pass
+            return []
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_guid = {executor.submit(fetch_guid, g): g for g in sorted_guids}
+            for future in as_completed(future_to_guid):
+                found = future.result()
+                for p in found:
+                    name = p.get('_display_name')
+                    pnr = p.get('personalnummer')
+                    score = self._calculate_staff_score(p)
+                    p['_score'] = score
+                    
+                    if pnr:
+                        # We have a PNR. 
+                        name_to_pnr[name] = pnr
+                        if pnr not in pnr_to_best_record or score > pnr_to_best_record[pnr].get('_score', 0):
+                            pnr_to_best_record[pnr] = p
+                    else:
+                        # No PNR. Check if we already know a PNR for this name
+                        known_pnr = name_to_pnr.get(name)
+                        if known_pnr:
+                            # Merge with the PNR record
+                            if score > pnr_to_best_record[known_pnr].get('_score', 0):
+                                # Update info but keep the PNR from the existing best
+                                p['personalnummer'] = known_pnr
+                                pnr_to_best_record[known_pnr] = p
                         else:
-                            # No PNR. Check if we already know a PNR for this name
-                            known_pnr = name_to_pnr.get(name)
-                            if known_pnr:
-                                # Merge with the PNR record
-                                if score > pnr_to_best_record[known_pnr].get('_score', 0):
-                                    # Update info but keep the PNR from the existing best
-                                    p['personalnummer'] = known_pnr
-                                    pnr_to_best_record[known_pnr] = p
-                            else:
-                                # Truly no PNR yet. Store by name
-                                if name not in name_no_pnr_to_best_record or score > name_no_pnr_to_best_record[name].get('_score', 0):
-                                    name_no_pnr_to_best_record[name] = p
-            except: pass
-            
+                            # Truly no PNR yet. Store by name
+                            if name not in name_no_pnr_to_best_record or score > name_no_pnr_to_best_record[name].get('_score', 0):
+                                name_no_pnr_to_best_record[name] = p
+
         # Final aggregation: records with PNR + records with NO PNR that aren't duplicates
         results_map = {**pnr_to_best_record}
         for name, record in name_no_pnr_to_best_record.items():
@@ -322,7 +328,7 @@ class IncodeRequests:
         def norm_start(dt): return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0) if dt.hour >= 20 else dt
         holiday_cache = {}
         def is_h(d):
-            if d.year not in holiday_cache: holiday_cache[d.year] = self._get_holidays(d.year)
+            if d.year not in holiday_cache: holiday_cache[d.year] = get_holidays(d.year)
             return d in holiday_cache[d.year]
         
         # v1.7 style body (no orgUnitDataGuid)
@@ -428,32 +434,6 @@ class IncodeRequests:
                 curr_s, curr_e, curr_l = d, d, daily_map[d]['label']
         results.append({'begin': datetime.combine(curr_s, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%S'), 'end': datetime.combine(curr_e, datetime.max.time().replace(microsecond=0)).strftime('%Y-%m-%dT%H:%M:%S'), 'location': '', 'vehicle': '', 'duty_type': curr_l, 'crew': []})
         return results
-
-    def _get_holidays(self, year: int) -> List[datetime.date]:
-        holidays = [
-            datetime(year, 1, 1).date(), datetime(year, 1, 6).date(), 
-            datetime(year, 5, 1).date(), datetime(year, 8, 15).date(), 
-            datetime(year, 10, 10).date(), datetime(year, 10, 26).date(), 
-            datetime(year, 11, 1).date(), datetime(year, 12, 8).date(), 
-            datetime(year, 12, 24).date(), datetime(year, 12, 25).date(), 
-            datetime(year, 12, 26).date(), datetime(year, 12, 31).date()
-        ]
-        a, b, c = year % 19, year // 100, year % 100
-        d, e, f = b // 4, b % 4, (b + 8) // 25
-        g = (b - f + 1) // 3
-        h = (19 * a + b - d - g + 15) % 30
-        i, k = c // 4, c % 4
-        l = (32 + 2 * e + 2 * i - h - k) % 7
-        m = (a + 11 * h + 22 * l) // 451
-        mo, dy = (h + l - 7 * m + 114) // 31, ((h + l - 7 * m + 114) % 31) + 1
-        easter = datetime(year, mo, dy).date()
-        # Ostersonntag (0), Ostermontag (+1), Himmelfahrt (+39), Pfingstsonntag (+49), Pfingstmontag (+50), Fronleichnam (+60)
-        holidays.extend([
-            easter, easter + timedelta(days=1), 
-            easter + timedelta(days=39), easter + timedelta(days=49), 
-            easter + timedelta(days=50), easter + timedelta(days=60)
-        ])
-        return holidays
 
     def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
         try:

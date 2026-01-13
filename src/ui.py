@@ -17,7 +17,7 @@ from rich.align import Align
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from src.config import console, BANNER, load_credentials
-from src.utils import get_key, wait_for_return, clear_screen, flush_input, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP_ALT, KEY_DOWN_ALT, KEY_LEFT, KEY_RIGHT, KEY_LEFT_ALT, KEY_RIGHT_ALT
+from src.utils import get_key, wait_for_return, clear_screen, flush_input, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP_ALT, KEY_DOWN_ALT, KEY_LEFT, KEY_RIGHT, KEY_LEFT_ALT, KEY_RIGHT_ALT, get_holidays
 from src.pdf import export_to_pdf
 from src.ical import export_to_ics
 
@@ -155,73 +155,21 @@ class CenteredPrompt(Prompt):
 
 
 def show_staff_search(incode: Any) -> None:
-
-
-
     clear_screen()
-
-
-
     console.print(Align.center(BANNER))
-
-
-
-    console.print() # Spacer
-
-
-
+    console.print()
     console.print(Align.center("[bold header]MITARBEITER-VERZEICHNIS[/bold header]"))
-
-
-
-    console.print() # Spacer
-
-
-
-    
-
-
-
+    console.print()
     console.print(Align.center("[dim]Suche nach Name, PNR oder Kürzel ist möglich ...[/dim]"))
-
-
-
-    console.print() # Added blank line
-
-
-
+    console.print()
     
-
-
-
     width = shutil.get_terminal_size().columns
-
-
-
     padding = (width // 2) - 4
-
-
-
     query = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
-
-
-
     if not query: return
-
-
-
     
-
-
-
-    console.print() # Spacer
-
-
-
+    console.print()
     with Live(Align.center(Spinner("dots", text=f" Suche nach '{query}' ...")), console=console, transient=True):
-
-
-
         results = incode.search_staff_contact(query)
         
     if not results:
@@ -240,8 +188,9 @@ def show_staff_search(incode: Any) -> None:
         selected_person = interactive_menu(options, title=f"TREFFER-AUSWAHL ({len(results)})")
         if not selected_person: return
 
-    # Show FULL DETAILS for the selected person
-    p = selected_person
+    _display_staff_details_loop(selected_person)
+
+def _display_staff_details_loop(p: Any) -> None:
     show_details = False
     
     # Helper for nice dates
@@ -418,45 +367,6 @@ def show_staff_search(incode: Any) -> None:
             wait_for_return()
         elif k == KEY_ENTER or (k and k.lower() == 'q') or k == KEY_ESC:
             return
-
-def get_holidays(year: int) -> List[datetime.date]:
-    """Returns a list of Austrian holidays for the given year."""
-    # Fixed
-    holidays = [
-        datetime(year, 1, 1).date(),
-        datetime(year, 1, 6).date(),
-        datetime(year, 5, 1).date(),
-        datetime(year, 8, 15).date(),
-        datetime(year, 10, 10).date(),
-        datetime(year, 10, 26).date(),
-        datetime(year, 11, 1).date(),
-        datetime(year, 12, 8).date(),
-        datetime(year, 12, 24).date(),
-        datetime(year, 12, 25).date(),
-        datetime(year, 12, 26).date(),
-        datetime(year, 12, 31).date()
-    ]
-    
-    # Variable (Easter based)
-    a = year % 19; b = year // 100; c = year % 100
-    d = b // 4; e = b % 4; f = (b + 8) // 25
-    g = (b - f + 1) // 3; h = (19 * a + b - d - g + 15) % 30
-    i, k = c // 4, c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    mo = (h + l - 7 * m + 114) // 31
-    dy = ((h + l - 7 * m + 114) % 31) + 1
-    easter = datetime(year, mo, dy).date()
-    
-    # Ostersonntag (0), Ostermontag (+1), Himmelfahrt (+39), Pfingstsonntag (+49), Pfingstmontag (+50), Fronleichnam (+60)
-    holidays.append(easter)                      # Easter Sunday
-    holidays.append(easter + timedelta(days=1))  # Easter Monday
-    holidays.append(easter + timedelta(days=39)) # Ascension
-    holidays.append(easter + timedelta(days=49)) # Whit Sunday
-    holidays.append(easter + timedelta(days=50)) # Whit Monday
-    holidays.append(easter + timedelta(days=60)) # Corpus Christi
-    
-    return holidays
 
 def show_absences(incode: Any) -> None:
     console.print()
