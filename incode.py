@@ -15,7 +15,7 @@ try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu
-    from src.utils import clear_screen, check_for_updates, update_app, wait_for_return
+    from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
     from src.bot import IncodeBot
 except ImportError as e:
     print(f"Fehler: Abhängigkeiten konnten nicht geladen werden ({e}).")
@@ -66,13 +66,54 @@ def run_cli():
             
         if has_update:
             console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
-            # Custom centered prompt logic for update
-            width = shutil.get_terminal_size().columns
+            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren?"))
+            console.print()
+
+            # Interactive Yes/No
+            is_yes = True
+            while True:
+                # Render options
+                y_style = "[black on green] Ja [/]" if is_yes else " Ja "
+                n_style = "[black on green] Nein [/]" if not is_yes else " Nein "
+                
+                # Use carriage return to overwrite line (or clear previous lines if needed, but simplistic approach here)
+                # Since we can't easily overwrite multiple lines without moving cursor up, 
+                # we'll just print the prompt line again with a carriage return logic or clear screen? 
+                # Clearing screen is too jarring. 
+                # Better: Use Console's Live or just reprint the line with \r if it was a single line.
+                # But we want centered. 
+                # Let's use a simple clear_screen approach for the whole prompt or just `console.print` with Live.
+                
+                from rich.table import Table
+                grid = Table.grid(padding=(0, 2))
+                grid.add_column(); grid.add_column()
+                grid.add_row(y_style, n_style)
+                
+                # We use Live display to update the selection
+                from rich.live import Live
+                
+                # We need to break out to run the Live context manager properly
+                # Actually, wrapping the whole loop in Live is best.
+                break
             
-            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren? [bold cyan][j/n] (j)[/bold cyan]"))
-            ans = CenteredPrompt.ask(" " * max(0, (width // 2) - 2) + "[bold green]>[/bold green] ", choices=["j", "n"], default="j")
+            with Live(console=console, refresh_per_second=10) as live:
+                while True:
+                    y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
+                    n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
+                    
+                    grid = Table.grid(padding=(0, 4))
+                    grid.add_column(); grid.add_column()
+                    grid.add_row(y_style, n_style)
+                    
+                    live.update(Align.center(grid))
+                    
+                    k = get_key()
+                    if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
+                        is_yes = not is_yes
+                    elif k == KEY_ENTER:
+                        break
             
-            if ans == "j":
+            if is_yes:
                 if update_app():
                     console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
                     time.sleep(1)
