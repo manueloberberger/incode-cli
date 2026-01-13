@@ -14,7 +14,8 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.config import console, DEFAULT_GUID
-from src.utils import TimeoutHTTPAdapter, get_holidays
+from src.utils import TimeoutHTTPAdapter, get_holidays, handle_api_errors
+from src.models import Duty, StaffMember, Absence
 
 CACHE_FILE = ".incode_cache.json"
 CACHE_TTL = 900  # 15 Minutes validity
@@ -435,14 +436,14 @@ class IncodeRequests:
         results.append({'begin': datetime.combine(curr_s, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%S'), 'end': datetime.combine(curr_e, datetime.max.time().replace(microsecond=0)).strftime('%Y-%m-%dT%H:%M:%S'), 'location': '', 'vehicle': '', 'duty_type': curr_l, 'crew': []})
         return results
 
-    def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'})
-            if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode)
-        except: pass
+    @handle_api_errors([])
+    def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
+        resp = self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'})
+        if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode)
         return []
 
-    def load_future_duties(self, use_cache=True, filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
+    @handle_api_errors([])
+    def load_future_duties(self, use_cache=True, filter_mode: str = 'exclude_absences') -> List[Duty]:
         """
         Loads future duties from the monthly view.
         
@@ -451,33 +452,59 @@ class IncodeRequests:
             filter_mode (str): 'exclude_absences', 'only_absences', or 'include_all'.
         
         Returns:
-            List[Dict[str, Any]]: List of duties sorted by date.
+            List[Duty]: List of duties sorted by date.
         """
         cache_key = f"future_duties_{filter_mode}"
+        # Serialization for objects is tricky with simple json dump. 
+        # For now, we skip cache reading for objects or we'd need a serializer.
+        # To keep it simple and working: Disable read-cache for objects momentarily or implement hydration.
+        # Actually, let's keep it simple: If cache is dict, we need to convert back.
+        # But wait, self._get_cached_data returns dicts.
         if use_cache:
-            cached = self._get_cached_data(cache_key)
-            if cached: return cached
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                # Hydrate
+                return [Duty(
+                    begin=datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S'),
+                    end=datetime.strptime(d['end'], '%Y-%m-%dT%H:%M:%S'),
+                    vehicle=d['vehicle'],
+                    location=d['location'],
+                    duty_type=d['duty_type'],
+                    crew=d['crew'],
+                    comment=d.get('comment')
+                ) for d in cached_data]
+
         now = datetime.now()
         start_fetch = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
         next_month = now.replace(year=now.year + 1, month=1, day=1) if now.month == 12 else now.replace(month=now.month + 1, day=1)
         nm_end = next_month.replace(year=next_month.year + 1, month=1, day=1) - timedelta(seconds=1) if next_month.month == 12 else next_month.replace(month=next_month.month + 1, day=1) - timedelta(seconds=1)
         ts_s, ts_e = int(start_fetch.timestamp()), int(nm_end.timestamp())
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': start_fetch.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': nm_end.strftime('%Y-%m-%dT23:59:59.000Z'), 'from': str(ts_s), 'to': str(ts_e), 'start': str(ts_s), 'end': str(ts_e), 'includeFinished': '1', 'view': 'month'})
-            resp.raise_for_status()
-            duties = self._parse_personal_duties(resp.json(), filter_mode)
-            archive = self.load_archive_duties(now.year, filter_mode)
-            d_map = {d['begin']: d for d in duties}
-            for ad in archive:
-                if ad['begin'] not in d_map: d_map[ad['begin']] = ad
-                elif not d_map[ad['begin']].get('location') and ad.get('location'): d_map[ad['begin']] = ad
-            duties = sorted(d_map.values(), key=lambda x: x['begin'])
-            self._set_cached_data(cache_key, duties)
-            return duties
-        except Exception as e:
-            console.print(Align.center(f"[dim red]Fehler beim Laden der Dienste: {e}[/dim red]"))
-            if cache_key in self.cache: return self.cache[cache_key]['data']
-            return []
+        
+        resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': start_fetch.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': nm_end.strftime('%Y-%m-%dT23:59:59.000Z'), 'from': str(ts_s), 'to': str(ts_e), 'start': str(ts_s), 'end': str(ts_e), 'includeFinished': '1', 'view': 'month'})
+        resp.raise_for_status()
+        duties = self._parse_personal_duties(resp.json(), filter_mode)
+        archive = self.load_archive_duties(now.year, filter_mode)
+        
+        # Merge logic
+        d_map = {d.begin: d for d in duties}
+        for ad in archive:
+            if ad.begin not in d_map: d_map[ad.begin] = ad
+            elif not d_map[ad.begin].location and ad.location: d_map[ad.begin] = ad
+            
+        duties = sorted(d_map.values(), key=lambda x: x.begin)
+        
+        # Cache as dicts
+        serializable = [{
+            'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'),
+            'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'),
+            'vehicle': d.vehicle,
+            'location': d.location,
+            'duty_type': d.duty_type,
+            'crew': d.crew,
+            'comment': d.comment
+        } for d in duties]
+        self._set_cached_data(cache_key, serializable)
+        return duties
 
     def load_daily_plan(self, date: datetime, use_cache=True) -> List[Dict[str, Any]]:
         cache_key = f"daily_{date.strftime('%Y-%m-%d')}"
@@ -503,7 +530,7 @@ class IncodeRequests:
             hydrated.append(ni)
         return hydrated
 
-    def _parse_personal_duties(self, data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Dict[str, Any]]:
+    def _parse_personal_duties(self, data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Duty]:
         results, fw = [], ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung", "dienstfrei", "ausbildung", "lehrgang"]
         for item in data.get('data', []):
             if not isinstance(item, dict): continue
@@ -522,7 +549,17 @@ class IncodeRequests:
                 last = str(al[-1])
                 if last and (last[0].isdigit() or any(vt in last.upper() for vt in ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"])): veh, crew = last, [str(x) for x in al[1:-1]]
                 else: veh, crew = "", [str(x) for x in al[1:]]
-            results.append({'begin': b.strftime('%Y-%m-%dT%H:%M:%S'), 'end': e.strftime('%Y-%m-%dT%H:%M:%S'), 'location': loc, 'vehicle': veh, 'duty_type': dt_name, 'crew': crew})
+            
+            # Create Duty Object
+            results.append(Duty(
+                begin=b,
+                end=e,
+                location=loc,
+                vehicle=veh,
+                duty_type=dt_name,
+                crew=crew,
+                comment=comm
+            ))
         return results
 
     def _parse_daily_plan_raw(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:

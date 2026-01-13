@@ -246,7 +246,30 @@ from rich.align import Align
 from rich.spinner import Spinner
 from rich.live import Live
 from datetime import date, datetime, timedelta
-from typing import List
+from typing import List, Callable, TypeVar, Any
+from functools import wraps
+from requests import RequestException
+from src.config import console
+
+T = TypeVar("T")
+
+def handle_api_errors(default_return: Any = None) -> Callable:
+    """
+    Decorator to handle API errors gracefully.
+    Logs error to console and returns default_return.
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            try:
+                return func(*args, **kwargs)
+            except RequestException as e:
+                console.print(Align.center(f"[dim red]Netzwerk-Fehler in {func.__name__}: {e}[/dim red]"))
+            except Exception as e:
+                console.print(Align.center(f"[dim red]Unerwarteter Fehler in {func.__name__}: {e}[/dim red]"))
+            return default_return
+        return wrapper
+    return decorator
 
 def get_holidays(year: int) -> List[date]:
     """Returns a list of Austrian holidays for the given year."""

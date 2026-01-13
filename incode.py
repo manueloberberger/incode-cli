@@ -66,7 +66,14 @@ def run_cli():
             
         if has_update:
             console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
-            if Prompt.ask("Möchtest du das Update jetzt automatisch installieren?", choices=["j", "n"], default="j") == "j":
+            # Custom centered prompt logic for update
+            width = shutil.get_terminal_size().columns
+            padding = (width // 2) - 30 # Approx center
+            
+            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren?"))
+            ans = CenteredPrompt.ask(" " * max(0, (width // 2) - 2) + "[bold green]>[/bold green] ", choices=["j", "n"], default="j")
+            
+            if ans == "j":
                 if update_app():
                     console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
                     time.sleep(1)

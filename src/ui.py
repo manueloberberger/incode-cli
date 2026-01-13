@@ -476,18 +476,32 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
     
     for d in duties:
         try:
-            b, e = datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S'), datetime.strptime(d['end'], '%Y-%m-%dT%H:%M:%S')
-            h = (e - b).total_seconds() / 3600
-            crew_str = ", ".join(d['crew']) if d['crew'] else "-"
+            # d is now a Duty object
+            b, e = d.begin, d.end
+            h = d.duration_hours
+            crew_str = ", ".join(d.crew) if d.crew else "-"
             if search_colleague and search_colleague.lower() not in crew_str.lower(): continue
             found_any = True
-            export_duties.append(d)
+            
+            # For export, we might need a dict representation if export tools expect it
+            # The export tools in pdf.py/ical.py currently handle dicts primarily but check type.
+            # We should probably pass a dict or update those tools. 
+            # Given constraints, let's create a dict for export to be safe for now.
+            export_duties.append({
+                'begin': b.strftime('%Y-%m-%dT%H:%M:%S'),
+                'end': e.strftime('%Y-%m-%dT%H:%M:%S'),
+                'vehicle': d.vehicle,
+                'location': d.location,
+                'duty_type': d.duty_type,
+                'crew': d.crew
+            })
+            
             month_key = f"{b.year}-{b.month:02d} ({month_names[b.month]})"
             monthly_stats[month_key] += h
-            loc = d.get('location', '')
-            if not loc and d.get('duty_type') == 'Vergangen':
+            loc = d.location or ""
+            if not loc and d.duty_type == 'Vergangen':
                 loc = "[dim]-[/dim]"
-            table.add_row(b.strftime('%d.%m.%Y'), f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')} ({h:g}h) ", loc, d['vehicle'] or "-", crew_str)
+            table.add_row(b.strftime('%d.%m.%Y'), f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')} ({h:g}h) ", loc, d.vehicle or "-", crew_str)
         except Exception: pass
 
     if not found_any: 
@@ -516,12 +530,12 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             vehicle_types = ["RTWA", "RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"] 
             
             for d in duties:
-                loc = d.get('location', '')
+                loc = d.location or ""
                 if loc: location_counts[loc] += 1
                 
                 key = None
-                vehicle = d.get('vehicle', '').upper()
-                duty_type = d.get('duty_type', '')
+                vehicle = (d.vehicle or "").upper()
+                duty_type = d.duty_type or ""
                 
                 if vehicle:
                     for vt in vehicle_types:
