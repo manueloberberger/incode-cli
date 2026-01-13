@@ -193,7 +193,7 @@ def update_app() -> bool:
         
         # 2. Git Pull
         console.print(Align.center("[info]Lade Updates von GitHub (git pull) ...[/info]"))
-        subprocess.run(["git", "pull"], check=True)
+        subprocess.run(["git", "pull"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         
         # 3. Restore Stash (if any)
         if stashed:
