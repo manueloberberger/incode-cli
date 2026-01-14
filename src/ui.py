@@ -946,22 +946,8 @@ def show_events_menu(incode: Any) -> None:
         console.print(Align.center(table))
         wait_for_return()
 
-def show_colleague_search(incode) -> None:
-    """Shows a dedicated page for searching colleague duties."""
-    clear_screen()
-    console.print(Align.center(BANNER))
-    console.print()
-    console.print(Align.center("[bold header]GEMEINSAME DIENSTE[/bold header]"))
-    console.print()
-    console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
-    console.print()
 
-    name = centered_input("[bold green]>[/bold green] ")
-    if not name:
-        return
-        
-    console.print() # Spacer
-    show_future_duties(incode, search_colleague=name)
+
         
     elif sel == "all":
         with Live(Align.center(Spinner("dots", text=" Lade Veranstaltungs-Plan ...")), console=console, transient=True):
@@ -1015,3 +1001,20 @@ def show_colleague_search(incode) -> None:
             
         console.print(Align.center(table))
         wait_for_return()
+
+def show_colleague_search(incode) -> None:
+    """Shows a dedicated page for searching colleague duties."""
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print()
+    console.print(Align.center("[bold header]GEMEINSAME DIENSTE[/bold header]"))
+    console.print()
+    console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
+    console.print()
+
+    name = centered_input("[bold green]>[/bold green] ")
+    if not name:
+        return
+        
+    console.print() # Spacer
+    show_future_duties(incode, search_colleague=name)
