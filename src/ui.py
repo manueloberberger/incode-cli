@@ -989,16 +989,16 @@ def show_events_menu(incode: Any) -> None:
             event_name = p.get('vehicle', 'Event')
             location = p.get('location', '')
             
-    display_name = event_name
-    if location and location not in event_name:
-        display_name += f"\n[dim]({location})[/dim]"
-    
-    table.add_row(
-        b.strftime('%d.%m.%Y'),
-        f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
-        display_name,
-        ", ".join(crew_list) or "[dim]-[/dim]"
-    )
-    
-console.print(Align.center(table))
-wait_for_return()
+            display_name = event_name
+            if location and location not in event_name:
+                display_name += f"\n[dim]({location})[/dim]"
+            
+            table.add_row(
+                b.strftime('%d.%m.%Y'),
+                f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
+                display_name,
+                ", ".join(crew_list) or "[dim]-[/dim]"
+            )
+            
+        console.print(Align.center(table))
+        wait_for_return()
