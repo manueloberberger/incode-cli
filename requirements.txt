@@ -4,3 +4,4 @@ rich
 reportlab
 python-telegram-bot
 icalendar
+pytest

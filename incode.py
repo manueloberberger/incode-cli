@@ -23,10 +23,7 @@ except ImportError as e:
     print("Bitte führe 'pip install -r requirements.txt' aus.")
     sys.exit(1)
 
-class CenteredPrompt(Prompt):
-    prompt_suffix = ""
-    def make_prompt(self, default: Any) -> Text:
-        return self.prompt
+
 
 def _prompt_new_user():
     width = shutil.get_terminal_size().columns
@@ -110,7 +107,8 @@ def startup_checks():
         if has_update:
             console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
             
-            from src.ui import prompt_yes_no
+            # from src.ui import prompt_yes_no # Redundant, already imported globally
+
             if prompt_yes_no("Möchtest du das Update jetzt automatisch installieren?"):
                 if update_app():
                     console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
