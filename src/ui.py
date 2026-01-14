@@ -68,33 +68,6 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
         
         console.print(Align.center(f"[header]{title}[/header]\n"))
 
-def prompt_yes_no(question: str) -> bool:
-    """
-    Shows an interactive Yes/No prompt with arrow navigation.
-    Returns: True for Yes, False for No.
-    """
-    console.print(Align.center(f"{question}"))
-    console.print()
-    
-    is_yes = True
-    with Live(console=console, refresh_per_second=10) as live:
-        while True:
-            y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
-            n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
-            
-            grid = Table.grid(padding=(0, 4))
-            grid.add_column(); grid.add_column()
-            grid.add_row(y_style, n_style)
-            
-            live.update(Align.center(grid))
-            
-            k = get_key()
-            if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
-                is_yes = not is_yes
-            elif k == KEY_ENTER:
-                return is_yes
-            elif k == KEY_ESC or k == 'q':
-                return False
         
         menu_grid = Table.grid(padding=(0, 0))
         menu_grid.add_column()
@@ -1018,3 +991,31 @@ def show_events_menu(incode: Any) -> None:
             
         console.print(Align.center(table))
         wait_for_return()
+
+def prompt_yes_no(question: str) -> bool:
+    """
+    Shows an interactive Yes/No prompt with arrow navigation.
+    Returns: True for Yes, False for No.
+    """
+    console.print(Align.center(f"{question}"))
+    console.print()
+    
+    is_yes = True
+    with Live(console=console, refresh_per_second=10) as live:
+        while True:
+            y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
+            n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
+            
+            grid = Table.grid(padding=(0, 4))
+            grid.add_column(); grid.add_column()
+            grid.add_row(y_style, n_style)
+            
+            live.update(Align.center(grid))
+            
+            k = get_key()
+            if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
+                is_yes = not is_yes
+            elif k == KEY_ENTER:
+                return is_yes
+            elif k == KEY_ESC or k == 'q':
+                return False
