@@ -4,6 +4,8 @@ import time
 import select
 from typing import Optional, Any
 from requests.adapters import HTTPAdapter
+import shutil
+import re
 from src.config import DEFAULT_TIMEOUT, console
 
 # Platform specific imports
@@ -360,7 +362,14 @@ def centered_input(label: str, password: bool = False, default: str = None) -> O
     Supports ESC to cancel (returns None).
     Supports Backspace.
     """
-    console.print(Align.center(label), end="")
+    # Calculate padding to center the label
+    width = shutil.get_terminal_size().columns
+    label_len = len(label)
+    # Ensure non-negative padding
+    padding = max(0, (width // 2) - unicode_len(label))
+    
+    # Print the label with padding
+    console.print(" " * padding + label, end="")
     sys.stdout.flush()
     
     input_str = ""
@@ -393,3 +402,9 @@ def centered_input(label: str, password: bool = False, default: str = None) -> O
             else:
                 sys.stdout.write(k)
             sys.stdout.flush()
+
+def unicode_len(s: str) -> int:
+    """Helper to get visual length of string ignoring ANSI codes for centering calculation."""
+    # Strip ANSI codes for length calculation
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return len(ansi_escape.sub('', s))
