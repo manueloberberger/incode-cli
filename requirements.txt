@@ -1,7 +1,12 @@
-requests
-beautifulsoup4
-rich
-reportlab
-python-telegram-bot
-icalendar
-pytest
+requests==2.31.0
+beautifulsoup4==4.12.3
+rich==13.7.0
+reportlab==4.0.9
+python-telegram-bot==20.8
+icalendar==5.0.11
+pytest==8.0.0
+# Dev Dependencies
+requests-mock==1.11.0
+mypy==1.8.0
+types-requests==2.31.0.20240125
+types-beautifulsoup4==4.12.0.20240106
