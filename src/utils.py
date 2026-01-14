@@ -321,6 +321,10 @@ def get_holidays(year: int) -> List[date]:
 
 def wait_for_return() -> Optional[str]:
     console.print(Align.center("\n[bold dim]Beliebige Taste drücken um fortzufahren ...[/bold dim]"))
+    flush_input()
+    while True:
+        k = get_key()
+        if k: return k
 
 def prompt_yes_no(question: str) -> bool:
     """
