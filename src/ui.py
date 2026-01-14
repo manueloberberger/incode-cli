@@ -16,8 +16,8 @@ from rich.console import Group
 from rich.align import Align
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from src.config import console, BANNER, load_credentials
-from src.utils import get_key, wait_for_return, clear_screen, flush_input, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_UP_ALT, KEY_DOWN_ALT, KEY_LEFT, KEY_RIGHT, KEY_LEFT_ALT, KEY_RIGHT_ALT, get_holidays
+from src.config import console, BANNER
+from src.utils import clear_screen, get_key, wait_for_return, centered_input, prompt_yes_no, KEY_UP, KEY_UP_ALT, KEY_DOWN, KEY_DOWN_ALT, KEY_ENTER, KEY_ESC, KEY_BACKSPACE, KEY_LEFT, KEY_LEFT_ALT, KEY_RIGHT, KEY_RIGHT_ALT, get_holidays
 from src.pdf import export_to_pdf
 from src.ical import export_to_ics
 
@@ -989,84 +989,16 @@ def show_events_menu(incode: Any) -> None:
             event_name = p.get('vehicle', 'Event')
             location = p.get('location', '')
             
-            display_name = event_name
-            if location and location not in event_name:
-                display_name += f"\n[dim]({location})[/dim]"
-            
-            table.add_row(
-                b.strftime('%d.%m.%Y'),
-                f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
-                display_name,
-                ", ".join(crew_list) or "[dim]-[/dim]"
-            )
-            
-        console.print(Align.center(table))
-        wait_for_return()
-
-def prompt_yes_no(question: str) -> bool:
-    """
-    Shows an interactive Yes/No prompt with arrow navigation.
-    Returns: True for Yes, False for No.
-    """
-    console.print(Align.center(f"{question}"))
-    console.print()
+    display_name = event_name
+    if location and location not in event_name:
+        display_name += f"\n[dim]({location})[/dim]"
     
-    is_yes = True
-    with Live(console=console, refresh_per_second=10) as live:
-        while True:
-            y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
-            n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
-            
-            grid = Table.grid(padding=(0, 4))
-            grid.add_column(); grid.add_column()
-            grid.add_row(y_style, n_style)
-            
-            live.update(Align.center(grid))
-            
-            k = get_key()
-            if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
-                is_yes = not is_yes
-            elif k == KEY_ENTER:
-                return is_yes
-            elif k == KEY_ESC or k == 'q':
-                return False
-
-def centered_input(label: str, password: bool = False, default: str = None) -> Optional[str]:
-    """
-    Reads input from user, centered. 
-    Supports ESC to cancel (returns None).
-    Supports Backspace.
-    """
-    console.print(Align.center(label), end="")
-    sys.stdout.flush()
+    table.add_row(
+        b.strftime('%d.%m.%Y'),
+        f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
+        display_name,
+        ", ".join(crew_list) or "[dim]-[/dim]"
+    )
     
-    input_str = ""
-    
-    while True:
-        k = get_key()
-        if not k: continue
-        
-        if k == KEY_ENTER:
-            console.print() # Newline
-            if not input_str and default:
-                return default
-            return input_str
-            
-        elif k == KEY_ESC:
-            console.print() # Newline
-            return None
-            
-        elif k == KEY_BACKSPACE or k == '\x7f' or k == '\b':
-            if len(input_str) > 0:
-                input_str = input_str[:-1]
-                # Erase last char: Backspace, Space, Backspace
-                sys.stdout.write('\b \b')
-                sys.stdout.flush()
-                
-        elif len(k) == 1 and k.isprintable():
-            input_str += k
-            if password:
-                sys.stdout.write('*')
-            else:
-                sys.stdout.write(k)
-            sys.stdout.flush()
+console.print(Align.center(table))
+wait_for_return()

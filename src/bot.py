@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_mess
 
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
-from src.ui import centered_input
+from src.utils import centered_input
 from src.pdf import export_to_pdf
 
 # Logging Configuration

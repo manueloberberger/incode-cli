@@ -252,6 +252,7 @@ def update_app() -> bool:
 from rich.align import Align
 from rich.spinner import Spinner
 from rich.live import Live
+from rich.table import Table
 from datetime import date, datetime, timedelta
 from typing import List, Callable, TypeVar, Any
 from functools import wraps
@@ -317,9 +318,74 @@ def get_holidays(year: int) -> List[date]:
     
     return holidays
 
+
 def wait_for_return() -> Optional[str]:
-    console.print(Align.center("\n[dim]Beliebige Taste drücken um fortzufahren ...[/dim]"))
-    flush_input()
+    console.print(Align.center("\n[bold dim]Beliebige Taste drücken um fortzufahren ...[/bold dim]"))
+
+def prompt_yes_no(question: str) -> bool:
+    """
+    Shows an interactive Yes/No prompt with arrow navigation.
+    Returns: True for Yes, False for No.
+    """
+    console.print(Align.center(f"{question}"))
+    console.print()
+    
+    is_yes = True
+    with Live(console=console, refresh_per_second=10) as live:
+        while True:
+            y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
+            n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
+            
+            grid = Table.grid(padding=(0, 4))
+            grid.add_column(); grid.add_column()
+            grid.add_row(y_style, n_style)
+            
+            live.update(Align.center(grid))
+            
+            k = get_key()
+            if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
+                is_yes = not is_yes
+            elif k == KEY_ENTER:
+                return is_yes
+            elif k == KEY_ESC or k == 'q':
+                return False
+
+def centered_input(label: str, password: bool = False, default: str = None) -> Optional[str]:
+    """
+    Reads input from user, centered. 
+    Supports ESC to cancel (returns None).
+    Supports Backspace.
+    """
+    console.print(Align.center(label), end="")
+    sys.stdout.flush()
+    
+    input_str = ""
+    
     while True:
         k = get_key()
-        if k: return k
+        if not k: continue
+        
+        if k == KEY_ENTER:
+            console.print() # Newline
+            if not input_str and default:
+                return default
+            return input_str
+            
+        elif k == KEY_ESC:
+            console.print() # Newline
+            return None
+            
+        elif k == KEY_BACKSPACE or k == '\x7f' or k == '\b':
+            if len(input_str) > 0:
+                input_str = input_str[:-1]
+                # Erase last char: Backspace, Space, Backspace
+                sys.stdout.write('\b \b')
+                sys.stdout.flush()
+                
+        elif len(k) == 1 and k.isprintable():
+            input_str += k
+            if password:
+                sys.stdout.write('*')
+            else:
+                sys.stdout.write(k)
+            sys.stdout.flush()
