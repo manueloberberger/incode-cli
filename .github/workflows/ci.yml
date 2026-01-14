@@ -25,11 +25,11 @@ jobs:
         
     - name: Run generic tests
       run: |
-        pytest tests/test_utils.py
+        python -m pytest tests/test_utils.py
 
     - name: Run API tests
       run: |
-        pytest tests/test_api.py
+        python -m pytest tests/test_api.py
 
     # Optional: Fail on type errors? For now just run it to see output in logs
     - name: Run Type Checks
