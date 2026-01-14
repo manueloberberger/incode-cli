@@ -12,7 +12,7 @@ from rich.align import Align
 from rich.table import Table
 from rich.text import Text
 try:
-    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials
+    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu
     from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
@@ -27,36 +27,76 @@ class CenteredPrompt(Prompt):
     def make_prompt(self, default: Any) -> Text:
         return self.prompt
 
-def setup_auth():
-    creds = load_credentials()
-    if creds:
-        u, p = creds['username'], creds['password']
-        base_url = creds.get('base_url')
-        extra_guids = creds.get('extra_guids')
-        console.print(Align.center(f"Verwende gespeicherte Zugangsdaten für [info]{u}[/info]"))
-    else:
-        width = shutil.get_terminal_size().columns
-        padding = (width // 2) - 4
-        
-        console.print() # Spacer
-        console.print(Align.center("[bold]Incode Benutzername[/bold]"))
-        u = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
-        
-        console.print() # Spacer
-        console.print(Align.center("[bold]Passwort[/bold]"))
-        p = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ", password=True)
-        
-        console.print() # Spacer
-        base_url = "https://dienstplan.k.roteskreuz.at" 
-        extra_guids = None
-        save_credentials(u, p, base_url, extra_guids, None)
+def _prompt_new_user():
+    width = shutil.get_terminal_size().columns
+    padding = (width // 2) - 4
     
+    console.print()
+    console.print(Align.center("[bold]Incode Benutzername[/bold]"))
+    u = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+    
+    console.print()
+    console.print(Align.center("[bold]Passwort[/bold]"))
+    p = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ", password=True)
+    
+    console.print()
+    base_url = "https://dienstplan.k.roteskreuz.at" 
+    extra_guids = None
+    save_credentials(u, p, base_url, extra_guids, None)
     return u, p, base_url, extra_guids
 
-def run_cli():
-    clear_screen()
-    console.print(Align.center(BANNER))
+def setup_auth(force_interactive=False):
+    creds_data = load_credentials()
+    users = creds_data.get('users', [])
     
+    # 1. No users -> Create first one
+    if not users:
+        return _prompt_new_user()
+    
+    # 2. Single user and not forced -> Auto Login
+    if len(users) == 1 and not force_interactive:
+        u = users[0]
+        console.print(Align.center(f"Verwende gespeicherte Zugangsdaten für [info]{u['username']}[/info]"))
+        return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
+
+    # 3. Multiple users or forced -> Selection Menu
+    while True:
+        clear_screen()
+        console.print(Align.center(BANNER))
+        console.print(Align.center("[bold]BENUTZER-AUSWAHL[/bold]"))
+        console.print()
+        
+        options = []
+        for user in users:
+            options.append((f"Login als {user['username']}", user))
+            
+        options.append(("➕  Neuen Benutzer hinzufügen", "new"))
+        options.append(("🗑️   Benutzer entfernen", "delete"))
+        options.append(("🚪  Beenden", "exit"))
+        
+        selected = interactive_menu(options, title="LOGIN")
+        
+        if selected == "exit" or selected is None:
+            sys.exit(0)
+        elif selected == "new":
+            return _prompt_new_user()
+        elif selected == "delete":
+            # Sub-menu for deletion
+            del_options = [(f"Lösche {u['username']}", u['username']) for u in users]
+            del_options.append(("Zurück", "back"))
+            to_delete = interactive_menu(del_options, title="BENUTZER LÖSCHEN")
+            if to_delete and to_delete != "back":
+                remove_user(to_delete)
+                # Reload users
+                creds_data = load_credentials()
+                users = creds_data.get('users', [])
+                if not users: return _prompt_new_user()
+        else:
+            # User selected
+            u = selected
+            return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
+
+def startup_checks():
     # Check for updates
     try:
         from rich.spinner import Spinner
@@ -72,28 +112,15 @@ def run_cli():
             # Interactive Yes/No
             is_yes = True
             while True:
-                # Render options
                 y_style = "[black on green] Ja [/]" if is_yes else " Ja "
                 n_style = "[black on green] Nein [/]" if not is_yes else " Nein "
-                
-                # Use carriage return to overwrite line (or clear previous lines if needed, but simplistic approach here)
-                # Since we can't easily overwrite multiple lines without moving cursor up, 
-                # we'll just print the prompt line again with a carriage return logic or clear screen? 
-                # Clearing screen is too jarring. 
-                # Better: Use Console's Live or just reprint the line with \r if it was a single line.
-                # But we want centered. 
-                # Let's use a simple clear_screen approach for the whole prompt or just `console.print` with Live.
                 
                 from rich.table import Table
                 grid = Table.grid(padding=(0, 2))
                 grid.add_column(); grid.add_column()
                 grid.add_row(y_style, n_style)
                 
-                # We use Live display to update the selection
-                from rich.live import Live
-                
-                # We need to break out to run the Live context manager properly
-                # Actually, wrapping the whole loop in Live is best.
+                # Manual Live loop simulation for choice
                 break
             
             with Live(console=console, refresh_per_second=10) as live:
@@ -125,80 +152,97 @@ def run_cli():
                 console.print(Align.center("\nNutze [bold green]git pull[/bold green] um die neueste Version manuell zu erhalten."))
                 console.print(Align.center("[dim](Denke danach daran, 'pip install -r requirements.txt' auszuführen)[/dim]\n"))
                 wait_for_return()
-            clear_screen()
-            console.print(Align.center(BANNER))
     except Exception:
         pass # Ignore errors during update check to not block startup
-    
-    u, p, base_url, extra_guids = setup_auth()
-        
-    incode = IncodeRequests(base_url, extra_guids)
-    
-    s, m = incode.login(u, p)
-    if not s: 
-        console.print(Align.center(f"[error]{m}[/error]"))
-        if Prompt.ask("Zugangsdaten löschen?", choices=["j", "n"], default="n") == "j":
-            if os.path.exists('.credentials.json'): os.remove('.credentials.json')
-        return
-    
-    # Pre-fetch next duty for dashboard
-    next_duty = incode.get_next_duty()
-    
-    menu_options = [
-        ("📅  Mein Dienstplan", "future"),
-        ("🌴  Meine Abwesenheiten", "absences"),
-        ("🚑  Events / Ambulanzdienste", "events"),
-        ("🚑  Tagesplan (Heute)", "today"),
-        ("📆  Tagesplan (Datum wählen)", "date"),
-        ("📒  Mitarbeiter-Verzeichnis", "staff"),
-        ("🔍  Gemeinsame Dienste suchen", "colleague"),
-        ("📺  Live-Monitor", "live"),
-        ("🤖  Telegram Bot", "bot"),
-        ("🚪  Beenden", "exit")
-    ]
 
+def run_cli():
+    clear_screen()
+    console.print(Align.center(BANNER))
+    startup_checks()
+    
+    force_menu = False
+    
     while True:
-        # Pass dashboard data to interactive_menu via callback or modification
-        # Since interactive_menu is in ui.py and we don't want to change its signature too much,
-        # we can just render the dashboard inside interactive_menu if we pass it.
-        # Let's modify ui.py interactive_menu to accept optional 'dashboard_data'
+        clear_screen()
+        console.print(Align.center(BANNER))
         
-        selection = interactive_menu(menu_options, dashboard_data=next_duty)
+        u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
         
-        if selection == "future":
-            show_future_duties(incode)
-            next_duty = incode.get_next_duty() # Refresh
-        elif selection == "absences":
-            show_absences(incode)
-        elif selection == "events":
-            show_events_menu(incode)
-        elif selection == "today":
-            show_daily_plan(incode)
-        elif selection == "date":
-            target_date = select_date_interactive()
-            if target_date:
-                show_daily_plan(incode, target_date)
-        elif selection == "staff":
-            show_staff_search(incode)
-        elif selection == "colleague":
-            width = shutil.get_terminal_size().columns
-            padding = (width // 2) - 4
-            console.print() # Spacer
-            console.print(Align.center("[bold]Gemeinsame Dienste suchen[/bold]"))
-            console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
-            console.print() # Added blank line
-            name = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
-            if name: 
+        incode = IncodeRequests(base_url, extra_guids)
+        
+        s, m = incode.login(u, p)
+        if not s: 
+            console.print(Align.center(f"[error]{m}[/error]"))
+            # If login failed, force menu next time to allow choosing another user or fixing credentials
+            wait_for_return()
+            force_menu = True
+            continue
+        
+        # Save last active user on successful login
+        update_credentials({}, username=u)
+        
+        # Pre-fetch next duty for dashboard
+        next_duty = incode.get_next_duty()
+        
+        menu_options = [
+            ("📅  Mein Dienstplan", "future"),
+            ("🌴  Meine Abwesenheiten", "absences"),
+            ("🚑  Events / Ambulanzdienste", "events"),
+            ("🚑  Tagesplan (Heute)", "today"),
+            ("📆  Tagesplan (Datum wählen)", "date"),
+            ("📒  Mitarbeiter-Verzeichnis", "staff"),
+            ("🔍  Gemeinsame Dienste suchen", "colleague"),
+            ("📺  Live-Monitor", "live"),
+            ("🤖  Telegram Bot", "bot"),
+            ("👤  Benutzer wechseln / Logout", "logout"),
+            ("🚪  Beenden", "exit")
+        ]
+
+        should_logout = False
+        while True:
+            selection = interactive_menu(menu_options, dashboard_data=next_duty)
+            
+            if selection == "future":
+                show_future_duties(incode)
+                next_duty = incode.get_next_duty() # Refresh
+            elif selection == "absences":
+                show_absences(incode)
+            elif selection == "events":
+                show_events_menu(incode)
+            elif selection == "today":
+                show_daily_plan(incode)
+            elif selection == "date":
+                target_date = select_date_interactive()
+                if target_date:
+                    show_daily_plan(incode, target_date)
+            elif selection == "staff":
+                show_staff_search(incode)
+            elif selection == "colleague":
+                width = shutil.get_terminal_size().columns
+                padding = (width // 2) - 4
                 console.print() # Spacer
-                show_future_duties(incode, search_colleague=name)
-        elif selection == "live":
-            show_live_monitor(incode)
-        elif selection == "bot":
-            start_bot_mode(incode)
-        elif selection == "exit" or selection is None:
-            clear_screen()
-            console.print(Align.center("[dim]Auf Wiedersehen![/dim]"))
-            break
+                console.print(Align.center("[bold]Gemeinsame Dienste suchen[/bold]"))
+                console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
+                console.print() # Added blank line
+                name = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+                if name: 
+                    console.print() # Spacer
+                    show_future_duties(incode, search_colleague=name)
+            elif selection == "live":
+                show_live_monitor(incode)
+            elif selection == "bot":
+                start_bot_mode(incode)
+            elif selection == "logout":
+                should_logout = True
+                force_menu = True
+                break
+            elif selection == "exit" or selection is None:
+                clear_screen()
+                console.print(Align.center("[dim]Auf Wiedersehen![/dim]"))
+                sys.exit(0)
+        
+        if should_logout:
+            continue
 
 def start_bot_mode(incode_instance=None, debug=False):
     clear_screen()
