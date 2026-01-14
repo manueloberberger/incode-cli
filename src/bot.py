@@ -5,6 +5,8 @@ import asyncio
 import re
 import warnings
 from datetime import datetime, timedelta
+from typing import Dict, Any
+
 
 from rich.align import Align
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
