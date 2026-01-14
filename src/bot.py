@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_mess
 
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
-from src.utils import centered_input
+from src.utils import centered_input, get_key, KEY_ESC
 from src.pdf import export_to_pdf
 
 # Logging Configuration
@@ -313,7 +313,28 @@ class IncodeBot:
 
         application.add_handler(conv_handler)
         
-        console.print(Align.center("[bold green]Telegram Bot läuft !!! Drücke STRG + C zum Beenden ...[/bold green]"))
-        console.print()
-        
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        async def main_loop():
+            await application.initialize()
+            await application.start()
+            await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+            
+            console.print(Align.center("[dim]Bot ist aktiv. Drücke ESC um zurückzukehren.[/dim]"))
+
+            try:
+                while True:
+                    await asyncio.sleep(0.1)
+                    k = get_key(timeout=0.05)
+                    if k == KEY_ESC:
+                        console.print(Align.center("\n[yellow]Beende Bot-Modus ...[/yellow]"))
+                        break
+            except KeyboardInterrupt:
+                 console.print(Align.center("\n[yellow]Beende Bot-Modus (SIGINT) ...[/yellow]"))
+            finally:
+                await application.updater.stop()
+                await application.stop()
+                await application.shutdown()
+
+        try:
+            asyncio.run(main_loop())
+        except KeyboardInterrupt:
+            pass

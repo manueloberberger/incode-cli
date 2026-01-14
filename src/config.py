@@ -22,7 +22,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.2.3"
+VERSION = "2.3.0"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
