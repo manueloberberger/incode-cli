@@ -218,7 +218,15 @@ def start_bot_mode(incode_instance=None, debug=False):
         incode_instance = IncodeRequests(base_url, extra_guids, username=u)
     
     bot = IncodeBot(incode_instance)
-    bot.run(debug=debug)
+    try:
+        bot.run(debug=debug)
+    except KeyboardInterrupt:
+        console.print()
+        console.print(Align.center("[bold yellow]Beende Telegram Bot... Bitte warten (nicht mehrmals klicken) ...[/bold yellow]"))
+        # Allow some time or just let it exit naturally if possible, 
+        # but usually KeyboardInterrupt stops the loop.
+        # We catch it so we can print the message cleanly.
+        pass
 
 def show_help():
     clear_screen()
