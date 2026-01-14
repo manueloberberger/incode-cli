@@ -106,41 +106,9 @@ def startup_checks():
             
         if has_update:
             console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
-            console.print(Align.center("Möchtest du das Update jetzt automatisch installieren?"))
-            console.print()
-
-            # Interactive Yes/No
-            is_yes = True
-            while True:
-                y_style = "[black on green] Ja [/]" if is_yes else " Ja "
-                n_style = "[black on green] Nein [/]" if not is_yes else " Nein "
-                
-                from rich.table import Table
-                grid = Table.grid(padding=(0, 2))
-                grid.add_column(); grid.add_column()
-                grid.add_row(y_style, n_style)
-                
-                # Manual Live loop simulation for choice
-                break
             
-            with Live(console=console, refresh_per_second=10) as live:
-                while True:
-                    y_style = "[black on green]  Ja  [/]" if is_yes else "[dim]  Ja  [/dim]"
-                    n_style = "[black on green] Nein [/]" if not is_yes else "[dim] Nein [/dim]"
-                    
-                    grid = Table.grid(padding=(0, 4))
-                    grid.add_column(); grid.add_column()
-                    grid.add_row(y_style, n_style)
-                    
-                    live.update(Align.center(grid))
-                    
-                    k = get_key()
-                    if k == KEY_LEFT or k == KEY_LEFT_ALT or k == KEY_RIGHT or k == KEY_RIGHT_ALT:
-                        is_yes = not is_yes
-                    elif k == KEY_ENTER:
-                        break
-            
-            if is_yes:
+            from src.ui import prompt_yes_no
+            if prompt_yes_no("Möchtest du das Update jetzt automatisch installieren?"):
                 if update_app():
                     console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
                     time.sleep(1)
