@@ -442,6 +442,10 @@ def _display_staff_details_loop(p: Any) -> None:
             return
 
 def show_absences(incode: Any) -> None:
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print()
+    console.print(Align.center("[bold header]MEINE ABWESENHEITEN[/bold header]"))
     console.print()
     with Live(Align.center(Spinner("dots", text=" Lade Abwesenheiten ...")), console=console, transient=True):
         # Try the dedicated endpoint first (this was the v1.7 behavior)
@@ -523,6 +527,15 @@ def show_absences(incode: Any) -> None:
     wait_for_return()
 
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print()
+    
+    if search_colleague:
+        console.print(Align.center(f"[bold header]GEMEINSAME DIENSTE MIT '{search_colleague.upper()}'[/bold header]"))
+    else:
+        console.print(Align.center("[bold header]MEIN DIENSTPLAN[/bold header]"))
+    
     console.print()
     with Live(Align.center(Spinner("dots", text=" Lade Dienstplan ...")), console=console, transient=True):
         duties = incode.load_future_duties()
@@ -950,6 +963,11 @@ def show_events_menu(incode: Any) -> None:
 
         
     elif sel == "all":
+        clear_screen()
+        console.print(Align.center(BANNER))
+        console.print()
+        console.print(Align.center("[bold header]VERANSTALTUNGS-KALENDER[/bold header]"))
+        console.print()
         with Live(Align.center(Spinner("dots", text=" Lade Veranstaltungs-Plan ...")), console=console, transient=True):
             # Load 3 months by default
             plan = incode.load_events_plan()
