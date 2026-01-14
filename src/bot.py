@@ -5,7 +5,7 @@ import asyncio
 import re
 import warnings
 from datetime import datetime, timedelta
-from rich.prompt import Prompt
+
 from rich.align import Align
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ConversationHandler
@@ -16,6 +16,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_mess
 
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
+from src.ui import centered_input
 from src.pdf import export_to_pdf
 
 # Logging Configuration
@@ -43,9 +44,18 @@ class IncodeBot:
         """Ensures Telegram config exists for current user."""
         if not self.user_config.get("telegram_token") or not self.user_config.get("allowed_user_id"):
             console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
-            token = Prompt.ask("Telegram Bot Token")
+            console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
+            token = centered_input("Telegram Bot Token: ")
+            if not token: 
+                 console.print(Align.center("[yellow]Abbruch.[/yellow]"))
+                 return
+            
             try:
-                user_id = int(Prompt.ask("Deine Telegram User ID (Zahlen)"))
+                uid_str = centered_input("Deine Telegram User ID (Zahlen): ")
+                if not uid_str: 
+                    console.print(Align.center("[yellow]Abbruch.[/yellow]"))
+                    return
+                user_id = int(uid_str)
             except ValueError:
                 console.print(Align.center("[red]User ID muss eine Zahl sein.[/red]"))
                 sys.exit(1)

@@ -237,7 +237,10 @@ def show_staff_search(incode: Any) -> None:
     
     width = shutil.get_terminal_size().columns
     padding = (width // 2) - 4
-    query = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+    query = centered_input(" " * max(0, padding) + "[bold green]>[/bold green] ")
+    if not query:
+        return # ESC pressed
+
     if not query: return
     
     console.print()
@@ -815,7 +818,9 @@ def show_live_monitor(incode: Any) -> None:
         console.print(Align.center("Aktualisierungs-Intervall (Minuten):"))
         width = shutil.get_terminal_size().columns
         padding = (width // 2) - 4
-        min_str = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ", default="5")
+        min_str = centered_input(" " * max(0, padding) + "[bold green]>[/bold green] ", default="5")
+        if min_str is None: # ESC
+             return # Cancel monitor start
         refresh_interval = int(min_str) * 60
         if refresh_interval < 60: refresh_interval = 60
     except:
@@ -1025,3 +1030,43 @@ def prompt_yes_no(question: str) -> bool:
                 return is_yes
             elif k == KEY_ESC or k == 'q':
                 return False
+
+def centered_input(label: str, password: bool = False, default: str = None) -> Optional[str]:
+    """
+    Reads input from user, centered. 
+    Supports ESC to cancel (returns None).
+    Supports Backspace.
+    """
+    console.print(Align.center(label), end="")
+    sys.stdout.flush()
+    
+    input_str = ""
+    
+    while True:
+        k = get_key()
+        if not k: continue
+        
+        if k == KEY_ENTER:
+            console.print() # Newline
+            if not input_str and default:
+                return default
+            return input_str
+            
+        elif k == KEY_ESC:
+            console.print() # Newline
+            return None
+            
+        elif k == KEY_BACKSPACE or k == '\x7f' or k == '\b':
+            if len(input_str) > 0:
+                input_str = input_str[:-1]
+                # Erase last char: Backspace, Space, Backspace
+                sys.stdout.write('\b \b')
+                sys.stdout.flush()
+                
+        elif len(k) == 1 and k.isprintable():
+            input_str += k
+            if password:
+                sys.stdout.write('*')
+            else:
+                sys.stdout.write(k)
+            sys.stdout.flush()

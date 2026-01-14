@@ -13,6 +13,7 @@ from rich.table import Table
 from rich.text import Text
 try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user
+    from src.ui import centered_input
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu
     from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
@@ -33,16 +34,18 @@ def _prompt_new_user():
     
     console.print()
     console.print(Align.center("[bold]Incode Benutzername[/bold]"))
-    u = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+    u = centered_input(" " * max(0, padding) + "[bold green]>[/bold green] ")
     
     console.print()
     console.print(Align.center("[bold]Passwort[/bold]"))
-    p = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ", password=True)
+    p = centered_input(" " * max(0, padding) + "[bold green]>[/bold green] ", password=True)
     
     console.print()
     base_url = "https://dienstplan.k.roteskreuz.at" 
     extra_guids = None
     save_credentials(u, p, base_url, extra_guids, None)
+    if not u or not p:
+        sys.exit(0) # Exit if inputs are cancelled
     return u, p, base_url, extra_guids
 
 def setup_auth(force_interactive=False):
@@ -192,7 +195,7 @@ def run_cli():
                 console.print(Align.center("[bold]Gemeinsame Dienste suchen[/bold]"))
                 console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
                 console.print() # Added blank line
-                name = CenteredPrompt.ask(" " * max(0, padding) + "[bold green]>[/bold green] ")
+                name = centered_input(" " * max(0, padding) + "[bold green]>[/bold green] ")
                 if name: 
                     console.print() # Spacer
                     show_future_duties(incode, search_colleague=name)
