@@ -7,6 +7,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.panel import Panel
 from rich.pretty import Pretty
+import time
 
 from src.config import console, BANNER
 from src.utils import clear_screen, centered_input, wait_for_return, get_key, KEY_ESC, KEY_ENTER
@@ -236,9 +237,41 @@ def show_colleague_search(incode) -> None:
     console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
     console.print()
 
-    name = centered_input("[bold green]>[/bold green] ")
-    if not name:
+    name_query = centered_input("[bold green]>[/bold green] ")
+    if not name_query:
         return
         
+    console.print()
+    selected_name = name_query
+    
+    # 1. Try to find the colleague in directory
+    with Live(Align.center(Spinner("dots", text=f" Suche '{name_query}' im Verzeichnis ...")), console=console, transient=True):
+        results = incode.search_staff_contact(name_query)
+        
+    if results:
+        # If we have hits, let user choose exactly
+        options = []
+        for r in results:
+            # Format: "Max Mustermann (12345)"
+            label = f"{r.get('_display_name')} [dim]({r.get('personalnummer', 'n.a.')})[/dim]"
+            # We pass the display name as value for the search
+            options.append((label, r.get('_display_name')))
+            
+        options.append((f"Nach Text '{name_query}' suchen (Fallback)", name_query))
+        
+        # Determine title
+        if len(results) == 1:
+            title_str = "1 TREFFER GEFUNDEN"
+        else:
+            title_str = f"{len(results)} TREFFER GEFUNDEN"
+            
+        selection = interactive_menu(options, title=title_str)
+        if not selection: return
+        selected_name = selection
+    else:
+        # Fallback info
+        console.print(Align.center(f"[dim]Nichts im Verzeichnis gefunden. Suche nach Text '{name_query}' ...[/dim]"))
+        time.sleep(1)
+
     console.print() # Spacer
-    show_future_duties(incode, search_colleague=name)
+    show_future_duties(incode, search_colleague=selected_name)
