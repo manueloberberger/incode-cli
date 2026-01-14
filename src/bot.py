@@ -28,11 +28,20 @@ class IncodeBot:
     def __init__(self, api: IncodeRequests):
         self.api = api
         self.config = load_credentials()
+        self.user_config = self._get_active_user_config()
         self.ensure_config()
 
+    def _get_active_user_config(self) -> Dict[str, Any]:
+        """Helper to get current user config."""
+        target = self.api.username or self.config.get('last_active')
+        for u in self.config.get('users', []):
+            if u['username'] == target:
+                return u
+        return {}
+
     def ensure_config(self):
-        """Ensures Telegram config exists."""
-        if not self.config or not self.config.get("telegram_token") or not self.config.get("allowed_user_id"):
+        """Ensures Telegram config exists for current user."""
+        if not self.user_config.get("telegram_token") or not self.user_config.get("allowed_user_id"):
             console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
             token = Prompt.ask("Telegram Bot Token")
             try:
@@ -41,8 +50,9 @@ class IncodeBot:
                 console.print(Align.center("[red]User ID muss eine Zahl sein.[/red]"))
                 sys.exit(1)
             
-            update_credentials({"telegram_token": token, "allowed_user_id": user_id})
+            update_credentials({"telegram_token": token, "allowed_user_id": user_id}, username=self.api.username)
             self.config = load_credentials()
+            self.user_config = self._get_active_user_config()
             console.print(Align.center("[green]Telegram Konfiguration gespeichert.[/green]"))
 
     def send_document(self, chat_id: int, file_path: str, caption: str = None) -> bool:
@@ -56,7 +66,9 @@ class IncodeBot:
     async def _send_document_async(self, chat_id: int, file_path: str, caption: str) -> bool:
         try:
             from telegram import Bot
-            bot = Bot(token=self.config['telegram_token'])
+            token = self.user_config.get('telegram_token')
+            if not token: return False
+            bot = Bot(token=token)
             async with bot:
                 with open(file_path, 'rb') as f:
                     await bot.send_document(chat_id=chat_id, document=f, caption=caption)
@@ -88,7 +100,7 @@ class IncodeBot:
         user_id = query.from_user.id
         logger.info(f"Button clicked: {query.data} by user {user_id}")
         
-        allowed_id = str(self.config.get("allowed_user_id", ""))
+        allowed_id = str(self.user_config.get("allowed_user_id", ""))
         if str(user_id) != allowed_id:
             logger.warning(f"Access denied for user {user_id} (Allowed: {allowed_id})")
             await query.answer("Kein Zugriff.", show_alert=True)
@@ -158,7 +170,7 @@ class IncodeBot:
         user_id = update.effective_user.id
         logger.info(f"Text command received: {update.message.text} from {user_id}")
         
-        allowed_id = str(self.config.get("allowed_user_id", ""))
+        allowed_id = str(self.user_config.get("allowed_user_id", ""))
         if str(user_id) != allowed_id:
             await self.unauthorized(update)
             return
@@ -247,7 +259,10 @@ class IncodeBot:
 
     def run(self, debug=False):
         """Starts the bot."""
-        token = self.config['telegram_token']
+        token = self.user_config.get('telegram_token')
+        if not token:
+            console.print("[red]Kein Bot Token gefunden![/red]")
+            return
         
         if debug:
             # Configure logging to use Rich for better integration when debugging

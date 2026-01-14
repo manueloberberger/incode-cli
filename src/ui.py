@@ -791,7 +791,9 @@ def show_live_monitor(incode: Any) -> None:
     
     # Check if configured
     creds = load_credentials()
-    has_telegram = creds and creds.get("telegram_token") and creds.get("allowed_user_id")
+    active_user = incode.username
+    user_conf = next((u for u in creds.get('users', []) if u['username'] == active_user), {})
+    has_telegram = user_conf.get("telegram_token") and user_conf.get("allowed_user_id")
     
     console.print() # Spacer
     if has_telegram:
