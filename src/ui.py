@@ -586,7 +586,13 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             # Hours Statistics
             stats_table = Table(title="[bold blue]Stunden-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
             stats_table.add_column("Monat"); stats_table.add_column("Stunden", justify="right")
-            for m, total in sorted(monthly_stats.items()): stats_table.add_row(m, f"{total:g} Std.")
+            total_all_hours = 0.0
+            for m, total in sorted(monthly_stats.items()): 
+                stats_table.add_row(m, f"{total:g} Std.")
+                total_all_hours += total
+            
+            stats_table.add_section()
+            stats_table.add_row("[bold]GESAMT[/bold]", f"[bold]{total_all_hours:g} Std.[/bold]")
             
             # Duty Count Statistics
             duty_counts = defaultdict(int)
@@ -622,11 +628,14 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             count_table.add_column("Typ/Art"); count_table.add_column("Anzahl", justify="right")
             for k, v in sorted(duty_counts.items(), key=lambda item: item[1], reverse=True):
                 count_table.add_row(k, f"{v}x")
-
             loc_table = Table(title="[bold blue]Dienststellen-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
             loc_table.add_column("Dienststelle"); loc_table.add_column("Anzahl", justify="right")
             for k, v in sorted(location_counts.items(), key=lambda item: item[1], reverse=True):
                 loc_table.add_row(k, f"{v}x")
+
+
+            # Display tables side by side
+            console.print(Align.center(Columns([stats_table, count_table, loc_table], align="center", expand=True)))
 
             # Display tables side by side or neatly stacked
         opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
