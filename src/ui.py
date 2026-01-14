@@ -16,7 +16,7 @@ from rich.console import Group
 from rich.align import Align
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from src.config import console, BANNER
+from src.config import console, BANNER, load_credentials
 from src.utils import clear_screen, get_key, wait_for_return, centered_input, prompt_yes_no, flush_input, KEY_UP, KEY_UP_ALT, KEY_DOWN, KEY_DOWN_ALT, KEY_ENTER, KEY_ESC, KEY_BACKSPACE, KEY_LEFT, KEY_LEFT_ALT, KEY_RIGHT, KEY_RIGHT_ALT, get_holidays
 from src.pdf import export_to_pdf
 from src.ical import export_to_ics
