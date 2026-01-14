@@ -45,7 +45,7 @@ def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
         console.print(f"[error]Fehler beim Bot-Versand: {e}[/error]")
         return False
 
-def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: str = None) -> Optional[Any]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: str = None, allow_escape: bool = True) -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
@@ -81,7 +81,12 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
             menu_grid.add_row("")
         
         console.print(Align.center(menu_grid))
-        console.print(Align.center(f"\n[dim]⬆/⬇ Navigieren • ↵ Auswählen • ESC Zurück/Beenden[/dim]\n"))
+        
+        hint = "⬆/⬇ Navigieren • ↵ Auswählen"
+        if allow_escape:
+            hint += " • ESC Zurück/Beenden"
+        
+        console.print(Align.center(f"\n[dim]{hint}[/dim]\n"))
 
         key = get_key()
         
@@ -92,7 +97,8 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
         elif key == KEY_ENTER:
             return options[selected_idx][1]
         elif key == KEY_ESC or (key and key.lower() == 'q'):
-            return None
+            if allow_escape:
+                return None
 
 def select_date_interactive() -> Optional[datetime]:
     """

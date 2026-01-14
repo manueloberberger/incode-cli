@@ -168,7 +168,7 @@ def run_cli():
 
         should_logout = False
         while True:
-            selection = interactive_menu(menu_options, dashboard_data=next_duty, current_user=u)
+            selection = interactive_menu(menu_options, dashboard_data=next_duty, current_user=u, allow_escape=False)
             
             if selection == "future":
                 show_future_duties(incode)
