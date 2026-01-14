@@ -698,7 +698,11 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                     break
 
 def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool = False, override_plan: Optional[List[Any]] = None) -> Optional[List[Any]]:
-    if not is_live: console.print()
+    if not is_live:
+        clear_screen()
+        console.print(Align.center(BANNER))
+        console.print()
+
     if not date: date = datetime.now()
     
     plan = None
@@ -717,8 +721,9 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
             wait_for_return()
         return None
     
-    console.print(Align.center(f"[bold]🚑  Gesamter Tagesplan {date.strftime('%d.%m.%Y')}[/bold]"))
-    console.print()
+    if not is_live:
+        console.print(Align.center(f"[bold header]TAGESPLAN {date.strftime('%d.%m.%Y')}[/bold header]"))
+        console.print()
         
     table = Table(header_style="header", expand=False, box=None, padding=(0, 1))
     table.add_column("Zeit", style="info"); table.add_column("Fzg", style="success"); table.add_column("Besatzung")
