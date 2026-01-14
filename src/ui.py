@@ -45,7 +45,7 @@ def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
         console.print(f"[error]Fehler beim Bot-Versand: {e}[/error]")
         return False
 
-def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None) -> Optional[Any]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: str = None) -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
@@ -62,6 +62,10 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
         if dashboard_data:
             render_next_duty_panel(dashboard_data)
         
+        if current_user:
+            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{current_user}[/bold white][/dim]"))
+            console.print() # Spacer
+        
         console.print(Align.center(f"[header]{title}[/header]\n"))
         
         menu_grid = Table.grid(padding=(0, 0))
@@ -72,6 +76,8 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
                 menu_grid.add_row(f"[bold green]> {label}[/bold green]")
             else:
                 menu_grid.add_row(f"  {label}")
+            # Add empty row for spacing
+            menu_grid.add_row("")
         
         console.print(Align.center(menu_grid))
         console.print(Align.center(f"\n[dim]⬆/⬇ Navigieren • ↵ Auswählen • ESC Zurück/Beenden[/dim]\n"))

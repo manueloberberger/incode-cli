@@ -168,7 +168,7 @@ def run_cli():
         
         u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
         
-        incode = IncodeRequests(base_url, extra_guids)
+        incode = IncodeRequests(base_url, extra_guids, username=u)
         
         s, m = incode.login(u, p)
         if not s: 
@@ -200,7 +200,7 @@ def run_cli():
 
         should_logout = False
         while True:
-            selection = interactive_menu(menu_options, dashboard_data=next_duty)
+            selection = interactive_menu(menu_options, dashboard_data=next_duty, current_user=u)
             
             if selection == "future":
                 show_future_duties(incode)
@@ -253,7 +253,7 @@ def start_bot_mode(incode_instance=None, debug=False):
     
     if not incode_instance:
         u, p, base_url, extra_guids = setup_auth()
-        incode_instance = IncodeRequests(base_url, extra_guids)
+        incode_instance = IncodeRequests(base_url, extra_guids, username=u)
     
     bot = IncodeBot(incode_instance)
     bot.run(debug=debug)

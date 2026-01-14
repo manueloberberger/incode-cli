@@ -21,7 +21,7 @@ CACHE_FILE = ".incode_cache.json"
 CACHE_TTL = 900  # 15 Minutes validity
 
 class IncodeRequests:
-    def __init__(self, base_url: str, extra_guids: Optional[List[str]] = None) -> None:
+    def __init__(self, base_url: str, extra_guids: Optional[List[str]] = None, username: Optional[str] = None) -> None:
         self.session = requests.Session()
         retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         adapter = TimeoutHTTPAdapter(max_retries=retries)
@@ -33,7 +33,14 @@ class IncodeRequests:
         self.base_url: str = base_url
         self.extra_guids: List[str] = extra_guids if extra_guids else []
         self.user_agent: str = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Safari/605.1.15'
+        self.username = username
         self.cache = self._load_cache()
+
+    def _get_cache_key(self, key_base: str) -> str:
+        """Helper to qualify cache keys with username if available."""
+        if self.username:
+            return f"{self.username}_{key_base}"
+        return key_base
 
     def _load_cache(self) -> Dict[str, Any]:
         if os.path.exists(CACHE_FILE):
@@ -52,6 +59,7 @@ class IncodeRequests:
             console.print(Align.center(f"[warning]Cache konnte nicht gespeichert werden: {e}[/warning]"))
 
     def _get_cached_data(self, key: str) -> Optional[Any]:
+        key = self._get_cache_key(key)
         if key in self.cache:
             entry = self.cache[key]
             timestamp = entry.get('timestamp', 0)
@@ -60,6 +68,7 @@ class IncodeRequests:
         return None
 
     def _set_cached_data(self, key: str, data: Any):
+        key = self._get_cache_key(key)
         self.cache[key] = {'timestamp': time.time(), 'data': data}
         self._save_cache()
 
@@ -116,6 +125,12 @@ class IncodeRequests:
                                     self.org_unit_data_guid = g[-1]
                             except Exception: pass
                         if self.header_key: break
+                
+                # FINAL VALIDATION: Without x-incode headers, API calls will fail. 
+                # Be strict here: If we didn't find them, we can't be logged in correctly.
+                if not self.header_key or not self.header_value:
+                    return False, "Login fehlgeschlagen (Keine API-Token gefunden)."
+
                 return True, "Eingeloggt."
             except Exception as e: return False, f"Fehler: {e}"
 
