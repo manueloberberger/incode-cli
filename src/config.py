@@ -143,8 +143,29 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
     _write_credentials(data)
 
 def _write_credentials(data: Dict[str, Any]) -> None:
-    with open(CREDENTIALS_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    """
+    Writes credentials atomically to prevent data loss on crash.
+    """
+    import tempfile
+    
+    # Write to a temp file first
     try:
-        os.chmod(CREDENTIALS_FILE, 0o600)
-    except Exception: pass
+        # Create temp file in the same directory to ensure atomic move works
+        dir_name = os.path.dirname(os.path.abspath(CREDENTIALS_FILE)) or '.'
+        with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, encoding='utf-8') as tf:
+            json.dump(data, tf, indent=4)
+            temp_name = tf.name
+            
+        # Permission set on temp file
+        try:
+            os.chmod(temp_name, 0o600)
+        except Exception: pass
+        
+        # Atomic replacement
+        os.replace(temp_name, CREDENTIALS_FILE)
+        
+    except Exception as e:
+        console.print(f"[error]Fehler beim Speichern der Credentials: {e}[/error]")
+        if 'temp_name' in locals() and os.path.exists(temp_name):
+            try: os.remove(temp_name)
+            except: pass

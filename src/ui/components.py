@@ -85,7 +85,7 @@ def render_next_duty_panel(duty: Any) -> None:
     console.print(Align.center(p))
     console.print() # Spacer
 
-def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: str = None, allow_escape: bool = True) -> Optional[Any]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: Optional[str] = None, allow_escape: bool = True) -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
