@@ -256,9 +256,15 @@ class IncodeBot:
     def _fetch_duties_sync(self, filter_today: bool, custom_date: datetime = None):
         """Helper to run blocking API calls."""
         # Ensure login if needed
-        creds = load_credentials()
         if not self.api.header_key:
-            ok, msg = self.api.login(creds['username'], creds['password'])
+            # Reload config to be safe
+            self.config = load_credentials()
+            self.user_config = self._get_active_user_config()
+            
+            if not self.user_config.get('username'):
+                 raise Exception("Keine gültigen Zugangsdaten gefunden.")
+
+            ok, msg = self.api.login(self.user_config['username'], self.user_config['password'])
             if not ok:
                 raise Exception(f"Login fehlgeschlagen: {msg}")
 
