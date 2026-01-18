@@ -153,10 +153,13 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
 
 import subprocess
 
-def check_for_updates() -> bool:
-    """Checks for git updates. Returns True if updates are available."""
+import re
+from typing import Optional
+
+def check_for_updates() -> Optional[str]:
+    """Checks for git updates. Returns new version string if updates are available, else None."""
     if not os.path.exists(".git"):
-        return False
+        return None
     
     try:
         # Fetch latest changes silently (timeout to prevent hanging)
@@ -172,13 +175,26 @@ def check_for_updates() -> bool:
         )
         
         if res.returncode == 0 and res.stdout.strip().isdigit():
-            count = int(res.stdout.strip())
-            return count > 0
+            if count > 0:
+                # Try to get remote version
+                try:
+                    ver_res = subprocess.run(
+                        ["git", "show", "@{u}:src/config.py"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    if ver_res.returncode == 0:
+                        match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', ver_res.stdout)
+                        if match:
+                            return match.group(1)
+                except: pass
+                return "Neu" # Fallback if version extraction fails but update exists
             
     except Exception:
         pass
         
-    return False
+    return None
 
 def update_app() -> bool:
     """Performs safe git pull (with stash) and pip install. Returns True if successful."""

@@ -102,10 +102,11 @@ def startup_checks():
         from rich.spinner import Spinner
         from rich.live import Live
         with Live(Align.center(Spinner("dots", text="[dim]Prüfe auf Updates ...[/dim]")), console=console, transient=True):
-            has_update = check_for_updates()
+            new_version = check_for_updates()
             
-        if has_update:
-            console.print(Align.center("\n[bold yellow]✨ Ein Update ist verfügbar![/bold yellow]"))
+        if new_version:
+            v_msg = f" (v{VERSION} -> v{new_version})" if new_version and new_version != "Neu" else ""
+            console.print(Align.center(f"\n[bold yellow]✨ Ein Update ist verfügbar{v_msg}![/bold yellow]"))
             
             # from src.ui import prompt_yes_no # Redundant, already imported globally
 
