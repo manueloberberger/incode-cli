@@ -89,3 +89,4 @@ def _change_update_interval() -> None:
     if selection is not None and selection != -1:
         set_update_interval(selection)
         console.print(Align.center(f"[green]Einstellung gespeichert![/green]"))
+        time.sleep(1.2)
