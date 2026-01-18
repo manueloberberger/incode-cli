@@ -3,6 +3,13 @@ import json
 import sys
 from typing import Optional, Dict, List, Any
 import keyring
+import keyring
+try:
+    from cryptography.fernet import Fernet
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
@@ -42,6 +49,74 @@ DEFAULT_GUID = None
 
 # Global state to remember if keyring is broken/timed out
 KEYRING_DISABLED = False
+
+def _get_encryption_key() -> Optional[bytes]:
+    """
+    Retrieves or generates the encryption key from Keyring.
+    Returns None if Keyring is disabled or unavailable.
+    """
+    if KEYRING_DISABLED or not CRYPTOGRAPHY_AVAILABLE:
+        return None
+        
+    service_name = "incode-cli-crypto"
+    username = "config-key"
+    
+    try:
+        key = keyring.get_password(service_name, username)
+        if key:
+            return key.encode('utf-8')
+            
+        # Generate new key
+        new_key = Fernet.generate_key()
+        keyring.set_password(service_name, username, new_key.decode('utf-8'))
+        return new_key
+    except Exception as e:
+        # If we can't access keyring for the key, we can't use encryption
+        return None
+
+def _encrypt_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Encrypts the data dictionary if possible.
+    Returns the original data if encryption is not possible.
+    """
+    key = _get_encryption_key()
+    if not key:
+        return data
+        
+    try:
+        f = Fernet(key)
+        json_str = json.dumps(data)
+        encrypted_bytes = f.encrypt(json_str.encode('utf-8'))
+        return {
+            "version": 2,
+            "encrypted_data": encrypted_bytes.decode('utf-8')
+        }
+    except Exception:
+        return data
+
+def _decrypt_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Decrypts the data if it's encrypted.
+    Returns empty dict if decryption fails.
+    """
+    if "encrypted_data" not in data:
+        return data
+        
+    key = _get_encryption_key()
+    if not key:
+        # We have encrypted data but no key (e.g. keyring locked/reset)
+        # We cannot recover the data.
+        raise ValueError("Encryption key not available")
+        
+    try:
+        f = Fernet(key)
+        encrypted_bytes = data["encrypted_data"].encode('utf-8')
+        decrypted_bytes = f.decrypt(encrypted_bytes)
+        from typing import cast
+        return cast(Dict[str, Any], json.loads(decrypted_bytes.decode('utf-8')))
+    except Exception as e:
+        raise ValueError(f"Decryption failed: {e}")
+
 
 def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
@@ -108,6 +183,17 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         with open(CREDENTIALS_FILE, 'r') as f:
             data = json.load(f)
         
+        # Determine if data is encrypted
+        was_encrypted = False
+        if "encrypted_data" in data:
+            try:
+                data = _decrypt_data(data)
+                was_encrypted = True
+            except Exception as e:
+                console.print(Align.center(f"[red]Fehler beim Entschlüsseln der Konfiguration: {e}[/red]"))
+                console.print(Align.center("[yellow]Die Konfigurationsdatei muss neu erstellt werden (bitte neu einloggen).[/yellow]"))
+                return {}
+
         # Determine if data is old format (direct dict) or new format (list of users)
         if 'users' not in data and ('username' in data or 'password' in data):
             # Convert old format to new format
@@ -168,6 +254,10 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         
             if changed:
                 if debug: console.print("[dim]Debug: Saving migrated changes to file...[/dim]")
+                _write_credentials(data)
+            elif not was_encrypted and not no_keyring and not KEYRING_DISABLED and CRYPTOGRAPHY_AVAILABLE:
+                # If content was not encrypted but we can encrypt, do it now
+                if debug: console.print("[dim]Debug: Migrating configuration to encrypted format...[/dim]")
                 _write_credentials(data)
             
             # Hydrate passwords from Keyring if requested
@@ -337,9 +427,15 @@ def _write_credentials(data: Dict[str, Any]) -> None:
     # Write to a temp file first
     try:
         # Create temp file in the same directory to ensure atomic move works
+        # Create temp file in the same directory to ensure atomic move works
         dir_name = os.path.dirname(os.path.abspath(CREDENTIALS_FILE)) or '.'
         with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, encoding='utf-8') as tf:
-            json.dump(data, tf, indent=4)
+            # Encrypt if possible before writing
+            data_to_write = data
+            if not KEYRING_DISABLED and CRYPTOGRAPHY_AVAILABLE:
+                data_to_write = _encrypt_data(data)
+                
+            json.dump(data_to_write, tf, indent=4)
             temp_name = tf.name
             
         # Permission set on temp file
