@@ -50,6 +50,62 @@ DEFAULT_GUID = None
 # Global state to remember if keyring is broken/timed out
 KEYRING_DISABLED = False
 
+def _timeout_handler(signum: int, frame: Any) -> None:
+    raise TimeoutError("Keyring operation timed out")
+
+def _safe_keyring_get(service: str, username: str) -> Optional[str]:
+    import sys
+    import signal
+    global KEYRING_DISABLED
+
+    no_keyring = "--no-keyring" in sys.argv
+    if no_keyring or KEYRING_DISABLED:
+        return None
+
+    if sys.platform != 'win32':
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(3) # 3 seconds timeout
+        
+    try:
+        return keyring.get_password(service, username)
+    except Exception as e:
+        if isinstance(e, TimeoutError):
+            global console
+            from rich.align import Align
+            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
+            KEYRING_DISABLED = True
+        return None
+    finally:
+        if sys.platform != 'win32':
+            signal.alarm(0)
+
+def _safe_keyring_set(service: str, username: str, password: str) -> bool:
+    import sys
+    import signal
+    global KEYRING_DISABLED
+
+    no_keyring = "--no-keyring" in sys.argv
+    if no_keyring or KEYRING_DISABLED:
+        return False
+        
+    if sys.platform != 'win32':
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(3) # 3 seconds timeout
+        
+    try:
+        keyring.set_password(service, username, password)
+        return True
+    except Exception as e:
+        if isinstance(e, TimeoutError):
+            global console
+            from rich.align import Align
+            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
+            KEYRING_DISABLED = True
+        return False
+    finally:
+        if sys.platform != 'win32':
+            signal.alarm(0)
+
 def _get_encryption_key() -> Optional[bytes]:
     """
     Retrieves or generates the encryption key from Keyring.
@@ -62,13 +118,15 @@ def _get_encryption_key() -> Optional[bytes]:
     username = "config-key"
     
     try:
-        key = keyring.get_password(service_name, username)
+        key = _safe_keyring_get(service_name, username)
         if key:
             return key.encode('utf-8')
             
         # Generate new key
         new_key = Fernet.generate_key()
-        keyring.set_password(service_name, username, new_key.decode('utf-8'))
+        success = _safe_keyring_set(service_name, username, new_key.decode('utf-8'))
+        if not success:
+            return None
         return new_key
     except Exception as e:
         # If we can't access keyring for the key, we can't use encryption
@@ -131,40 +189,6 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     debug = "--debug" in sys.argv
     no_keyring = "--no-keyring" in sys.argv
     
-    if KEYRING_DISABLED:
-        no_keyring = True
-
-    def _timeout_handler(signum: int, frame: Any) -> None:
-        raise TimeoutError("Keyring operation timed out")
-
-    def _safe_keyring_set(service: str, username: str, password: str) -> None:
-        if no_keyring or KEYRING_DISABLED:
-            raise Exception("Keyring disabled")
-            
-        if sys.platform != 'win32':
-            signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(3) # 3 seconds timeout
-            
-        try:
-            keyring.set_password(service, username, password)
-        finally:
-            if sys.platform != 'win32':
-                signal.alarm(0)
-
-    def _safe_keyring_get(service: str, username: str) -> Optional[str]:
-        if no_keyring or KEYRING_DISABLED:
-            raise Exception("Keyring disabled")
-
-        if sys.platform != 'win32':
-            signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(3) # 3 seconds timeout
-            
-        try:
-            return keyring.get_password(service, username)
-        finally:
-            if sys.platform != 'win32':
-                signal.alarm(0)
-
     def _handle_keyring_error(e: Exception, context: str = "") -> None:
         global KEYRING_DISABLED
         if isinstance(e, TimeoutError):
@@ -320,20 +344,9 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     keyring_success = False
     
     if not no_keyring:
-        if sys.platform != 'win32':
-             signal.signal(signal.SIGALRM, _timeout_handler)
-             signal.alarm(3)
-        try:
-            keyring.set_password("incode-cli", username, password)
+        success = _safe_keyring_set("incode-cli", username, password)
+        if success:
             keyring_success = True
-        except Exception as e:
-            if isinstance(e, TimeoutError):
-                console.print(Align.center(f"[yellow]Warnung: Keyring Timeout beim Speichern. Nutze Datei-Speicher.[/yellow]"))
-            else:
-                console.print(Align.center(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]"))
-        finally:
-            if sys.platform != 'win32':
-                signal.alarm(0)
     else:
         # User explicitly requested no keyring via flag or it was disabled
         pass
@@ -376,11 +389,22 @@ def remove_user(username: str) -> None:
     _write_credentials(data)
     
     # Remove from keyring
-    try:
-        keyring.delete_password("incode-cli", username)
-        keyring.delete_password("incode-cli-telegram", username)
-    except Exception:
-        pass
+    def _safe_keyring_delete(service: str, username: str) -> None:
+        import sys
+        import signal
+        if sys.platform != 'win32':
+            signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(3)
+        try:
+            keyring.delete_password(service, username)
+        except Exception:
+            pass
+        finally:
+            if sys.platform != 'win32':
+                signal.alarm(0)
+
+    _safe_keyring_delete("incode-cli", username)
+    _safe_keyring_delete("incode-cli-telegram", username)
 
 def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) -> None:
     """
@@ -392,22 +416,19 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
     if not target_user: return
 
     # Handle Keyring updates
-    # Handle Keyring updates
     if 'password' in updates:
-        try:
-            keyring.set_password("incode-cli", target_user, updates['password'])
+        success = _safe_keyring_set("incode-cli", target_user, updates['password'])
+        if success:
             updates['password'] = None # Don't save to file
-        except Exception as e:
-            console.print(Align.center(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]"))
-            # Keep password in updates, so it gets saved to file
+        else:
+            console.print(Align.center(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden (Timeout/Fehler), speichere lokal.[/warning]"))
             
     if 'telegram_token' in updates:
-        try:
-            keyring.set_password("incode-cli-telegram", target_user, updates['telegram_token'])
+        success = _safe_keyring_set("incode-cli-telegram", target_user, updates['telegram_token'])
+        if success:
             updates['telegram_token'] = None
-        except Exception as e:
-            console.print(Align.center(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]"))
-            # Keep token in updates
+        else:
+            console.print(Align.center(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden (Timeout/Fehler), speichere lokal.[/warning]"))
 
     users = data.get('users', [])
     for u in users:
@@ -426,7 +447,6 @@ def _write_credentials(data: Dict[str, Any]) -> None:
     
     # Write to a temp file first
     try:
-        # Create temp file in the same directory to ensure atomic move works
         # Create temp file in the same directory to ensure atomic move works
         dir_name = os.path.dirname(os.path.abspath(CREDENTIALS_FILE)) or '.'
         with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, encoding='utf-8') as tf:
