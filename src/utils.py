@@ -37,7 +37,7 @@ class TimeoutHTTPAdapter(HTTPAdapter):
             del kwargs["timeout"]
         super().__init__(*args, **kwargs)
 
-    def send(self, request: Any, **kwargs: Any) -> Any:
+    def send(self, request: Any, **kwargs: Any) -> Any: # type: ignore[override]
         timeout = kwargs.get("timeout")
         if timeout is None:
             kwargs["timeout"] = self.timeout
@@ -49,8 +49,8 @@ def clear_screen() -> None:
 def flush_input() -> None:
     """Clears the input buffer."""
     if os.name == 'nt':
-        while msvcrt.kbhit():
-            msvcrt.getch()
+        while msvcrt.kbhit(): # type: ignore
+            msvcrt.getch() # type: ignore
     else:
         termios.tcflush(sys.stdin, termios.TCIFLUSH)
 
@@ -74,17 +74,17 @@ def _get_key_windows(timeout: Optional[float]) -> Optional[str]:
     # If timeout specified, poll
     start = time.time()
     while True:
-        if msvcrt.kbhit():
+        if msvcrt.kbhit(): # type: ignore
             return _read_windows_key_blocking()
         if time.time() - start > timeout:
             return None
         time.sleep(0.01)
 
 def _read_windows_key_blocking() -> Optional[str]:
-    ch = msvcrt.getch()
+    ch = msvcrt.getch() # type: ignore
     # Handle special keys
     if ch == b'\x00' or ch == b'\xe0':
-        sc = msvcrt.getch()
+        sc = msvcrt.getch() # type: ignore
         if sc == b'H': return KEY_UP
         if sc == b'P': return KEY_DOWN
         if sc == b'K': return KEY_LEFT
@@ -111,7 +111,9 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
         return None
 
     try:
-        tty.setraw(fd)
+        # Use TCSADRAIN to prevent flushing input buffer (defaults to TCSAFLUSH)
+        # preventing lost keys during sleep periods
+        tty.setraw(fd, termios.TCSADRAIN)
         
         # Check if data is available
         r, _, _ = select.select([fd], [], [], timeout)
@@ -356,7 +358,7 @@ def prompt_yes_no(question: str) -> bool:
             elif k == KEY_ESC or k == 'q':
                 return False
 
-def centered_input(label: str, password: bool = False, default: str = None) -> Optional[str]:
+def centered_input(label: str, password: bool = False, default: Optional[str] = None) -> Optional[str]:
     """
     Reads input from user, centered. 
     Supports ESC to cancel (returns None).

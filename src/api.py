@@ -181,7 +181,7 @@ class IncodeRequests:
         except: pass
         return project_map
 
-    def load_events_plan(self, date_from: datetime = None, date_to: datetime = None) -> List[Dict[str, Any]]:
+    def load_events_plan(self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Loads roster for events by parsing HTML cards and augmenting with JSON data."""
         project_map = self.get_project_guids()
         guids_to_try = [self.org_unit_data_guid] + self.extra_guids
@@ -381,16 +381,16 @@ class IncodeRequests:
                     # state 0 = requested, state 1 = approved
                     if state not in [0, 1] or item.get('withdrawn') in [1, True]: continue
                     
-                    reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
+                    reason_str = str(item.get('reasonName') or item.get('absenceTypeName') or "Abwesend")
                     status_text = " [yellow](Beantragt)[/yellow]" if state == 0 else " [green](Gen. / n. eingetr.)[/green]"
                     
-                    b, e = norm_start(self._fix_datetime(item.get('begin'))), self._fix_datetime(item.get('end'))
-                    if not b or not e: continue
-                    if e.hour == 0 and e.minute == 0: e -= timedelta(seconds=1)
+                    b, end_dt = norm_start(self._fix_datetime(item.get('begin'))), self._fix_datetime(item.get('end'))
+                    if not b or not end_dt: continue
+                    if end_dt.hour == 0 and end_dt.minute == 0: end_dt -= timedelta(seconds=1)
                     curr = b.date()
-                    while curr <= e.date():
-                        if curr not in daily_map or not daily_map[curr]['fixed']:
-                            lbl = reason
+                    while curr <= end_dt.date():
+                        if curr not in daily_map or not daily_map[curr].get('fixed'):
+                            lbl = reason_str
                             if is_h(curr):
                                 lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
                             
@@ -405,7 +405,7 @@ class IncodeRequests:
         # 1. Sunday BEFORE vacation/holiday block (if starts on Monday)
         for d in sorted_d:
             if d.weekday() == 0:
-                lbl_mon = daily_map[d]['label'].lower()
+                lbl_mon = str(daily_map[d]['label']).lower()
                 if "urlaub" in lbl_mon or "sonderabwesenheit" in lbl_mon:
                     prev_sun = d - timedelta(days=1)
                     prev_fri = d - timedelta(days=3)
@@ -413,7 +413,7 @@ class IncodeRequests:
                     # Check if Friday was also Urlaub (Continuous vacation)
                     is_connecting = False
                     if prev_fri in daily_map:
-                        lbl_fri = daily_map[prev_fri]['label'].lower()
+                        lbl_fri = str(daily_map[prev_fri]['label']).lower()
                         if "urlaub" in lbl_fri or "sonderabwesenheit" in lbl_fri:
                             is_connecting = True
                     
@@ -431,12 +431,12 @@ class IncodeRequests:
         # Refresh sorted list after potential additions
         sorted_d = sorted(daily_map.keys())
         for d in sorted_d:
-            if d.weekday() == 5 and "urlaub" in daily_map[d]['label'].lower():
+            if d.weekday() == 5 and "urlaub" in str(daily_map[d]['label']).lower():
                 sun = d + timedelta(days=1)
                 if sun not in daily_map:
                     suffix = ""
-                    if "[yellow]" in daily_map[d]['label']: suffix = " [yellow](Beantragt)[/yellow]"
-                    elif "[green]" in daily_map[d]['label']: suffix = " [green](Gen. / n. eingetr.)[/green]"
+                    if "[yellow]" in str(daily_map[d]['label']): suffix = " [yellow](Beantragt)[/yellow]"
+                    elif "[green]" in str(daily_map[d]['label']): suffix = " [green](Gen. / n. eingetr.)[/green]"
                     daily_map[sun] = {'label': "Abwesend" + suffix, 'fixed': False}
                     
         if not daily_map: return []
@@ -603,29 +603,33 @@ class IncodeRequests:
             pg = i.get('parentDataGuid')
             if not pg: continue
             if pg not in grouped: grouped[pg] = {"crew": {}, "vehicle": "", "begin": None, "end": None}
+            # Explicit cast for type checkers
+            entry: Dict[str, Any] = grouped[pg]
             eid, rn = str(i.get('externalId', '')).upper(), str(i.get('additionalInfos', {}).get('ressource_name', '')).strip()
             b, e = self._fix_datetime(i.get('begin')), self._fix_datetime(i.get('end'))
-            if eid == "KFZ": grouped[pg]["vehicle"], grouped[pg]["begin"], grouped[pg]["end"] = rn, b, e
+            if eid == "KFZ": entry["vehicle"], entry["begin"], entry["end"] = rn, b, e
             elif eid in ["FAHRER", "SANITAETER1", "SANITAETER2"] and rn:
-                grouped[pg]["crew"][eid] = rn
-                if not grouped[pg]["begin"]: grouped[pg]["begin"], grouped[pg]["end"] = b, e
+                entry["crew"][eid] = rn
+                if not entry["begin"]: entry["begin"], entry["end"] = b, e
         return [v for v in grouped.values() if v["begin"] and v["end"]]
 
     def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
-        guids = set([self.org_unit_data_guid] + self.extra_guids)
-        if DEFAULT_GUID: guids.add(DEFAULT_GUID)
-        guids = list(guids)
+        
+        guids_set = {self.org_unit_data_guid} if self.org_unit_data_guid else set()
+        guids_set.update(self.extra_guids)
+        if DEFAULT_GUID: guids_set.add(DEFAULT_GUID)
+        guids_list = list(guids_set)
         
         try:
             d_resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '20'})
             if d_resp.status_code == 200:
                 for item in d_resp.json().get('data', []):
                     og = item.get('orgUnitDataGuid')
-                    if og and og not in guids: guids.append(og)
+                    if og and og not in guids_list: guids_list.append(og)
         except: pass
         results, seen = [], set()
-        for g in [x for x in guids if x]:
+        for g in [x for x in guids_list if x]:
             try:
                 r = self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'})
                 if r.status_code == 200:

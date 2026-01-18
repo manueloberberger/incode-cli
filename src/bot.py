@@ -324,7 +324,8 @@ class IncodeBot:
         async def main_loop():
             await application.initialize()
             await application.start()
-            await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+            # Reduce timeout to 2s to allow faster shutdown loops
+            await application.updater.start_polling(allowed_updates=Update.ALL_TYPES, timeout=2, bootstrap_retries=0)
             
             console.print(Align.center("[dim]Bot ist aktiv. Drücke ESC um zurückzukehren.[/dim]"))
 
@@ -338,8 +339,10 @@ class IncodeBot:
             except KeyboardInterrupt:
                  console.print(Align.center("\n[yellow]Beende Bot-Modus (SIGINT) ...[/yellow]"))
             finally:
-                await application.updater.stop()
-                await application.stop()
+                if application.updater.running:
+                    await application.updater.stop()
+                if application.running:
+                    await application.stop()
                 await application.shutdown()
 
         try:
