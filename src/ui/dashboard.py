@@ -104,8 +104,8 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             stats_table.add_row("[bold]GESAMT[/bold]", f"[bold]{total_all_hours:g} Std.[/bold]")
             
             # Duty Count Statistics
-            duty_counts = defaultdict(int)
-            location_counts = defaultdict(int)
+            duty_counts: Dict[str, int] = defaultdict(int)
+            location_counts: Dict[str, int] = defaultdict(int)
             
             vehicle_types = ["RTWA", "RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"] 
             
@@ -151,13 +151,13 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
         
         flush_input()
         while True:
-            k = get_key()
-            if k:
-                k = k.lower()
+            key_input = get_key()
+            if key_input:
+                k_str = key_input.lower()
                 # Clean timestamp for filenames: YYYY-MM-DD_HH-MM
                 ts_readable = datetime.now().strftime('%Y-%m-%d_%H-%M')
                 
-                if k == 'p' or k == 't':
+                if k_str == 'p' or k_str == 't':
                     if search_colleague:
                         # Sanitize name
                         safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])
@@ -166,13 +166,13 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
                         fn = f"Mein_Dienstplan_{ts_readable}.pdf"
 
                     if export_to_pdf(export_duties, fn):
-                        if k == 't':
+                        if k_str == 't':
                             msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
                             if send_pdf_via_bot(incode, fn, msg):
                                 console.print("[success]PDF erfolgreich per Telegram gesendet !!![/success]")
                     wait_for_return()
                     break
-                elif k == 'c':
+                elif k_str == 'c':
                     fn = f"Dienstplan_{ts_readable}.ics"
                     if search_colleague: 
                         safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])

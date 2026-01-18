@@ -4,7 +4,7 @@ import json
 import os
 import re
 from urllib3.util.retry import Retry
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from bs4 import BeautifulSoup
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.spinner import Spinner
@@ -226,7 +226,7 @@ class IncodeRequests:
             console.print(Align.center(f"[dim red]Fehler beim Laden der Events: {e}[/dim red]"))
         return []
 
-    def load_my_event_duties(self) -> List[Dict[str, Any]]:
+    def load_my_event_duties(self) -> List[Duty]:
         df, dt = datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'), (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
         try:
             guid = self.org_unit_data_guid or DEFAULT_GUID
@@ -257,9 +257,9 @@ class IncodeRequests:
         sorted_guids = sorted([g for g in guids if g])
         
         # Intermediate storage for merging
-        pnr_to_best_record = {}
-        name_to_pnr = {}
-        name_no_pnr_to_best_record = {}
+        pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
+        name_to_pnr: Dict[str, str] = {}
+        name_no_pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
         
         def fetch_guid(guid):
             try:
@@ -338,7 +338,9 @@ class IncodeRequests:
         Applies logic to handle weekends (e.g. 'Freies Wochenende' vs 'Abwesend') based on 
         surrounding vacation blocks.
         """
-        results, daily_map, now = [], {}, datetime.now()
+        results: List[Dict[str, Any]] = []
+        daily_map: Dict[date, Dict[str, Any]] = {}
+        now = datetime.now()
         start_date, end_date = now - timedelta(days=30), now + timedelta(days=400)
         df_str, dt_str = start_date.strftime('%Y-%m-%dT00:00:00.000Z'), end_date.strftime('%Y-%m-%dT23:59:59.000Z')
         def norm_start(dt): return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0) if dt.hour >= 20 else dt
