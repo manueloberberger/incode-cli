@@ -23,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.12"
+VERSION = "2.4.13"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -46,8 +46,54 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     Automatically migrates old format to new format and migrates plain text passwords to keyring.
     """
     import sys
+    
     debug = "--debug" in sys.argv
     no_keyring = "--no-keyring" in sys.argv
+    
+    # Global state to remember if keyring is broken/timed out
+    if not hasattr(load_credentials, "keyring_disabled"):
+        load_credentials.keyring_disabled = False
+
+    if load_credentials.keyring_disabled:
+        no_keyring = True
+
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("Keyring operation timed out")
+
+    def _safe_keyring_set(service, username, password):
+        if no_keyring or load_credentials.keyring_disabled:
+            raise Exception("Keyring disabled")
+            
+        if sys.platform != 'win32':
+            signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(3) # 3 seconds timeout
+            
+        try:
+            keyring.set_password(service, username, password)
+        finally:
+            if sys.platform != 'win32':
+                signal.alarm(0)
+
+    def _safe_keyring_get(service, username):
+        if no_keyring or load_credentials.keyring_disabled:
+            raise Exception("Keyring disabled")
+
+        if sys.platform != 'win32':
+            signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(3) # 3 seconds timeout
+            
+        try:
+            return keyring.get_password(service, username)
+        finally:
+            if sys.platform != 'win32':
+                signal.alarm(0)
+
+    def _handle_keyring_error(e, context=""):
+        if isinstance(e, TimeoutError):
+            console.print(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]")
+            load_credentials.keyring_disabled = True
+        elif debug:
+            console.print(f"[red]Debug: Keyring Fehler ({context}): {e}[/red]")
     
     if debug: console.print("[dim]Debug: Entering load_credentials...[/dim]")
     
@@ -88,8 +134,8 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         users = data.get('users', [])
         changed = False
         
-        if no_keyring:
-             if debug: console.print("[dim]Debug: --no-keyring active. Skipping migration and hydration.[/dim]")
+        if no_keyring or load_credentials.keyring_disabled:
+             if debug: console.print("[dim]Debug: Keyring disabled/skipped.[/dim]")
         else:
             # Check if migration needed (files with plain text passwords)
             if debug and users: console.print("[dim]Debug: Checking for necessary migrations...[/dim]")
@@ -98,53 +144,53 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                 if u.get('password') and not u.get('password').startswith("KEYRING:"):
                     try:
                         if debug: console.print(f"[dim]Debug: Migrating password for {u['username']} to keyring...[/dim]")
-                        keyring.set_password("incode-cli", u['username'], u['password'])
+                        _safe_keyring_set("incode-cli", u['username'], u['password'])
                         u['password'] = None # Remove from file
                         changed = True
                         console.print(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]")
                     except Exception as e:
-                        if debug: console.print(f"[red]Debug: Migration failed: {e}[/red]")
-                        console.print(f"[warning]Konnte Passwort nicht migrieren: {e}[/warning]")
+                        _handle_keyring_error(e, "Migration Password")
+                        # If timed out, stop trying directly
+                        if load_credentials.keyring_disabled: break
 
                 # 2. Migrate plain text token to keyring
                 if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
                     try:
-                        keyring.set_password("incode-cli-telegram", u['username'], u['telegram_token'])
+                        _safe_keyring_set("incode-cli-telegram", u['username'], u['telegram_token'])
                         u['telegram_token'] = None # Remove from file
                         changed = True
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _handle_keyring_error(e, "Migration Token")
+                        if load_credentials.keyring_disabled: break
         
             if changed:
                 if debug: console.print("[dim]Debug: Saving migrated changes to file...[/dim]")
                 _write_credentials(data)
             
             # Hydrate passwords from Keyring if requested
-            if hydrate:
+            if hydrate and not load_credentials.keyring_disabled:
                 if debug: console.print("[dim]Debug: Hydrating credentials (reading from keyring)...[/dim]")
                 for u in users:
                     # Password
                     if u.get('password') is None:
                         try:
                             if debug: console.print(f"[dim]Debug: Lade Passwort für {u['username']} aus Keyring...[/dim]")
-                            pw = keyring.get_password("incode-cli", u['username'])
+                            pw = _safe_keyring_get("incode-cli", u['username'])
                             if pw:
                                 u['password'] = pw
                             elif debug: console.print(f"[dim]Debug: Kein Passwort im Keyring für {u['username']} gefunden.[/dim]")
                         except Exception as e:
-                            if debug: console.print(f"[red]Debug: Keyring Fehler (Password): {e}[/red]")
-                            console.print("[warning]Konnte Passwort nicht aus Keyring laden.[/warning]")
+                            _handle_keyring_error(e, "Load Password")
                     
                     # Token
                     if u.get('telegram_token') is None:
                         try:
                             if debug: console.print(f"[dim]Debug: Lade Token für {u['username']} aus Keyring...[/dim]")
-                            token = keyring.get_password("incode-cli-telegram", u['username'])
+                            token = _safe_keyring_get("incode-cli-telegram", u['username'])
                             if token:
                                 u['telegram_token'] = token
                         except Exception as e:
-                            if debug: console.print(f"[red]Debug: Keyring Fehler (Token): {e}[/red]")
-                            pass
+                            _handle_keyring_error(e, "Load Token")
         
         if debug: console.print("[dim]Debug: load_credentials finished.[/dim]")
         return data
@@ -166,18 +212,35 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     found = False
     
     import sys
+    import signal
     no_keyring = "--no-keyring" in sys.argv
-    
+    # Reuse disabled state if load_credentials ran before
+    if hasattr(load_credentials, "keyring_disabled") and load_credentials.keyring_disabled:
+        no_keyring = True
+
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("Keyring operation timed out")
+
     # Save secret to keyring
     keyring_success = False
+    
     if not no_keyring:
+        if sys.platform != 'win32':
+             signal.signal(signal.SIGALRM, _timeout_handler)
+             signal.alarm(3)
         try:
             keyring.set_password("incode-cli", username, password)
             keyring_success = True
         except Exception as e:
-            console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+            if isinstance(e, TimeoutError):
+                console.print(f"[yellow]Warnung: Keyring Timeout beim Speichern. Nutze Datei-Speicher.[/yellow]")
+            else:
+                console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+        finally:
+            if sys.platform != 'win32':
+                signal.alarm(0)
     else:
-        # User explicitly requested no keyring via flag
+        # User explicitly requested no keyring via flag or it was disabled
         pass
 
     for u in users:
