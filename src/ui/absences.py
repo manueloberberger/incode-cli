@@ -13,8 +13,6 @@ def show_absences(incode: Any) -> None:
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()
-    console.print(Align.center("[bold header]MEINE ABWESENHEITEN[/bold header]"))
-    console.print()
     with Live(Align.center(Spinner("dots", text=" Lade Abwesenheiten ...")), console=console, transient=True):
         # Try the dedicated endpoint first (this was the v1.7 behavior)
         absences = incode.load_absences()
