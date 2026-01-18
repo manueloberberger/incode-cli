@@ -114,7 +114,7 @@ def startup_checks(debug=False):
             
             # from src.ui import prompt_yes_no # Redundant, already imported globally
 
-            if prompt_yes_no("Möchtest du das Update jetzt automatisch installieren?"):
+            if prompt_yes_no("\nMöchtest du das Update jetzt automatisch installieren?"):
                 if update_app():
                     console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
                     time.sleep(1)
