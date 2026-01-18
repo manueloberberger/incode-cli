@@ -3,7 +3,6 @@ import json
 import sys
 from typing import Optional, Dict, List, Any
 import keyring
-import keyring
 try:
     from cryptography.fernet import Fernet
     CRYPTOGRAPHY_AVAILABLE = True
