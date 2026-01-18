@@ -147,7 +147,9 @@ def run_cli(debug=False):
             clear_screen()
         console.print(Align.center(BANNER))
         
+        if debug: console.print("[dim]Debug: Calling setup_auth...[/dim]")
         u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
+        if debug: console.print(f"[dim]Debug: setup_auth returned user: {u}[/dim]")
         
         incode = IncodeRequests(base_url, extra_guids, username=u)
         

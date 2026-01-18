@@ -23,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.9"
+VERSION = "2.4.10"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -74,60 +74,73 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
             
             if 'users' not in data:
                 data['users'] = []
+    import sys
+    debug = "--debug" in sys.argv
+    
+    if not os.path.exists(CREDENTIALS_FILE):
+        return {}
+    
+    try:
+        with open(CREDENTIALS_FILE, 'r') as f:
+            data = json.load(f)
             
-            # Migration: Move passwords and tokens to keyring
-            users = data.get('users', [])
-            dirty = False
+        users = data.get('users', [])
+        changed = False
+        
+        # Check if migration needed (files with plain text passwords)
+        for u in users:
+            # 1. Migrate plain text password to keyring
+            if u.get('password') and not u.get('password').startswith("KEYRING:"):
+                try:
+                    keyring.set_password("incode-cli", u['username'], u['password'])
+                    u['password'] = None # Remove from file
+                    changed = True
+                    console.print(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]")
+                except Exception as e:
+                    console.print(f"[warning]Konnte Passwort nicht migrieren: {e}[/warning]")
+
+            # 2. Migrate plain text token to keyring
+            if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
+                try:
+                    keyring.set_password("incode-cli-telegram", u['username'], u['telegram_token'])
+                    u['telegram_token'] = None # Remove from file
+                    changed = True
+                except Exception:
+                    pass
+        
+        if changed:
+            _write_credentials(data)
             
+        # Hydrate passwords from Keyring if requested
+        if hydrate:
             for u in users:
-                username = u.get('username')
-                if not username: continue
+                # Password
+                if u.get('password') is None:
+                    try:
+                        if debug: console.print(f"[dim]Debug: Lade Passwort für {u['username']} aus Keyring...[/dim]")
+                        pw = keyring.get_password("incode-cli", u['username'])
+                        if pw:
+                            u['password'] = pw
+                        elif debug: console.print(f"[dim]Debug: Kein Passwort im Keyring für {u['username']} gefunden.[/dim]")
+                    except Exception as e:
+                        if debug: console.print(f"[red]Debug: Keyring Fehler (Password): {e}[/red]")
+                        console.print("[warning]Konnte Passwort nicht aus Keyring laden.[/warning]")
                 
-                # Migrate Password
-                pwd = u.get('password')
-                if pwd and not pwd.startswith("KEYRING:"): 
-                    # We store None in JSON, but locally we might see "None" string checks if any
-                    # Let's assume if it is a non-empty string, it is a password
+                # Token
+                if u.get('telegram_token') is None:
                     try:
-                        keyring.set_password("incode-cli", username, pwd)
-                        u['password'] = None
-                        dirty = True
+                        if debug: console.print(f"[dim]Debug: Lade Token für {u['username']} aus Keyring...[/dim]")
+                        token = keyring.get_password("incode-cli-telegram", u['username'])
+                        if token:
+                            u['telegram_token'] = token
                     except Exception as e:
-                        console.print(f"[warning]Konnte Passwort für {username} nicht in Keyring speichern: {e}[/warning]")
-
-                # Migrate Telegram Token
-                tgm = u.get('telegram_token')
-                if tgm and not tgm.startswith("KEYRING:"):
-                    try:
-                        keyring.set_password("incode-cli-telegram", username, tgm)
-                        u['telegram_token'] = None
-                        dirty = True
-                    except Exception as e:
-                         console.print(f"[warning]Konnte Telegram Token für {username} nicht in Keyring speichern: {e}[/warning]")
-
-            if dirty:
-                _write_credentials(data)
-
-            # Hydrate objects from keyring
-            if hydrate:
-                for u in users:
-                    username = u.get('username')
-                    if username:
-                        try:
-                            pd = keyring.get_password("incode-cli", username)
-                            if pd: u['password'] = pd
-                            
-                            tk = keyring.get_password("incode-cli-telegram", username)
-                            if tk: u['telegram_token'] = tk
-                        except Exception:
-                            pass # Should handle missing gracefully?
-
-            return data
-            
-        except Exception as e:
-            console.print(f"[warning]Konnte Credentials nicht lesen: {e}[/warning]")
-    return {'users': [], 'last_active': None}
-
+                        if debug: console.print(f"[red]Debug: Keyring Fehler (Token): {e}[/red]")
+                        pass
+                        
+        return data
+    except Exception as e:
+        console.print(f"[error]Fehler beim Laden der Credentials: {e}[/error]")
+        return {}
 def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
     """
     Saves or updates a specific user.
