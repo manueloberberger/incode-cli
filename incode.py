@@ -97,13 +97,16 @@ def setup_auth(force_interactive=False):
             u = selected
             return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
 
-def startup_checks():
+def startup_checks(debug=False):
     # Check for updates
     try:
         from rich.spinner import Spinner
         from rich.live import Live
-        with Live(Align.center(Spinner("dots", text="[dim]Prüfe auf Updates ...[/dim]")), console=console, transient=True):
-            new_version = check_for_updates()
+        if debug:
+            console.print("[dim]Prüfe auf Updates (Debug mode)...[/dim]")
+        
+        with Live(Align.center(Spinner("dots", text="[dim]Prüfe auf Updates ...[/dim]")), console=console, transient=not debug):
+            new_version = check_for_updates(debug=debug)
             
         if new_version:
             v_msg = f" (v{VERSION} -> v{new_version})" if new_version and new_version != "Neu" else ""
@@ -123,13 +126,19 @@ def startup_checks():
                 console.print(Align.center("\nNutze [bold green]git pull[/bold green] um die neueste Version manuell zu erhalten."))
                 console.print(Align.center("[dim](Denke danach daran, 'pip install -r requirements.txt' auszuführen)[/dim]\n"))
                 wait_for_return()
-    except Exception:
+        elif debug:
+             console.print("[dim]Debug: Keine Updates gefunden oder Check fertig.[/dim]")
+             wait_for_return()
+    except Exception as e:
+        if debug:
+            console.print(f"[red]Fehler bei startup_checks: {e}[/red]")
         pass # Ignore errors during update check to not block startup
 
-def run_cli():
-    clear_screen()
+def run_cli(debug=False):
+    if not debug:
+        clear_screen()
     console.print(Align.center(BANNER))
-    startup_checks()
+    startup_checks(debug=debug)
     
     force_menu = False
     
@@ -287,6 +296,6 @@ if __name__ == "__main__":
         if len(sys.argv) > 1 and "bot" in sys.argv:
             start_bot_mode(debug=debug_mode)
         else:
-            run_cli()
+            run_cli(debug=debug_mode)
     except KeyboardInterrupt:
         print("\nAbbruch durch Benutzer.")
