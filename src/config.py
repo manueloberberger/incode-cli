@@ -23,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.10"
+VERSION = "2.4.11"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -45,35 +45,6 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     Returns a dict with structure: {'users': [user_dict, ...], 'last_active': str}
     Automatically migrates old format to new format and migrates plain text passwords to keyring.
     """
-    if os.path.exists(CREDENTIALS_FILE):
-        try:
-            with open(CREDENTIALS_FILE, 'r') as f:
-                data = json.load(f)
-            
-            # Migration: Old format (root has username) -> New format (users list)
-            if 'username' in data and 'users' not in data:
-                # Convert old single user to list
-                user = {
-                    'username': data['username'],
-                    'password': data['password'],
-                    'base_url': data.get('base_url', BASE_URL_DEFAULT),
-                    'extra_guids': data.get('extra_guids', []),
-                    'real_name': data.get('real_name')
-                }
-                new_data = {
-                    'users': [user],
-                    'last_active': user['username']
-                }
-                # Save immediately to complete migration
-                try:
-                    with open(CREDENTIALS_FILE, 'w') as f:
-                        json.dump(new_data, f, indent=4)
-                except: pass
-                # Re-assign data to proceed with processing
-                data = new_data
-            
-            if 'users' not in data:
-                data['users'] = []
     import sys
     debug = "--debug" in sys.argv
     
@@ -83,6 +54,32 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     try:
         with open(CREDENTIALS_FILE, 'r') as f:
             data = json.load(f)
+        
+        # Determine if data is old format (direct dict) or new format (list of users)
+        if 'users' not in data and ('username' in data or 'password' in data):
+            # Convert old format to new format
+            user = {
+                'username': data.get('username'),
+                'password': data.get('password'),
+                'telegram_token': data.get('telegram_token'),
+                'base_url': data.get('base_url', BASE_URL_DEFAULT),
+                'extra_guids': data.get('extra_guids', []),
+                'real_name': data.get('real_name')
+            }
+            new_data = {
+                'users': [user],
+                'last_active': user['username']
+            }
+            # Save immediately to complete migration
+            try:
+                with open(CREDENTIALS_FILE, 'w') as f:
+                    json.dump(new_data, f, indent=4)
+            except: pass
+            # Re-assign data to proceed with processing
+            data = new_data
+        
+        if 'users' not in data:
+            data['users'] = []
             
         users = data.get('users', [])
         changed = False
