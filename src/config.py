@@ -2,6 +2,7 @@ import os
 import json
 import sys
 from typing import Optional, Dict, List, Any
+import keyring
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
@@ -22,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.6"
+VERSION = "2.4.7"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -38,11 +39,11 @@ CREDENTIALS_FILE = '.credentials.json'
 BASE_URL_DEFAULT = "https://dienstplan.k.roteskreuz.at"
 DEFAULT_GUID = None
 
-def load_credentials() -> Dict[str, Any]:
+def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
     Loads credentials.
     Returns a dict with structure: {'users': [user_dict, ...], 'last_active': str}
-    Automatically migrates old format to new format.
+    Automatically migrates old format to new format and migrates plain text passwords to keyring.
     """
     if os.path.exists(CREDENTIALS_FILE):
         try:
@@ -68,11 +69,59 @@ def load_credentials() -> Dict[str, Any]:
                     with open(CREDENTIALS_FILE, 'w') as f:
                         json.dump(new_data, f, indent=4)
                 except: pass
-                return new_data
+                # Re-assign data to proceed with processing
+                data = new_data
             
             if 'users' not in data:
                 data['users'] = []
             
+            # Migration: Move passwords and tokens to keyring
+            users = data.get('users', [])
+            dirty = False
+            
+            for u in users:
+                username = u.get('username')
+                if not username: continue
+                
+                # Migrate Password
+                pwd = u.get('password')
+                if pwd and not pwd.startswith("KEYRING:"): 
+                    # We store None in JSON, but locally we might see "None" string checks if any
+                    # Let's assume if it is a non-empty string, it is a password
+                    try:
+                        keyring.set_password("incode-cli", username, pwd)
+                        u['password'] = None
+                        dirty = True
+                    except Exception as e:
+                        console.print(f"[warning]Konnte Passwort für {username} nicht in Keyring speichern: {e}[/warning]")
+
+                # Migrate Telegram Token
+                tgm = u.get('telegram_token')
+                if tgm and not tgm.startswith("KEYRING:"):
+                    try:
+                        keyring.set_password("incode-cli-telegram", username, tgm)
+                        u['telegram_token'] = None
+                        dirty = True
+                    except Exception as e:
+                         console.print(f"[warning]Konnte Telegram Token für {username} nicht in Keyring speichern: {e}[/warning]")
+
+            if dirty:
+                _write_credentials(data)
+
+            # Hydrate objects from keyring
+            if hydrate:
+                for u in users:
+                    username = u.get('username')
+                    if username:
+                        try:
+                            pd = keyring.get_password("incode-cli", username)
+                            if pd: u['password'] = pd
+                            
+                            tk = keyring.get_password("incode-cli-telegram", username)
+                            if tk: u['telegram_token'] = tk
+                        except Exception:
+                            pass # Should handle missing gracefully?
+
             return data
             
         except Exception as e:
@@ -86,14 +135,28 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     if extra_guids is None:
         extra_guids = []
     
-    data = load_credentials()
+    data = load_credentials(hydrate=False)
     users = data.get('users', [])
     
     # Update existing or add new
     found = False
+    
+    # Save secret to keyring
+    # Save secret to keyring
+    keyring_success = False
+    try:
+        keyring.set_password("incode-cli", username, password)
+        keyring_success = True
+    except Exception as e:
+        console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+
     for u in users:
         if u['username'] == username:
-            u['password'] = password
+            if keyring_success:
+                u['password'] = None # Securely stored
+            else:
+                u['password'] = password # Fallback
+                
             u['base_url'] = base_url
             u['extra_guids'] = extra_guids
             u['real_name'] = real_name
@@ -103,7 +166,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     if not found:
         users.append({
             'username': username,
-            'password': password,
+            'password': None if keyring_success else password,
             'base_url': base_url,
             'extra_guids': extra_guids,
             'real_name': real_name
@@ -115,7 +178,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     _write_credentials(data)
 
 def remove_user(username: str) -> None:
-    data = load_credentials()
+    data = load_credentials(hydrate=False)
     users = data.get('users', [])
     data['users'] = [u for u in users if u['username'] != username]
     
@@ -123,15 +186,40 @@ def remove_user(username: str) -> None:
         data['last_active'] = data['users'][0]['username'] if data['users'] else None
         
     _write_credentials(data)
+    
+    # Remove from keyring
+    try:
+        keyring.delete_password("incode-cli", username)
+        keyring.delete_password("incode-cli-telegram", username)
+    except Exception:
+        pass
 
 def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) -> None:
     """
     Updates specific fields for a user. If username is None, updates the last active user.
     """
-    data = load_credentials()
+    data = load_credentials(hydrate=False)
     target_user = username or data.get('last_active')
     
     if not target_user: return
+
+    # Handle Keyring updates
+    # Handle Keyring updates
+    if 'password' in updates:
+        try:
+            keyring.set_password("incode-cli", target_user, updates['password'])
+            updates['password'] = None # Don't save to file
+        except Exception as e:
+            console.print(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]")
+            # Keep password in updates, so it gets saved to file
+            
+    if 'telegram_token' in updates:
+        try:
+            keyring.set_password("incode-cli-telegram", target_user, updates['telegram_token'])
+            updates['telegram_token'] = None
+        except Exception as e:
+            console.print(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]")
+            # Keep token in updates
 
     users = data.get('users', [])
     for u in users:
@@ -169,3 +257,25 @@ def _write_credentials(data: Dict[str, Any]) -> None:
         if 'temp_name' in locals() and os.path.exists(temp_name):
             try: os.remove(temp_name)
             except: pass
+
+def get_storage_status(username: str) -> str:
+    """
+    Returns a string indicating where the password is stored for the given user.
+    """
+    if not os.path.exists(CREDENTIALS_FILE):
+        return "❓ Unbekannt"
+        
+    try:
+        with open(CREDENTIALS_FILE, 'r') as f:
+            data = json.load(f)
+            users = data.get('users', [])
+            for u in users:
+                if u.get('username') == username:
+                    if u.get('password'):
+                        return "⚠️  Unverschlüsselt (Datei)"
+                    else:
+                        return "🔒 Verschlüsselt (Keyring)"
+    except:
+        pass
+        
+    return "❓ Unbekannt"

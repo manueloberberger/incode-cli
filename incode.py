@@ -12,7 +12,7 @@ from rich.align import Align
 from rich.table import Table
 from rich.text import Text
 try:
-    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user
+    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status
     from src.utils import centered_input
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search
@@ -56,6 +56,7 @@ def setup_auth(force_interactive=False):
     # 2. Single user and not forced -> Auto Login
     if len(users) == 1 and not force_interactive:
         u = users[0]
+        # Status is printed in run_cli now to avoid duplication
         console.print(Align.center(f"Verwende gespeicherte Zugangsdaten für [info]{u['username']}[/info]"))
         return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
 
@@ -139,6 +140,21 @@ def run_cli():
         u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
         
         incode = IncodeRequests(base_url, extra_guids, username=u)
+        
+        status = get_storage_status(u)
+        # Create a nice looking panel or text for the status
+        from rich.panel import Panel
+        
+        status_color = "green" if "Verschlüsselt" in status else "yellow"
+        console.print()
+        console.print(Align.center(
+            Panel.fit(
+                f"[{status_color}]{status}[/{status_color}]",
+                title="Sicherheits-Status",
+                border_style="dim"
+            )
+        ))
+        time.sleep(1.5) # Give user time to read
         
         s, m = incode.login(u, p)
         if not s: 
