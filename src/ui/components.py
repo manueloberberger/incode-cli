@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
 
-from src.config import console, BANNER, load_credentials
+from src.config import console, BANNER, load_credentials, get_storage_status
 from src.utils import clear_screen, get_key, KEY_UP, KEY_UP_ALT, KEY_DOWN, KEY_DOWN_ALT, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_LEFT_ALT, KEY_RIGHT, KEY_RIGHT_ALT
 from src.bot import IncodeBot
 
@@ -103,7 +103,10 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
             render_next_duty_panel(dashboard_data)
         
         if current_user:
-            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{current_user}[/bold white][/dim]"))
+            s_status = get_storage_status(current_user)
+            s_short = "🔒 Keyring" if "Keyring" in s_status else "⚠️ Datei"
+            s_color = "green" if "Keyring" in s_status else "yellow"
+            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{current_user}[/bold white] [{s_color}]({s_short})[/{s_color}][/dim]"))
             console.print() # Spacer
         
         console.print(Align.center(f"[header]{title}[/header]\n"))
