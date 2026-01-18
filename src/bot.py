@@ -338,7 +338,6 @@ class IncodeBot:
         async def main_loop() -> None:
             await application.initialize()
             await application.start()
-            await application.start()
             if application.updater:
                  # Reduce timeout to 2s to allow faster shutdown loops
                  await application.updater.start_polling(allowed_updates=Update.ALL_TYPES, timeout=2, bootstrap_retries=0)

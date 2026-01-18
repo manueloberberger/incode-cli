@@ -456,20 +456,17 @@ def get_storage_status(username: str) -> str:
     """
     Returns a string indicating where the password is stored for the given user.
     """
-    if not os.path.exists(CREDENTIALS_FILE):
-        return "❓ Unbekannt"
-        
     try:
-        with open(CREDENTIALS_FILE, 'r') as f:
-            data = json.load(f)
-            users = data.get('users', [])
-            for u in users:
-                if u.get('username') == username:
-                    if u.get('password'):
-                        return "⚠️  Unverschlüsselt (JSON)"
-                    else:
-                        return "🔒 Verschlüsselt (Keyring)"
-    except:
+        # load_credentials handles decryption and migration automatically
+        data = load_credentials(hydrate=False)
+        users = data.get('users', [])
+        for u in users:
+            if u.get('username') == username:
+                if u.get('password'):
+                    return "⚠️  Unverschlüsselt (JSON)"
+                else:
+                    return "🔒 Verschlüsselt (Keyring)"
+    except Exception:
         pass
         
     return "❓ Unbekannt"
