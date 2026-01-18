@@ -268,6 +268,7 @@ def show_help():
         ("./incode", "Startet das interaktive Hauptmenü (Standard)."),
         ("./incode bot", "Startet den Telegram Bot Modus."),
         ("./incode bot --debug", "Startet den Bot mit erweiterten technischen Logs."),
+        ("./incode --no-keyring", "Zwingt die Nutzung der Datei anstatt des System-Keyrings (für Linux/Kali)."),
         ("./incode --help", "Zeigt diese Hilfeübersicht an."),
         ("./incode --version", "Zeigt die aktuelle Programmversion.")
     ]

@@ -23,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.11"
+VERSION = "2.4.12"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -47,8 +47,12 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
     import sys
     debug = "--debug" in sys.argv
+    no_keyring = "--no-keyring" in sys.argv
+    
+    if debug: console.print("[dim]Debug: Entering load_credentials...[/dim]")
     
     if not os.path.exists(CREDENTIALS_FILE):
+        if debug: console.print("[dim]Debug: Credentials file not found.[/dim]")
         return {}
     
     try:
@@ -84,60 +88,70 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         users = data.get('users', [])
         changed = False
         
-        # Check if migration needed (files with plain text passwords)
-        for u in users:
-            # 1. Migrate plain text password to keyring
-            if u.get('password') and not u.get('password').startswith("KEYRING:"):
-                try:
-                    keyring.set_password("incode-cli", u['username'], u['password'])
-                    u['password'] = None # Remove from file
-                    changed = True
-                    console.print(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]")
-                except Exception as e:
-                    console.print(f"[warning]Konnte Passwort nicht migrieren: {e}[/warning]")
-
-            # 2. Migrate plain text token to keyring
-            if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
-                try:
-                    keyring.set_password("incode-cli-telegram", u['username'], u['telegram_token'])
-                    u['telegram_token'] = None # Remove from file
-                    changed = True
-                except Exception:
-                    pass
-        
-        if changed:
-            _write_credentials(data)
-            
-        # Hydrate passwords from Keyring if requested
-        if hydrate:
+        if no_keyring:
+             if debug: console.print("[dim]Debug: --no-keyring active. Skipping migration and hydration.[/dim]")
+        else:
+            # Check if migration needed (files with plain text passwords)
+            if debug and users: console.print("[dim]Debug: Checking for necessary migrations...[/dim]")
             for u in users:
-                # Password
-                if u.get('password') is None:
+                # 1. Migrate plain text password to keyring
+                if u.get('password') and not u.get('password').startswith("KEYRING:"):
                     try:
-                        if debug: console.print(f"[dim]Debug: Lade Passwort für {u['username']} aus Keyring...[/dim]")
-                        pw = keyring.get_password("incode-cli", u['username'])
-                        if pw:
-                            u['password'] = pw
-                        elif debug: console.print(f"[dim]Debug: Kein Passwort im Keyring für {u['username']} gefunden.[/dim]")
+                        if debug: console.print(f"[dim]Debug: Migrating password for {u['username']} to keyring...[/dim]")
+                        keyring.set_password("incode-cli", u['username'], u['password'])
+                        u['password'] = None # Remove from file
+                        changed = True
+                        console.print(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]")
                     except Exception as e:
-                        if debug: console.print(f"[red]Debug: Keyring Fehler (Password): {e}[/red]")
-                        console.print("[warning]Konnte Passwort nicht aus Keyring laden.[/warning]")
-                
-                # Token
-                if u.get('telegram_token') is None:
+                        if debug: console.print(f"[red]Debug: Migration failed: {e}[/red]")
+                        console.print(f"[warning]Konnte Passwort nicht migrieren: {e}[/warning]")
+
+                # 2. Migrate plain text token to keyring
+                if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
                     try:
-                        if debug: console.print(f"[dim]Debug: Lade Token für {u['username']} aus Keyring...[/dim]")
-                        token = keyring.get_password("incode-cli-telegram", u['username'])
-                        if token:
-                            u['telegram_token'] = token
-                    except Exception as e:
-                        if debug: console.print(f"[red]Debug: Keyring Fehler (Token): {e}[/red]")
+                        keyring.set_password("incode-cli-telegram", u['username'], u['telegram_token'])
+                        u['telegram_token'] = None # Remove from file
+                        changed = True
+                    except Exception:
                         pass
-                        
+        
+            if changed:
+                if debug: console.print("[dim]Debug: Saving migrated changes to file...[/dim]")
+                _write_credentials(data)
+            
+            # Hydrate passwords from Keyring if requested
+            if hydrate:
+                if debug: console.print("[dim]Debug: Hydrating credentials (reading from keyring)...[/dim]")
+                for u in users:
+                    # Password
+                    if u.get('password') is None:
+                        try:
+                            if debug: console.print(f"[dim]Debug: Lade Passwort für {u['username']} aus Keyring...[/dim]")
+                            pw = keyring.get_password("incode-cli", u['username'])
+                            if pw:
+                                u['password'] = pw
+                            elif debug: console.print(f"[dim]Debug: Kein Passwort im Keyring für {u['username']} gefunden.[/dim]")
+                        except Exception as e:
+                            if debug: console.print(f"[red]Debug: Keyring Fehler (Password): {e}[/red]")
+                            console.print("[warning]Konnte Passwort nicht aus Keyring laden.[/warning]")
+                    
+                    # Token
+                    if u.get('telegram_token') is None:
+                        try:
+                            if debug: console.print(f"[dim]Debug: Lade Token für {u['username']} aus Keyring...[/dim]")
+                            token = keyring.get_password("incode-cli-telegram", u['username'])
+                            if token:
+                                u['telegram_token'] = token
+                        except Exception as e:
+                            if debug: console.print(f"[red]Debug: Keyring Fehler (Token): {e}[/red]")
+                            pass
+        
+        if debug: console.print("[dim]Debug: load_credentials finished.[/dim]")
         return data
     except Exception as e:
         console.print(f"[error]Fehler beim Laden der Credentials: {e}[/error]")
         return {}
+
 def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
     """
     Saves or updates a specific user.
@@ -151,14 +165,20 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     # Update existing or add new
     found = False
     
-    # Save secret to keyring
+    import sys
+    no_keyring = "--no-keyring" in sys.argv
+    
     # Save secret to keyring
     keyring_success = False
-    try:
-        keyring.set_password("incode-cli", username, password)
-        keyring_success = True
-    except Exception as e:
-        console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+    if not no_keyring:
+        try:
+            keyring.set_password("incode-cli", username, password)
+            keyring_success = True
+        except Exception as e:
+            console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+    else:
+        # User explicitly requested no keyring via flag
+        pass
 
     for u in users:
         if u['username'] == username:
