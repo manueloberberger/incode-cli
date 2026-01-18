@@ -13,11 +13,8 @@ from rich.table import Table
 from rich.text import Text
 try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status
-    from src.utils import centered_input
-    from src.api import IncodeRequests
-    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search
-    from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT, centered_input, prompt_yes_no
-    from src.bot import IncodeBot
+    # Import lightweight utils needed for basic UI/params
+    from src.utils import clear_screen, centered_input, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
 except ImportError as e:
     print(f"Fehler: Abhängigkeiten konnten nicht geladen werden ({e}).")
     print("Bitte führe 'pip install -r requirements.txt' aus.")
@@ -61,6 +58,7 @@ def setup_auth(force_interactive=False):
         return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
 
     # 3. Multiple users or forced -> Selection Menu
+    from src.ui import interactive_menu
     while True:
         clear_screen()
         console.print(Align.center(BANNER))
@@ -102,6 +100,7 @@ def startup_checks(debug=False):
     try:
         from rich.spinner import Spinner
         from rich.live import Live
+        from src.utils import check_for_updates, update_app, prompt_yes_no
         if debug:
             console.print("[dim]Prüfe auf Updates (Debug mode)...[/dim]")
         
@@ -139,6 +138,10 @@ def run_cli(debug=False):
         clear_screen()
     console.print(Align.center(BANNER))
     startup_checks(debug=debug)
+    
+    from src.api import IncodeRequests
+    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search
+    from src.utils import prompt_yes_no
     
     force_menu = False
     
@@ -244,6 +247,7 @@ def start_bot_mode(incode_instance=None, debug=False):
         u, p, base_url, extra_guids = setup_auth()
         incode_instance = IncodeRequests(base_url, extra_guids, username=u)
     
+    from src.bot import IncodeBot
     bot = IncodeBot(incode_instance)
     try:
         bot.run(debug=debug)

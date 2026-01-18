@@ -92,7 +92,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
 
     def _handle_keyring_error(e, context=""):
         if isinstance(e, TimeoutError):
-            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]"))
+            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
             load_credentials.keyring_disabled = True
         elif debug:
             console.print(f"[red]Debug: Keyring Fehler ({context}): {e}[/red]")
@@ -367,7 +367,7 @@ def get_storage_status(username: str) -> str:
             for u in users:
                 if u.get('username') == username:
                     if u.get('password'):
-                        return "⚠️  Unverschlüsselt (Datei)"
+                        return "⚠️  Unverschlüsselt (JSON)"
                     else:
                         return "🔒 Verschlüsselt (Keyring)"
     except:
