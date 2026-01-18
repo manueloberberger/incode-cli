@@ -6,6 +6,7 @@ import keyring
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
+from rich.align import Align
 
 # Custom Theme
 theme = Theme({
@@ -26,12 +27,12 @@ console = Console(theme=theme)
 VERSION = "2.4.15"
 
 BANNER = rf"""
- [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
- [bold red] |_ _| \| |/ __|/ _ \|   \| __|     / __| |  |_ _|  [/bold red] 
- [bold white]  | || .  | (__| (_) | |) | _|     | (__| |__ | |   [/bold white] 
- [bold white] |___|_|\_|\___|\___/|___/|___|     \___|____|___|  [/bold white] 
- [bold white]                                                    [/bold white] 
- [bold white]                >> version {VERSION} <<                 [/bold white] 
+[bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
+[bold red] |_ _| \| |/ __|/ _ \|   \| __|     / __| |  |_ _|  [/bold red]
+[bold white]  | || .  | (__| (_) | |) | _|     | (__| |__ | |   [/bold white]
+[bold white] |___|_|\_|\___|\___/|___/|___|     \___|____|___|  [/bold white]
+
+[bold white]                >> version {VERSION} <<                 [/bold white]
 """
 
 DEFAULT_TIMEOUT = 10 # seconds
@@ -91,7 +92,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
 
     def _handle_keyring_error(e, context=""):
         if isinstance(e, TimeoutError):
-            console.print(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]")
+            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]"))
             load_credentials.keyring_disabled = True
         elif debug:
             console.print(f"[red]Debug: Keyring Fehler ({context}): {e}[/red]")
@@ -148,7 +149,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                         _safe_keyring_set("incode-cli", u['username'], u['password'])
                         u['password'] = None # Remove from file
                         changed = True
-                        console.print(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]")
+                        console.print(Align.center(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]"))
                     except Exception as e:
                         _handle_keyring_error(e, "Migration Password")
                         # If timed out, stop trying directly
@@ -196,7 +197,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         if debug: console.print("[dim]Debug: load_credentials finished.[/dim]")
         return data
     except Exception as e:
-        console.print(f"[error]Fehler beim Laden der Credentials: {e}[/error]")
+        console.print(Align.center(f"[error]Fehler beim Laden der Credentials: {e}[/error]"))
         return {}
 
 def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
@@ -234,9 +235,9 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
             keyring_success = True
         except Exception as e:
             if isinstance(e, TimeoutError):
-                console.print(f"[yellow]Warnung: Keyring Timeout beim Speichern. Nutze Datei-Speicher.[/yellow]")
+                console.print(Align.center(f"[yellow]Warnung: Keyring Timeout beim Speichern. Nutze Datei-Speicher.[/yellow]"))
             else:
-                console.print(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]")
+                console.print(Align.center(f"[warning]Keyring nicht verfügbar. Speichere Passwort lokal... ({e})[/warning]"))
         finally:
             if sys.platform != 'win32':
                 signal.alarm(0)
@@ -304,7 +305,7 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
             keyring.set_password("incode-cli", target_user, updates['password'])
             updates['password'] = None # Don't save to file
         except Exception as e:
-            console.print(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]")
+            console.print(Align.center(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]"))
             # Keep password in updates, so it gets saved to file
             
     if 'telegram_token' in updates:
@@ -312,7 +313,7 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
             keyring.set_password("incode-cli-telegram", target_user, updates['telegram_token'])
             updates['telegram_token'] = None
         except Exception as e:
-            console.print(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]")
+            console.print(Align.center(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden, speichere lokal: {e}[/warning]"))
             # Keep token in updates
 
     users = data.get('users', [])
@@ -347,7 +348,7 @@ def _write_credentials(data: Dict[str, Any]) -> None:
         os.replace(temp_name, CREDENTIALS_FILE)
         
     except Exception as e:
-        console.print(f"[error]Fehler beim Speichern der Credentials: {e}[/error]")
+        console.print(Align.center(f"[error]Fehler beim Speichern der Credentials: {e}[/error]"))
         if 'temp_name' in locals() and os.path.exists(temp_name):
             try: os.remove(temp_name)
             except: pass
