@@ -143,7 +143,8 @@ def run_cli(debug=False):
     force_menu = False
     
     while True:
-        clear_screen()
+        if not debug:
+            clear_screen()
         console.print(Align.center(BANNER))
         
         u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
