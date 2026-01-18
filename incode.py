@@ -112,7 +112,7 @@ def startup_checks(debug: bool = False) -> None:
             
         if new_version:
             v_msg = f" (v{VERSION} -> v{new_version})" if new_version and new_version != "Neu" else ""
-            console.print(Align.center(f"\n[bold yellow]✨ Ein Update ist verfügbar{v_msg}![/bold yellow]"))
+            console.print(Align.center(f"\n[bold red]✨ Ein Update ist verfügbar{v_msg}![/bold red]"))
             
             # from src.ui import prompt_yes_no # Redundant, already imported globally
 

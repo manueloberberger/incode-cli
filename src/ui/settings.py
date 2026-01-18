@@ -52,7 +52,7 @@ def _manual_update_check() -> None:
         new_version = check_for_updates(ignore_cache=True)
     
     if new_version:
-        console.print(Align.center(f"[bold green]✨ Update verfügbar: v{VERSION} -> v{new_version}[/bold green]\n"))
+        console.print(Align.center(f"[bold red]✨ Update verfügbar: v{VERSION} -> v{new_version}[/bold red]\n"))
         if prompt_yes_no("Möchtest du das Update jetzt installieren?"):
             if update_app():
                 console.print(Align.center("[info]Die App wird neu gestartet ...[/info]"))
