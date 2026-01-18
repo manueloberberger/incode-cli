@@ -23,7 +23,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.4.13"
+VERSION = "2.4.14"
 
 BANNER = rf"""
  [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red] 
@@ -46,6 +46,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     Automatically migrates old format to new format and migrates plain text passwords to keyring.
     """
     import sys
+    import signal
     
     debug = "--debug" in sys.argv
     no_keyring = "--no-keyring" in sys.argv
