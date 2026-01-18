@@ -5,7 +5,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime
 from src.config import console
 
-def export_to_pdf(duties, filename="dienstplan.pdf", title_text="Dienstplan Übersicht"):
+from typing import List, Dict, Any, Union
+
+def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf", title_text: str = "Dienstplan Übersicht") -> bool:
     doc = SimpleDocTemplate(filename, pagesize=A4)
     elements = []
     styles = getSampleStyleSheet()

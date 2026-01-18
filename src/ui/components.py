@@ -12,7 +12,7 @@ from src.config import console, BANNER, load_credentials, get_storage_status
 from src.utils import clear_screen, get_key, KEY_UP, KEY_UP_ALT, KEY_DOWN, KEY_DOWN_ALT, KEY_ENTER, KEY_ESC, KEY_LEFT, KEY_LEFT_ALT, KEY_RIGHT, KEY_RIGHT_ALT
 from src.bot import IncodeBot
 
-def send_pdf_via_bot(incode_instance, file_path: str, caption: str) -> bool:
+def send_pdf_via_bot(incode_instance: Any, file_path: str, caption: str) -> bool:
     """Helper to send a PDF via the built-in bot logic."""
     try:
         # We need a bot instance. It needs an API instance (which we have).

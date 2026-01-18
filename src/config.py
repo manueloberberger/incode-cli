@@ -59,10 +59,10 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     if KEYRING_DISABLED:
         no_keyring = True
 
-    def _timeout_handler(signum, frame):
+    def _timeout_handler(signum: int, frame: Any) -> None:
         raise TimeoutError("Keyring operation timed out")
 
-    def _safe_keyring_set(service, username, password):
+    def _safe_keyring_set(service: str, username: str, password: str) -> None:
         if no_keyring or KEYRING_DISABLED:
             raise Exception("Keyring disabled")
             
@@ -76,7 +76,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
             if sys.platform != 'win32':
                 signal.alarm(0)
 
-    def _safe_keyring_get(service, username):
+    def _safe_keyring_get(service: str, username: str) -> Optional[str]:
         if no_keyring or KEYRING_DISABLED:
             raise Exception("Keyring disabled")
 
@@ -90,7 +90,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
             if sys.platform != 'win32':
                 signal.alarm(0)
 
-    def _handle_keyring_error(e, context=""):
+    def _handle_keyring_error(e: Exception, context: str = "") -> None:
         global KEYRING_DISABLED
         if isinstance(e, TimeoutError):
             console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
@@ -196,7 +196,9 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                             _handle_keyring_error(e, "Load Token")
         
         if debug: console.print("[dim]Debug: load_credentials finished.[/dim]")
-        return data
+        # Mypy cannot infer that data is strictly Dict[str, Any] after loading from JSON
+        from typing import cast
+        return cast(Dict[str, Any], data)
     except Exception as e:
         console.print(Align.center(f"[error]Fehler beim Laden der Credentials: {e}[/error]"))
         return {}
@@ -221,7 +223,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     if KEYRING_DISABLED:
         no_keyring = True
 
-    def _timeout_handler(signum, frame):
+    def _timeout_handler(signum: int, frame: Any) -> None:
         raise TimeoutError("Keyring operation timed out")
 
     # Save secret to keyring

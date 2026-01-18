@@ -46,7 +46,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
     
     monthly_stats: Dict[str, float] = defaultdict(float)
     found_any = False
-    export_duties = []
+    export_duties: List[Dict[str, Any]] = []
     month_names = {1: "Januar", 2: "Februar", 3: "März", 4: "April", 5: "Mai", 6: "Juni", 7: "Juli", 8: "August", 9: "September", 10: "Oktober", 11: "November", 12: "Dezember"}
     
     for d in duties:

@@ -3,7 +3,11 @@ import sys
 import time
 import shutil
 from datetime import datetime
-from typing import Any
+from typing import Any, Tuple, Optional, List
+import sys
+import os
+import shutil
+import time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from rich.prompt import Prompt
@@ -11,8 +15,9 @@ from rich.console import Console
 from rich.align import Align
 from rich.table import Table
 from rich.text import Text
+
 try:
-    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status
+    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status, VERSION
     # Import lightweight utils needed for basic UI/params
     from src.utils import clear_screen, centered_input, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
 except ImportError as e:
@@ -20,9 +25,7 @@ except ImportError as e:
     print("Bitte führe 'pip install -r requirements.txt' aus.")
     sys.exit(1)
 
-
-
-def _prompt_new_user():
+def _prompt_new_user() -> Tuple[str, str, str, Optional[List[str]]]:
     width = shutil.get_terminal_size().columns
     padding = (width // 2) - 4
     
@@ -36,13 +39,13 @@ def _prompt_new_user():
     
     console.print()
     base_url = "https://dienstplan.k.roteskreuz.at" 
-    extra_guids = None
-    save_credentials(u, p, base_url, extra_guids, None)
+    extra_guids: Optional[List[str]] = None
     if not u or not p:
         sys.exit(0) # Exit if inputs are cancelled
+    save_credentials(u, p, base_url, extra_guids, None)
     return u, p, base_url, extra_guids
 
-def setup_auth(force_interactive=False):
+def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str], Optional[List[str]]]:
     creds_data = load_credentials()
     users = creds_data.get('users', [])
     
@@ -65,7 +68,7 @@ def setup_auth(force_interactive=False):
         console.print(Align.center("[bold]BENUTZER-AUSWAHL[/bold]"))
         console.print()
         
-        options = []
+        options: List[Tuple[str, Any]] = []
         for user in users:
             options.append((f"Login als {user['username']}", user))
             
@@ -81,7 +84,7 @@ def setup_auth(force_interactive=False):
             return _prompt_new_user()
         elif selected == "delete":
             # Sub-menu for deletion
-            del_options = [(f"Lösche {u['username']}", u['username']) for u in users]
+            del_options: List[Tuple[str, Any]] = [(f"Lösche {u['username']}", u['username']) for u in users]
             del_options.append(("Zurück", "back"))
             to_delete = interactive_menu(del_options, title="BENUTZER LÖSCHEN")
             if to_delete and to_delete != "back":
@@ -95,7 +98,7 @@ def setup_auth(force_interactive=False):
             u = selected
             return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
 
-def startup_checks(debug=False):
+def startup_checks(debug: bool = False) -> None:
     # Check for updates
     try:
         from rich.spinner import Spinner
@@ -133,7 +136,7 @@ def startup_checks(debug=False):
             console.print(f"[red]Fehler bei startup_checks: {e}[/red]")
         pass # Ignore errors during update check to not block startup
 
-def run_cli(debug=False):
+def run_cli(debug: bool = False) -> None:
     if not debug:
         clear_screen()
     console.print(Align.center(BANNER))
@@ -154,7 +157,7 @@ def run_cli(debug=False):
         u, p, base_url, extra_guids = setup_auth(force_interactive=force_menu)
         if debug: console.print(f"[dim]Debug: setup_auth returned user: {u}[/dim]")
         
-        incode = IncodeRequests(base_url, extra_guids, username=u)
+        incode = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
         
         status = get_storage_status(u)
         # Create a nice looking panel or text for the status
@@ -185,7 +188,7 @@ def run_cli(debug=False):
         # Pre-fetch next duty for dashboard
         next_duty = incode.get_next_duty()
         
-        menu_options = [
+        menu_options: List[Tuple[str, Any]] = [
             ("📅  Mein Dienstplan", "future"),
             ("🌴  Meine Abwesenheiten", "absences"),
             ("🚑  Events / Ambulanzdienste", "events"),
@@ -236,7 +239,7 @@ def run_cli(debug=False):
         if should_logout:
             continue
 
-def start_bot_mode(incode_instance=None, debug=False):
+def start_bot_mode(incode_instance: Any = None, debug: bool = False) -> None:
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()
@@ -245,7 +248,8 @@ def start_bot_mode(incode_instance=None, debug=False):
     
     if not incode_instance:
         u, p, base_url, extra_guids = setup_auth()
-        incode_instance = IncodeRequests(base_url, extra_guids, username=u)
+        from src.api import IncodeRequests
+        incode_instance = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
     
     from src.bot import IncodeBot
     bot = IncodeBot(incode_instance)
@@ -259,7 +263,7 @@ def start_bot_mode(incode_instance=None, debug=False):
         # We catch it so we can print the message cleanly.
         pass
 
-def show_help():
+def show_help() -> None:
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()

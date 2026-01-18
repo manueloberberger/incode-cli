@@ -53,21 +53,21 @@ def _display_staff_details_loop(p: Any) -> None:
     show_details = False
     
     # Helper for nice dates
-    def fmt_date(s):
+    def fmt_date(s: Any) -> str:
         if not s or len(str(s)) < 10: return "-"
         try:
             return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
-        except: return s
+        except: return str(s)
 
     # Helper for phone numbers
-    def fmt_phone(s):
+    def fmt_phone(s: Any) -> str:
         if not s: return ""
         s = str(s).strip()
         if s.startswith("00"): s = "+" + s[2:]
         if s.startswith("+43") and len(s) > 4:
             # Simple formatting: +43 664 1234567
             return f"{s[:3]} {s[3:6]} {s[6:]}"
-        return s
+        return str(s)
 
     while True:
         clear_screen()
@@ -100,10 +100,10 @@ def _display_staff_details_loop(p: Any) -> None:
         address_str = ", ".join(addr_parts) if addr_parts else None
 
         # Helper for Role
-        def fmt_role(person):
+        def fmt_role(person: Any) -> str:
             role = person.get('maportal_role', '')
             if role == 'dutytype_active': return "Aktiv"
-            return role
+            return str(role)
 
         basic_fields = [
             ("Dienstnummer", lambda _: service_number),
@@ -227,7 +227,7 @@ def _display_staff_details_loop(p: Any) -> None:
         elif k == KEY_ENTER or (k and k.lower() == 'q') or k == KEY_ESC:
             return
 
-def show_colleague_search(incode) -> None:
+def show_colleague_search(incode: Any) -> None:
     """Shows a dedicated page for searching colleague duties."""
     clear_screen()
     console.print(Align.center(BANNER))

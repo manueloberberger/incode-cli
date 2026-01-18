@@ -46,12 +46,13 @@ class IncodeRequests:
         if os.path.exists(CACHE_FILE):
             try:
                 with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    from typing import cast
+                    return cast(Dict[str, Any], json.load(f))
             except Exception:
                 return {}
         return {}
 
-    def _save_cache(self):
+    def _save_cache(self) -> None:
         try:
             with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
@@ -67,12 +68,12 @@ class IncodeRequests:
                 return entry.get('data')
         return None
 
-    def _set_cached_data(self, key: str, data: Any):
+    def _set_cached_data(self, key: str, data: Any) -> None:
         key = self._get_cache_key(key)
         self.cache[key] = {'timestamp': time.time(), 'data': data}
         self._save_cache()
 
-    def login(self, username, password) -> Tuple[bool, str]:
+    def login(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Authenticates against the web portal.
         
@@ -261,7 +262,7 @@ class IncodeRequests:
         name_to_pnr: Dict[str, str] = {}
         name_no_pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
         
-        def fetch_guid(guid):
+        def fetch_guid(guid: str) -> List[Dict[str, Any]]:
             try:
                 resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
                 if resp.status_code == 200: 
@@ -274,8 +275,8 @@ class IncodeRequests:
             for future in as_completed(future_to_guid):
                 found = future.result()
                 for p in found:
-                    name = p.get('_display_name')
-                    pnr = p.get('personalnummer')
+                    name = str(p.get('_display_name', ''))
+                    pnr = str(p.get('personalnummer', '')) if p.get('personalnummer') else None
                     score = self._calculate_staff_score(p)
                     p['_score'] = score
                     
@@ -343,9 +344,9 @@ class IncodeRequests:
         now = datetime.now()
         start_date, end_date = now - timedelta(days=30), now + timedelta(days=400)
         df_str, dt_str = start_date.strftime('%Y-%m-%dT00:00:00.000Z'), end_date.strftime('%Y-%m-%dT23:59:59.000Z')
-        def norm_start(dt): return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0) if dt.hour >= 20 else dt
-        holiday_cache = {}
-        def is_h(d):
+        def norm_start(dt: Optional[datetime]) -> Optional[datetime]: return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0) if dt and dt.hour >= 20 else dt
+        holiday_cache: Dict[int, Any] = {}
+        def is_h(d: date) -> bool:
             if d.year not in holiday_cache: holiday_cache[d.year] = get_holidays(d.year)
             return d in holiday_cache[d.year]
         
@@ -460,7 +461,7 @@ class IncodeRequests:
         return []
 
     @handle_api_errors([])
-    def load_future_duties(self, use_cache=True, filter_mode: str = 'exclude_absences') -> List[Duty]:
+    def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences') -> List[Duty]:
         """
         Loads future duties from the monthly view.
         
@@ -523,7 +524,7 @@ class IncodeRequests:
         self._set_cached_data(cache_key, serializable)
         return duties
 
-    def load_daily_plan(self, date: datetime, use_cache=True) -> List[Dict[str, Any]]:
+    def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
         cache_key = f"daily_{date.strftime('%Y-%m-%d')}"
         if use_cache:
             cached = self._get_cached_data(cache_key)

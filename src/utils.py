@@ -96,7 +96,9 @@ def _read_windows_key_blocking() -> Optional[str]:
     if ch == b'\x08': return KEY_BACKSPACE
     
     try:
-        return ch.decode('utf-8')
+        if isinstance(ch, bytes):
+            return ch.decode('utf-8')
+        return None
     except:
         return None
 
@@ -290,21 +292,21 @@ from src.config import console
 
 T = TypeVar("T")
 
-def handle_api_errors(default_return: Any = None) -> Callable:
+def handle_api_errors(default_return: Any = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to handle API errors gracefully.
     Logs error to console and returns default_return.
     """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        def wrapper(*args, **kwargs) -> T:
+        def wrapper(*args: Any, **kwargs: Any) -> T:
             try:
                 return func(*args, **kwargs)
             except RequestException as e:
                 console.print(Align.center(f"[dim red]Netzwerk-Fehler in {func.__name__}: {e}[/dim red]"))
             except Exception as e:
                 console.print(Align.center(f"[dim red]Unerwarteter Fehler in {func.__name__}: {e}[/dim red]"))
-            return default_return
+            return default_return # type: ignore
         return wrapper
     return decorator
 

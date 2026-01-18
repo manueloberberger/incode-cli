@@ -2,7 +2,9 @@ from datetime import datetime
 from icalendar import Calendar, Event, vText
 from src.config import console
 
-def export_to_ics(duties, filename="dienstplan.ics"):
+from typing import List, Dict, Any
+
+def export_to_ics(duties: List[Dict[str, Any]], filename: str = "dienstplan.ics") -> bool:
     cal = Calendar()
     cal.add('prodid', '-//RedCrossIncodeChecker//DE')
     cal.add('version', '2.0')

@@ -5,7 +5,9 @@ import asyncio
 import re
 import warnings
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from dataclasses import asdict
+
 
 
 from rich.align import Align
@@ -39,10 +41,11 @@ class IncodeBot:
         target = self.api.username or self.config.get('last_active')
         for u in self.config.get('users', []):
             if u['username'] == target:
-                return u
+                from typing import cast
+                return cast(Dict[str, Any], u)
         return {}
 
-    def ensure_config(self):
+    def ensure_config(self) -> None:
         """Ensures Telegram config exists for current user."""
         if not self.user_config.get("telegram_token") or not self.user_config.get("allowed_user_id"):
             console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
@@ -89,7 +92,9 @@ class IncodeBot:
             logger.error(f"Async send error: {e}")
             return False
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if not update.effective_user or not update.message: return ConversationHandler.END
         logger.info(f"Start command received from {update.effective_user.id}")
         keyboard = [
@@ -107,10 +112,10 @@ class IncodeBot:
         )
         return ConversationHandler.END
 
-    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Parses button clicks."""
         query = update.callback_query
-        if not query or not query.from_user: return
+        if not query or not query.from_user: return ConversationHandler.END
         user_id = query.from_user.id
         logger.info(f"Button clicked: {query.data} by user {user_id}")
         
@@ -118,7 +123,7 @@ class IncodeBot:
         if str(user_id) != allowed_id:
             logger.warning(f"Access denied for user {user_id} (Allowed: {allowed_id})")
             await query.answer("Kein Zugriff.", show_alert=True)
-            return
+            return ConversationHandler.END
 
         await query.answer() 
         
@@ -140,7 +145,7 @@ class IncodeBot:
              await self._process_duties_request(query.message, context, filter_today, chat_id=user_id)
         return ConversationHandler.END
 
-    async def date_button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def date_button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handle quick date selection buttons."""
         query = update.callback_query
         if not query or not query.from_user or not query.message: return ConversationHandler.END
@@ -156,6 +161,7 @@ class IncodeBot:
         await self._process_duties_request(query.message, context, True, chat_id=user_id, custom_date=target_date)
         return ConversationHandler.END
 
+    async def manual_date_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handle manual text input for date."""
         if not update.message or not update.message.text or not update.effective_user: return WAITING_FOR_DATE
         text = update.message.text.strip()
@@ -177,12 +183,12 @@ class IncodeBot:
             await update.message.reply_text("❌ Ungültiges Format. Bitte nutze TT.MM. (z.B. 15.01.)")
             return WAITING_FOR_DATE
 
-    async def unauthorized(self, update: Update):
+    async def unauthorized(self, update: Update) -> None:
         if not update.effective_user: return
         uid = update.effective_user.id
         logger.warning(f"Unauthorized access attempt from {uid}")
 
-    async def send_duties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def send_duties(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handler for text commands like /dienste"""
         if not update.effective_chat or not update.effective_user or not update.message or not update.message.text: return ConversationHandler.END
         chat_id = update.effective_chat.id
@@ -192,7 +198,7 @@ class IncodeBot:
         allowed_id = str(self.user_config.get("allowed_user_id", ""))
         if str(user_id) != allowed_id:
             await self.unauthorized(update)
-            return
+            return ConversationHandler.END
 
         cmd = update.message.text.lower()
         filter_today = "/tagesplan" in cmd or "/heute" in cmd
@@ -200,11 +206,11 @@ class IncodeBot:
         await self._process_duties_request(update.message, context, filter_today, chat_id)
         return ConversationHandler.END
 
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if update.message: await update.message.reply_text("Vorgang abgebrochen.")
         return ConversationHandler.END
 
-    async def _process_duties_request(self, message_obj, context, filter_today, chat_id, custom_date=None):
+    async def _process_duties_request(self, message_obj: Any, context: ContextTypes.DEFAULT_TYPE, filter_today: bool, chat_id: int, custom_date: Optional[datetime] = None) -> None:
         """Shared logic for processing duty requests."""
         try:
             date_label = "Heute"
@@ -260,7 +266,7 @@ class IncodeBot:
             logger.exception(f"Exception in _process_duties_request: {e}")
             await context.bot.send_message(chat_id=chat_id, text=f"❌ Ein Fehler ist aufgetreten: {e}")
 
-    def _fetch_duties_sync(self, filter_today: bool, custom_date: Optional[datetime] = None):
+    def _fetch_duties_sync(self, filter_today: bool, custom_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Helper to run blocking API calls."""
         # Ensure login if needed
         if not self.api.header_key:
@@ -280,9 +286,10 @@ class IncodeBot:
         elif filter_today:
             return self.api.load_daily_plan(datetime.now())
         else:
-            return self.api.load_future_duties()
+            duties = self.api.load_future_duties()
+            return [asdict(d) for d in duties]
 
-    def run(self, debug=False):
+    def run(self, debug: bool = False) -> None:
         """Starts the bot."""
         token = self.user_config.get('telegram_token')
         if not token:
@@ -328,11 +335,13 @@ class IncodeBot:
 
         application.add_handler(conv_handler)
         
-        async def main_loop():
+        async def main_loop() -> None:
             await application.initialize()
             await application.start()
-            # Reduce timeout to 2s to allow faster shutdown loops
-            await application.updater.start_polling(allowed_updates=Update.ALL_TYPES, timeout=2, bootstrap_retries=0)
+            await application.start()
+            if application.updater:
+                 # Reduce timeout to 2s to allow faster shutdown loops
+                 await application.updater.start_polling(allowed_updates=Update.ALL_TYPES, timeout=2, bootstrap_retries=0)
             
             console.print(Align.center("[dim]Bot ist aktiv. Drücke ESC um zurückzukehren.[/dim]"))
 
@@ -346,8 +355,9 @@ class IncodeBot:
             except KeyboardInterrupt:
                  console.print(Align.center("\n[yellow]Beende Bot-Modus (SIGINT) ...[/yellow]"))
             finally:
-                if application.updater.running:
-                    await application.updater.stop()
+                if application.updater:
+                    if application.updater.running:
+                        await application.updater.stop()
                 if application.running:
                     await application.stop()
                 await application.shutdown()
