@@ -156,17 +156,20 @@ import subprocess
 import re
 from typing import Optional
 
-def check_for_updates() -> Optional[str]:
+def check_for_updates(debug: bool = False) -> Optional[str]:
     """Checks for git updates. Returns new version string if updates are available, else None."""
     if not os.path.exists(".git"):
+        if debug: console.print("[yellow]Debug: Keine .git Directory gefunden.[/yellow]")
         return None
     
     try:
         # Fetch latest changes silently (timeout to prevent hanging)
-        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        if debug: console.print("[dim]Debug: Running git fetch...[/dim]")
+        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL if not debug else None, stderr=subprocess.DEVNULL if not debug else None, timeout=10)
         
         # Check if behind upstream
         # HEAD..@{u} calculates commits reachable from upstream but not from HEAD
+        if debug: console.print("[dim]Debug: Checking rev-list...[/dim]")
         res = subprocess.run(
             ["git", "rev-list", "--count", "HEAD..@{u}"], 
             capture_output=True, 
@@ -175,6 +178,9 @@ def check_for_updates() -> Optional[str]:
         )
         
         if res.returncode == 0 and res.stdout.strip().isdigit():
+            count = int(res.stdout.strip())
+            if debug: console.print(f"[dim]Debug: Commits behind: {count}[/dim]")
+            
             if count > 0:
                 # Try to get remote version
                 try:
@@ -190,8 +196,11 @@ def check_for_updates() -> Optional[str]:
                             return match.group(1)
                 except: pass
                 return "Neu" # Fallback if version extraction fails but update exists
+        elif debug:
+            console.print(f"[yellow]Debug: git rev-list failed: {res.stderr}[/yellow]")
             
-    except Exception:
+    except Exception as e:
+        if debug: console.print(f"[red]Debug: Update check error: {e}[/red]")
         pass
         
     return None
