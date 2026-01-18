@@ -40,6 +40,9 @@ CREDENTIALS_FILE = '.credentials.json'
 BASE_URL_DEFAULT = "https://dienstplan.k.roteskreuz.at"
 DEFAULT_GUID = None
 
+# Global state to remember if keyring is broken/timed out
+KEYRING_DISABLED = False
+
 def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
     Loads credentials.
@@ -48,22 +51,19 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
     import sys
     import signal
+    global KEYRING_DISABLED
     
     debug = "--debug" in sys.argv
     no_keyring = "--no-keyring" in sys.argv
     
-    # Global state to remember if keyring is broken/timed out
-    if not hasattr(load_credentials, "keyring_disabled"):
-        load_credentials.keyring_disabled = False
-
-    if load_credentials.keyring_disabled:
+    if KEYRING_DISABLED:
         no_keyring = True
 
     def _timeout_handler(signum, frame):
         raise TimeoutError("Keyring operation timed out")
 
     def _safe_keyring_set(service, username, password):
-        if no_keyring or load_credentials.keyring_disabled:
+        if no_keyring or KEYRING_DISABLED:
             raise Exception("Keyring disabled")
             
         if sys.platform != 'win32':
@@ -77,7 +77,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                 signal.alarm(0)
 
     def _safe_keyring_get(service, username):
-        if no_keyring or load_credentials.keyring_disabled:
+        if no_keyring or KEYRING_DISABLED:
             raise Exception("Keyring disabled")
 
         if sys.platform != 'win32':
@@ -91,9 +91,10 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                 signal.alarm(0)
 
     def _handle_keyring_error(e, context=""):
+        global KEYRING_DISABLED
         if isinstance(e, TimeoutError):
             console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
-            load_credentials.keyring_disabled = True
+            KEYRING_DISABLED = True
         elif debug:
             console.print(f"[red]Debug: Keyring Fehler ({context}): {e}[/red]")
     
@@ -136,7 +137,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         users = data.get('users', [])
         changed = False
         
-        if no_keyring or load_credentials.keyring_disabled:
+        if no_keyring or KEYRING_DISABLED:
              if debug: console.print("[dim]Debug: Keyring disabled/skipped.[/dim]")
         else:
             # Check if migration needed (files with plain text passwords)
@@ -153,7 +154,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                     except Exception as e:
                         _handle_keyring_error(e, "Migration Password")
                         # If timed out, stop trying directly
-                        if load_credentials.keyring_disabled: break
+                        if KEYRING_DISABLED: break
 
                 # 2. Migrate plain text token to keyring
                 if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
@@ -163,14 +164,14 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                         changed = True
                     except Exception as e:
                         _handle_keyring_error(e, "Migration Token")
-                        if load_credentials.keyring_disabled: break
+                        if KEYRING_DISABLED: break
         
             if changed:
                 if debug: console.print("[dim]Debug: Saving migrated changes to file...[/dim]")
                 _write_credentials(data)
             
             # Hydrate passwords from Keyring if requested
-            if hydrate and not load_credentials.keyring_disabled:
+            if hydrate and not KEYRING_DISABLED:
                 if debug: console.print("[dim]Debug: Hydrating credentials (reading from keyring)...[/dim]")
                 for u in users:
                     # Password
@@ -217,7 +218,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     import signal
     no_keyring = "--no-keyring" in sys.argv
     # Reuse disabled state if load_credentials ran before
-    if hasattr(load_credentials, "keyring_disabled") and load_credentials.keyring_disabled:
+    if KEYRING_DISABLED:
         no_keyring = True
 
     def _timeout_handler(signum, frame):

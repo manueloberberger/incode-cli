@@ -34,4 +34,4 @@ jobs:
     # Optional: Fail on type errors? For now just run it to see output in logs
     - name: Run Type Checks
       run: |
-        mypy src/ --ignore-missing-imports || true
+        mypy src/ --ignore-missing-imports
