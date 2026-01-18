@@ -30,7 +30,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.5.0"
+VERSION = "2.5.5"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -437,6 +437,40 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
     
     data['users'] = users
     _write_credentials(data)
+
+def get_update_interval() -> int:
+    """Returns the update interval in seconds. Default: 21600 (6 hours)."""
+    try:
+        data = load_credentials(hydrate=False)
+        return int(data.get('update_interval', 21600))
+    except:
+        return 21600
+
+def set_update_interval(seconds: int) -> None:
+    """Saves the update interval in seconds."""
+    try:
+        data = load_credentials(hydrate=False)
+        data['update_interval'] = seconds
+        _write_credentials(data)
+    except:
+        pass
+
+def get_last_update_check() -> float:
+    """Returns the timestamp of the last update check, or 0 if never checked."""
+    try:
+        data = load_credentials(hydrate=False)
+        return float(data.get('last_update_check', 0))
+    except:
+        return 0.0
+
+def set_last_update_check(timestamp: float) -> None:
+    """Saves the timestamp of the last update check."""
+    try:
+        data = load_credentials(hydrate=False)
+        data['last_update_check'] = timestamp
+        _write_credentials(data)
+    except:
+        pass
 
 def _write_credentials(data: Dict[str, Any]) -> None:
     """

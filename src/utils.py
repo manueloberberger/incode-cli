@@ -6,7 +6,7 @@ from typing import Optional, Any
 from requests.adapters import HTTPAdapter
 import shutil
 import re
-from src.config import DEFAULT_TIMEOUT, console
+from src.config import DEFAULT_TIMEOUT, console, get_last_update_check, set_last_update_check, get_update_interval
 
 # Platform specific imports
 if os.name == 'nt':
@@ -158,12 +158,19 @@ import subprocess
 import re
 from typing import Optional
 
-def check_for_updates(debug: bool = False) -> Optional[str]:
+def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Optional[str]:
     """Checks for git updates. Returns new version string if updates are available, else None."""
     if not os.path.exists(".git"):
         if debug: console.print("[yellow]Debug: Keine .git Directory gefunden.[/yellow]")
         return None
     
+    # Check cache
+    if not debug and not ignore_cache:
+        last_check = get_last_update_check()
+        interval = get_update_interval()
+        if time.time() - last_check < interval:
+            return None
+
     try:
         # Fetch latest changes silently (timeout to prevent hanging)
         if debug: console.print("[dim]Debug: Running git fetch...[/dim]")
@@ -204,6 +211,10 @@ def check_for_updates(debug: bool = False) -> Optional[str]:
     except Exception as e:
         if debug: console.print(f"[red]Debug: Update check error: {e}[/red]")
         pass
+    
+    # Update timestamp if we actually checked (successfully or not, to avoid spamming on error)
+    if not debug:
+        set_last_update_check(time.time())
         
     return None
 

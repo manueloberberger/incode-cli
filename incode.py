@@ -85,7 +85,7 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
         elif selected == "delete":
             # Sub-menu for deletion
             del_options: List[Tuple[str, Any]] = [(f"Lösche {u['username']}", u['username']) for u in users]
-            del_options.append(("Zurück", "back"))
+            del_options.append(("🔙  Zurück", "back"))
             to_delete = interactive_menu(del_options, title="BENUTZER LÖSCHEN")
             if to_delete and to_delete != "back":
                 remove_user(to_delete)
@@ -143,7 +143,7 @@ def run_cli(debug: bool = False) -> None:
     startup_checks(debug=debug)
     
     from src.api import IncodeRequests
-    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search
+    from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search, show_settings_menu
     from src.utils import prompt_yes_no
     
     force_menu = False
@@ -172,7 +172,7 @@ def run_cli(debug: bool = False) -> None:
                 border_style="dim"
             )
         ))
-        time.sleep(1.5) # Give user time to read
+        time.sleep(0.7) # Give user time to read
         
         s, m = incode.login(u, p)
         if not s: 
@@ -198,6 +198,7 @@ def run_cli(debug: bool = False) -> None:
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
             ("📺  Live-Monitor", "live"),
             ("🤖  Telegram Bot", "bot"),
+            ("⚙️   Einstellungen", "settings"),
             ("👤  Benutzer wechseln / Logout", "logout"),
             ("🚪  Beenden", "exit")
         ]
@@ -227,6 +228,8 @@ def run_cli(debug: bool = False) -> None:
                 show_live_monitor(incode)
             elif selection == "bot":
                 start_bot_mode(incode)
+            elif selection == "settings":
+                show_settings_menu()
             elif selection == "logout":
                 should_logout = True
                 force_menu = True

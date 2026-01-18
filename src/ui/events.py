@@ -14,7 +14,8 @@ def show_events_menu(incode: Any) -> None:
     console.print()
     options = [
         ("📋  Meine Ambulanz-Dienste", "my"),
-        ("🗓️  Veranstaltungs-Übersicht (Alle)", "all")
+        ("🗓️  Veranstaltungs-Übersicht (Alle)", "all"),
+        ("🔙  Zurück", None)
     ]
     sel = interactive_menu(options, title="🚑  EVENTS / AMBULANZEN")
     if not sel: return

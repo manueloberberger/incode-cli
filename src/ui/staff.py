@@ -21,6 +21,7 @@ def show_staff_search(incode: Any) -> None:
     console.print(Align.center("[bold header]MITARBEITER-VERZEICHNIS[/bold header]"))
     console.print()
     console.print(Align.center("[dim]Suche nach Name, PNR oder Kürzel ist möglich ...[/dim]"))
+    console.print(Align.center("[dim](Drücke ENTER ohne Eingabe oder ESC zum Abbrechen)[/dim]"))
     console.print()
     
     query = centered_input("[bold green]>[/bold green] ")
@@ -43,6 +44,8 @@ def show_staff_search(incode: Any) -> None:
         for r in results:
             label = f"{r.get('_display_name')} [dim]({r.get('personalnummer', 'n.a.')})[/dim]"
             options.append((label, r))
+        
+        options.append(("🔙  Zurück", None))
         
         selected_person = interactive_menu(options, title=f"TREFFER-AUSWAHL ({len(results)})")
         if not selected_person: return
@@ -235,6 +238,7 @@ def show_colleague_search(incode: Any) -> None:
     console.print(Align.center("[bold header]GEMEINSAME DIENSTE[/bold header]"))
     console.print()
     console.print(Align.center("[dim]Name des Kollegen eingeben ...[/dim]"))
+    console.print(Align.center("[dim](Drücke ENTER ohne Eingabe oder ESC zum Abbrechen)[/dim]"))
     console.print()
 
     name_query = centered_input("[bold green]>[/bold green] ")
@@ -258,6 +262,7 @@ def show_colleague_search(incode: Any) -> None:
             options.append((label, r.get('_display_name')))
             
         options.append((f"Nach Text '{name_query}' suchen (Fallback)", name_query))
+        options.append(("🔙  Zurück", None))
         
         # Determine title
         if len(results) == 1:
