@@ -12,3 +12,5 @@ js_urls.txt
 .idea/
 .DS_Store
 .venv/
+venv_ci/
+env/
