@@ -7,7 +7,7 @@ LINK_NAME="incode"
 VENV_DIR="$PROJECT_DIR/.venv"
 
 echo "=========================================="
-echo "   🔧 incode-cli Startup Fixer"
+echo "   🚀 incode-cli Installer & Fixer"
 echo "=========================================="
 echo "Project Directory: $PROJECT_DIR"
 echo ""
