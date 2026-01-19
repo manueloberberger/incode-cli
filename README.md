@@ -13,13 +13,8 @@
 git clone https://github.com/manueloberberger/incode-cli.git
 cd incode-cli
 
-# 2. Setup environment and install dependencies
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 3. Make executable
-chmod +x incode
+# 2. Install & Setup (Automated)
+./install.sh
 ```
 
 ## 💡 Usage
