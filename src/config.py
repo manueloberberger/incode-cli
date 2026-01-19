@@ -192,4 +192,4 @@ def get_storage_status(username: str) -> str:
     Returns a string indicating where the password is stored.
     (Now always JSON/Portable)
     """
-    return "✅ Portable (JSON)"
+    return "✅ Lokal (JSON)"
