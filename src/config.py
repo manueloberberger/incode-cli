@@ -2,12 +2,6 @@ import os
 import json
 import sys
 from typing import Optional, Dict, List, Any
-import keyring
-try:
-    from cryptography.fernet import Fernet
-    CRYPTOGRAPHY_AVAILABLE = True
-except ImportError:
-    CRYPTOGRAPHY_AVAILABLE = False
 
 from rich.console import Console
 from rich.theme import Theme
@@ -30,7 +24,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.5.8"
+VERSION = "2.6.0"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -46,293 +40,22 @@ CREDENTIALS_FILE = '.credentials.json'
 BASE_URL_DEFAULT = "https://dienstplan.k.roteskreuz.at"
 DEFAULT_GUID = None
 
-# Global state to remember if keyring is broken/timed out
-KEYRING_DISABLED = False
-
-def _timeout_handler(signum: int, frame: Any) -> None:
-    raise TimeoutError("Keyring operation timed out")
-
-def _safe_keyring_get(service: str, username: str) -> Optional[str]:
-    import sys
-    import signal
-    global KEYRING_DISABLED
-
-    no_keyring = "--no-keyring" in sys.argv
-    if no_keyring or KEYRING_DISABLED:
-        return None
-
-    if sys.platform != 'win32':
-        signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(3) # 3 seconds timeout
-        
-    try:
-        return keyring.get_password(service, username)
-    except Exception as e:
-        if isinstance(e, TimeoutError):
-            global console
-            from rich.align import Align
-            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
-            KEYRING_DISABLED = True
-        return None
-    finally:
-        if sys.platform != 'win32':
-            signal.alarm(0)
-
-def _safe_keyring_set(service: str, username: str, password: str) -> bool:
-    import sys
-    import signal
-    global KEYRING_DISABLED
-
-    no_keyring = "--no-keyring" in sys.argv
-    if no_keyring or KEYRING_DISABLED:
-        return False
-        
-    if sys.platform != 'win32':
-        signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(3) # 3 seconds timeout
-        
-    try:
-        keyring.set_password(service, username, password)
-        return True
-    except Exception as e:
-        if isinstance(e, TimeoutError):
-            global console
-            from rich.align import Align
-            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
-            KEYRING_DISABLED = True
-        return False
-    finally:
-        if sys.platform != 'win32':
-            signal.alarm(0)
-
-def _get_encryption_key() -> Optional[bytes]:
-    """
-    Retrieves or generates the encryption key from Keyring.
-    Returns None if Keyring is disabled or unavailable.
-    """
-    if KEYRING_DISABLED or not CRYPTOGRAPHY_AVAILABLE:
-        return None
-        
-    service_name = "incode-cli-crypto"
-    username = "config-key"
-    
-    try:
-        key = _safe_keyring_get(service_name, username)
-        if key:
-            return key.encode('utf-8')
-            
-        # If keyring timed out during get, do NOT generate a new key
-        if KEYRING_DISABLED:
-            return None
-
-        # Generate new key
-        new_key = Fernet.generate_key()
-        success = _safe_keyring_set(service_name, username, new_key.decode('utf-8'))
-        if not success:
-            return None
-        return new_key
-    except Exception as e:
-        # If we can't access keyring for the key, we can't use encryption
-        return None
-
-def _encrypt_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Encrypts the data dictionary if possible.
-    Returns the original data if encryption is not possible.
-    """
-    key = _get_encryption_key()
-    if not key:
-        return data
-        
-    try:
-        f = Fernet(key)
-        json_str = json.dumps(data)
-        encrypted_bytes = f.encrypt(json_str.encode('utf-8'))
-        return {
-            "version": 2,
-            "encrypted_data": encrypted_bytes.decode('utf-8')
-        }
-    except Exception:
-        return data
-
-def _decrypt_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Decrypts the data if it's encrypted.
-    Returns empty dict if decryption fails.
-    """
-    if "encrypted_data" not in data:
-        return data
-        
-    key = _get_encryption_key()
-    if not key:
-        # We have encrypted data but no key (e.g. keyring locked/reset)
-        # We cannot recover the data.
-        raise ValueError("Encryption key not available")
-        
-    try:
-        f = Fernet(key)
-        encrypted_bytes = data["encrypted_data"].encode('utf-8')
-        decrypted_bytes = f.decrypt(encrypted_bytes)
-        from typing import cast
-        return cast(Dict[str, Any], json.loads(decrypted_bytes.decode('utf-8')))
-    except Exception as e:
-        raise ValueError(f"Decryption failed: {e}")
-
-
 def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """
-    Loads credentials.
+    Loads credentials from the JSON file.
     Returns a dict with structure: {'users': [user_dict, ...], 'last_active': str}
-    Automatically migrates old format to new format and migrates plain text passwords to keyring.
     """
-    import sys
-    import signal
-    global KEYRING_DISABLED
-    
-    debug = "--debug" in sys.argv
-    no_keyring = "--no-keyring" in sys.argv
-    
-    def _handle_keyring_error(e: Exception, context: str = "") -> None:
-        global KEYRING_DISABLED
-        if isinstance(e, TimeoutError):
-            console.print(Align.center(f"[yellow]Warnung: Keyring reagiert nicht (Timeout). Falle auf Datei-Speicher zurück.[/yellow]\n"))
-            KEYRING_DISABLED = True
-        elif debug:
-            console.print(f"[red]Debug: Keyring Fehler ({context}): {e}[/red]")
-    
-    if debug: console.print("[dim]Debug: Entering load_credentials...[/dim]")
-    
     if not os.path.exists(CREDENTIALS_FILE):
-        if debug: console.print("[dim]Debug: Credentials file not found.[/dim]")
         return {}
     
     try:
         with open(CREDENTIALS_FILE, 'r') as f:
             data = json.load(f)
-        
-        # Determine if data is encrypted
-        was_encrypted = False
-        if "encrypted_data" in data:
-            try:
-                data = _decrypt_data(data)
-                was_encrypted = True
-            except Exception as e:
-                # CRITICAL FIX: If decryption failed because Keyring timed out, 
-                # do NOT wipe the config automatically. Ask the user.
-                if KEYRING_DISABLED or "Encryption key not available" in str(e):
-                    console.print(Align.center(f"[red]Fehler: Konfiguration ist verschlüsselt, aber der Keyring konnte nicht geöffnet werden.[/red]"))
-                    console.print(Align.center("[yellow]Der Zugriff auf die verschlüsselte Konfigurations-Datei ist nicht möglich.[/yellow]"))
-                    
-                    if Prompt.ask("[bold]Möchten Sie die Konfiguration zurücksetzen und sich neu anmelden?[/bold]", choices=["j", "n"], default="j") == "j":
-                        try:
-                            os.remove(CREDENTIALS_FILE)
-                            console.print(Align.center("[green]Konfiguration gelöscht. Bitte melden Sie sich neu an.[/green]"))
-                            console.input("[dim]Drücken Sie Enter um fortzufahren...[/dim]")
-                            return {}
-                        except Exception as del_err:
-                            console.print(f"[red]Fehler beim Löschen der Datei: {del_err}[/red]")
-                            sys.exit(1)
-                    else:
-                        console.print(Align.center("[yellow]Bitte entsperren Sie Ihren Schlüsselbund (Keyring) und starten Sie die App neu.[/yellow]"))
-                        sys.exit(1)
-
-                console.print(Align.center(f"[red]Fehler beim Entschlüsseln der Konfiguration: {e}[/red]"))
-                console.print(Align.center("[yellow]Die Konfigurationsdatei muss neu erstellt werden (bitte neu einloggen).[/yellow]"))
-                return {}
-
-        # Determine if data is old format (direct dict) or new format (list of users)
-        if 'users' not in data and ('username' in data or 'password' in data):
-            # Convert old format to new format
-            user = {
-                'username': data.get('username'),
-                'password': data.get('password'),
-                'telegram_token': data.get('telegram_token'),
-                'base_url': data.get('base_url', BASE_URL_DEFAULT),
-                'extra_guids': data.get('extra_guids', []),
-                'real_name': data.get('real_name')
-            }
-            new_data = {
-                'users': [user],
-                'last_active': user['username']
-            }
-            # Save immediately to complete migration
-            try:
-                with open(CREDENTIALS_FILE, 'w') as f:
-                    json.dump(new_data, f, indent=4)
-            except: pass
-            # Re-assign data to proceed with processing
-            data = new_data
-        
+            
+        # Ensure 'users' list exists
         if 'users' not in data:
             data['users'] = []
             
-        users = data.get('users', [])
-        changed = False
-        
-        if no_keyring or KEYRING_DISABLED:
-             if debug: console.print("[dim]Debug: Keyring disabled/skipped.[/dim]")
-        else:
-            # Check if migration needed (files with plain text passwords)
-            if debug and users: console.print("[dim]Debug: Checking for necessary migrations...[/dim]")
-            for u in users:
-                # 1. Migrate plain text password to keyring
-                if u.get('password') and not u.get('password').startswith("KEYRING:"):
-                    try:
-                        if debug: console.print(f"[dim]Debug: Migrating password for {u['username']} to keyring...[/dim]")
-                        _safe_keyring_set("incode-cli", u['username'], u['password'])
-                        u['password'] = None # Remove from file
-                        changed = True
-                        console.print(Align.center(f"[green]Passwort für {u['username']} in sicherem Keyring migriert.[/green]"))
-                    except Exception as e:
-                        _handle_keyring_error(e, "Migration Password")
-                        # If timed out, stop trying directly
-                        if KEYRING_DISABLED: break
-
-                # 2. Migrate plain text token to keyring
-                if u.get('telegram_token') and not u.get('telegram_token').startswith("KEYRING:"):
-                    try:
-                        _safe_keyring_set("incode-cli-telegram", u['username'], u['telegram_token'])
-                        u['telegram_token'] = None # Remove from file
-                        changed = True
-                    except Exception as e:
-                        _handle_keyring_error(e, "Migration Token")
-                        if KEYRING_DISABLED: break
-        
-            if changed:
-                if debug: console.print("[dim]Debug: Saving migrated changes to file...[/dim]")
-                _write_credentials(data)
-            elif not was_encrypted and not no_keyring and not KEYRING_DISABLED and CRYPTOGRAPHY_AVAILABLE:
-                # If content was not encrypted but we can encrypt, do it now
-                if debug: console.print("[dim]Debug: Migrating configuration to encrypted format...[/dim]")
-                _write_credentials(data)
-            
-            # Hydrate passwords from Keyring if requested
-            if hydrate and not KEYRING_DISABLED:
-                if debug: console.print("[dim]Debug: Hydrating credentials (reading from keyring)...[/dim]")
-                for u in users:
-                    # Password
-                    if u.get('password') is None:
-                        try:
-                            if debug: console.print(f"[dim]Debug: Lade Passwort für {u['username']} aus Keyring...[/dim]")
-                            pw = _safe_keyring_get("incode-cli", u['username'])
-                            if pw:
-                                u['password'] = pw
-                            elif debug: console.print(f"[dim]Debug: Kein Passwort im Keyring für {u['username']} gefunden.[/dim]")
-                        except Exception as e:
-                            _handle_keyring_error(e, "Load Password")
-                    
-                    # Token
-                    if u.get('telegram_token') is None:
-                        try:
-                            if debug: console.print(f"[dim]Debug: Lade Token für {u['username']} aus Keyring...[/dim]")
-                            token = _safe_keyring_get("incode-cli-telegram", u['username'])
-                            if token:
-                                u['telegram_token'] = token
-                        except Exception as e:
-                            _handle_keyring_error(e, "Load Token")
-        
-        if debug: console.print("[dim]Debug: load_credentials finished.[/dim]")
-        # Mypy cannot infer that data is strictly Dict[str, Any] after loading from JSON
         from typing import cast
         return cast(Dict[str, Any], data)
     except Exception as e:
@@ -341,45 +64,20 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
 
 def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
     """
-    Saves or updates a specific user.
+    Saves or updates a specific user to the JSON file.
     """
     if extra_guids is None:
         extra_guids = []
     
-    data = load_credentials(hydrate=False)
+    data = load_credentials()
     users = data.get('users', [])
     
     # Update existing or add new
     found = False
     
-    import sys
-    import signal
-    no_keyring = "--no-keyring" in sys.argv
-    # Reuse disabled state if load_credentials ran before
-    if KEYRING_DISABLED:
-        no_keyring = True
-
-    def _timeout_handler(signum: int, frame: Any) -> None:
-        raise TimeoutError("Keyring operation timed out")
-
-    # Save secret to keyring
-    keyring_success = False
-    
-    if not no_keyring:
-        success = _safe_keyring_set("incode-cli", username, password)
-        if success:
-            keyring_success = True
-    else:
-        # User explicitly requested no keyring via flag or it was disabled
-        pass
-
     for u in users:
         if u['username'] == username:
-            if keyring_success:
-                u['password'] = None # Securely stored
-            else:
-                u['password'] = password # Fallback
-                
+            u['password'] = password
             u['base_url'] = base_url
             u['extra_guids'] = extra_guids
             u['real_name'] = real_name
@@ -389,7 +87,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     if not found:
         users.append({
             'username': username,
-            'password': None if keyring_success else password,
+            'password': password,
             'base_url': base_url,
             'extra_guids': extra_guids,
             'real_name': real_name
@@ -401,7 +99,7 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
     _write_credentials(data)
 
 def remove_user(username: str) -> None:
-    data = load_credentials(hydrate=False)
+    data = load_credentials()
     users = data.get('users', [])
     data['users'] = [u for u in users if u['username'] != username]
     
@@ -409,48 +107,15 @@ def remove_user(username: str) -> None:
         data['last_active'] = data['users'][0]['username'] if data['users'] else None
         
     _write_credentials(data)
-    
-    # Remove from keyring
-    def _safe_keyring_delete(service: str, username: str) -> None:
-        import sys
-        import signal
-        if sys.platform != 'win32':
-            signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(3)
-        try:
-            keyring.delete_password(service, username)
-        except Exception:
-            pass
-        finally:
-            if sys.platform != 'win32':
-                signal.alarm(0)
-
-    _safe_keyring_delete("incode-cli", username)
-    _safe_keyring_delete("incode-cli-telegram", username)
 
 def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) -> None:
     """
     Updates specific fields for a user. If username is None, updates the last active user.
     """
-    data = load_credentials(hydrate=False)
+    data = load_credentials()
     target_user = username or data.get('last_active')
     
     if not target_user: return
-
-    # Handle Keyring updates
-    if 'password' in updates:
-        success = _safe_keyring_set("incode-cli", target_user, updates['password'])
-        if success:
-            updates['password'] = None # Don't save to file
-        else:
-            console.print(Align.center(f"[warning]Passwort konnte nicht in Keyring aktualisiert werden (Timeout/Fehler), speichere lokal.[/warning]"))
-            
-    if 'telegram_token' in updates:
-        success = _safe_keyring_set("incode-cli-telegram", target_user, updates['telegram_token'])
-        if success:
-            updates['telegram_token'] = None
-        else:
-            console.print(Align.center(f"[warning]Telegram Token konnte nicht in Keyring aktualisiert werden (Timeout/Fehler), speichere lokal.[/warning]"))
 
     users = data.get('users', [])
     for u in users:
@@ -464,7 +129,7 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
 def get_update_interval() -> int:
     """Returns the update interval in seconds. Default: 21600 (6 hours)."""
     try:
-        data = load_credentials(hydrate=False)
+        data = load_credentials()
         return int(data.get('update_interval', 21600))
     except:
         return 21600
@@ -472,7 +137,7 @@ def get_update_interval() -> int:
 def set_update_interval(seconds: int) -> None:
     """Saves the update interval in seconds."""
     try:
-        data = load_credentials(hydrate=False)
+        data = load_credentials()
         data['update_interval'] = seconds
         _write_credentials(data)
     except:
@@ -481,7 +146,7 @@ def set_update_interval(seconds: int) -> None:
 def get_last_update_check() -> float:
     """Returns the timestamp of the last update check, or 0 if never checked."""
     try:
-        data = load_credentials(hydrate=False)
+        data = load_credentials()
         return float(data.get('last_update_check', 0))
     except:
         return 0.0
@@ -489,7 +154,7 @@ def get_last_update_check() -> float:
 def set_last_update_check(timestamp: float) -> None:
     """Saves the timestamp of the last update check."""
     try:
-        data = load_credentials(hydrate=False)
+        data = load_credentials()
         data['last_update_check'] = timestamp
         _write_credentials(data)
     except:
@@ -497,20 +162,15 @@ def set_last_update_check(timestamp: float) -> None:
 
 def _write_credentials(data: Dict[str, Any]) -> None:
     """
-    Writes credentials atomically to prevent data loss on crash.
+    Writes credentials to JSON file atomically.
     """
     import tempfile
     
-    # Write to a temp file first
     try:
         # Create temp file in the same directory to ensure atomic move works
         dir_name = os.path.dirname(os.path.abspath(CREDENTIALS_FILE)) or '.'
         with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, encoding='utf-8') as tf:
-            # We NO LONGER encrypt the entire file. Logic changed to improve reliability.
-            # Passwords are still in Keyring (if available), but the JSON structure is plain.
-            data_to_write = data
-                
-            json.dump(data_to_write, tf, indent=4)
+            json.dump(data, tf, indent=4)
             temp_name = tf.name
             
         # Permission set on temp file
@@ -529,19 +189,7 @@ def _write_credentials(data: Dict[str, Any]) -> None:
 
 def get_storage_status(username: str) -> str:
     """
-    Returns a string indicating where the password is stored for the given user.
+    Returns a string indicating where the password is stored.
+    (Now always JSON/Portable)
     """
-    try:
-        # load_credentials handles decryption and migration automatically
-        data = load_credentials(hydrate=False)
-        users = data.get('users', [])
-        for u in users:
-            if u.get('username') == username:
-                if u.get('password'):
-                    return "⚠️  Unverschlüsselt (JSON)"
-                else:
-                    return "🔒 Verschlüsselt (Keyring)"
-    except Exception:
-        pass
-        
-    return "❓ Unbekannt"
+    return "✅ Portable (JSON)"
