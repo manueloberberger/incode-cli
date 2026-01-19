@@ -30,7 +30,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.5.7"
+VERSION = "2.5.8"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -121,6 +121,10 @@ def _get_encryption_key() -> Optional[bytes]:
         if key:
             return key.encode('utf-8')
             
+        # If keyring timed out during get, do NOT generate a new key
+        if KEYRING_DISABLED:
+            return None
+
         # Generate new key
         new_key = Fernet.generate_key()
         success = _safe_keyring_set(service_name, username, new_key.decode('utf-8'))
@@ -213,6 +217,25 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
                 data = _decrypt_data(data)
                 was_encrypted = True
             except Exception as e:
+                # CRITICAL FIX: If decryption failed because Keyring timed out, 
+                # do NOT wipe the config automatically. Ask the user.
+                if KEYRING_DISABLED or "Encryption key not available" in str(e):
+                    console.print(Align.center(f"[red]Fehler: Konfiguration ist verschlüsselt, aber der Keyring konnte nicht geöffnet werden.[/red]"))
+                    console.print(Align.center("[yellow]Der Zugriff auf die verschlüsselte Konfigurations-Datei ist nicht möglich.[/yellow]"))
+                    
+                    if Prompt.ask("[bold]Möchten Sie die Konfiguration zurücksetzen und sich neu anmelden?[/bold]", choices=["j", "n"], default="j") == "j":
+                        try:
+                            os.remove(CREDENTIALS_FILE)
+                            console.print(Align.center("[green]Konfiguration gelöscht. Bitte melden Sie sich neu an.[/green]"))
+                            console.input("[dim]Drücken Sie Enter um fortzufahren...[/dim]")
+                            return {}
+                        except Exception as del_err:
+                            console.print(f"[red]Fehler beim Löschen der Datei: {del_err}[/red]")
+                            sys.exit(1)
+                    else:
+                        console.print(Align.center("[yellow]Bitte entsperren Sie Ihren Schlüsselbund (Keyring) und starten Sie die App neu.[/yellow]"))
+                        sys.exit(1)
+
                 console.print(Align.center(f"[red]Fehler beim Entschlüsseln der Konfiguration: {e}[/red]"))
                 console.print(Align.center("[yellow]Die Konfigurationsdatei muss neu erstellt werden (bitte neu einloggen).[/yellow]"))
                 return {}
@@ -483,10 +506,9 @@ def _write_credentials(data: Dict[str, Any]) -> None:
         # Create temp file in the same directory to ensure atomic move works
         dir_name = os.path.dirname(os.path.abspath(CREDENTIALS_FILE)) or '.'
         with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False, encoding='utf-8') as tf:
-            # Encrypt if possible before writing
+            # We NO LONGER encrypt the entire file. Logic changed to improve reliability.
+            # Passwords are still in Keyring (if available), but the JSON structure is plain.
             data_to_write = data
-            if not KEYRING_DISABLED and CRYPTOGRAPHY_AVAILABLE:
-                data_to_write = _encrypt_data(data)
                 
             json.dump(data_to_write, tf, indent=4)
             temp_name = tf.name
