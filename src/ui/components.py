@@ -104,8 +104,8 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
         
         if current_user:
             s_status = get_storage_status(current_user)
-            s_short = "🔒 Keyring" if "Keyring" in s_status else "⚠️ JSON"
-            s_color = "green" if "Keyring" in s_status else "yellow"
+            s_short = "✅ JSON" 
+            s_color = "green"
             console.print(Align.center(f"[dim]Angemeldet als: [bold white]{current_user}[/bold white] [{s_color}]({s_short})[/{s_color}][/dim]"))
             console.print() # Spacer
         
