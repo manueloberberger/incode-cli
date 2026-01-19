@@ -8,4 +8,12 @@ done
 DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 cd "$DIR"
+
+# Check if .venv exists
+if [ ! -f ".venv/bin/python3" ]; then
+  echo "❌ Error: Virtual environment not found."
+  echo "👉 Please run './install.sh' first to set up the project."
+  exit 1
+fi
+
 exec ./.venv/bin/python3 incode.py "$@"
