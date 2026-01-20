@@ -1,4 +1,9 @@
 [tool.mypy]
-explicit_package_bases = true
+strict = true
 ignore_missing_imports = true
-no_implicit_optional = true
+files = ["incode.py", "src/"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true

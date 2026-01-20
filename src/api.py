@@ -15,6 +15,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.config import console, DEFAULT_GUID
 from src.utils import TimeoutHTTPAdapter, get_holidays, handle_api_errors
+from src.parser import (
+    fix_datetime,
+    calculate_staff_score,
+    parse_staff_contact,
+    extract_role,
+    parse_personal_duties,
+    parse_daily_plan_raw
+)
 from src.models import Duty, StaffMember, Absence
 
 CACHE_FILE = ".incode_cache.json"
@@ -140,13 +148,7 @@ class IncodeRequests:
         if self.header_key and self.header_value: headers[self.header_key] = self.header_value
         return headers
 
-    def _fix_datetime(self, s: Optional[str]) -> Optional[datetime]:
-        if not s: return None
-        try:
-            dt = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')
-            offset = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
-            return dt + timedelta(seconds=offset)
-        except: return None
+    # _fix_datetime moved to src.parser
 
     def get_project_guids(self) -> Dict[str, str]:
         """Fetches available project GUIDs and Names from the projects page."""
@@ -193,7 +195,7 @@ class IncodeRequests:
                 for card in soup.find_all('div', attrs={'data-role': 'incode-project'}):
                     guid, b_s, e_s = card.get('data-dataguid'), card.get('data-begin'), card.get('data-end')
                     if not guid or not b_s: continue
-                    b_dt, e_dt = self._fix_datetime(b_s), self._fix_datetime(e_s)
+                    b_dt, e_dt = fix_datetime(b_s), fix_datetime(e_s)
                     if not b_dt: continue
                     t_tag = card.find('h3', class_='card-title')
                     events.append({'guid': guid, 'begin': b_dt, 'end': e_dt, 'vehicle': t_tag.get_text(strip=True) if t_tag else "Event", 'location': '', 'crew': {}, 'open_slots': 0})
@@ -210,7 +212,7 @@ class IncodeRequests:
                             it = data.get('data', {}).values() if isinstance(data.get('data'), dict) else data.get('data', [])
                             for item in it:
                                 if not isinstance(item, dict): continue
-                                pg, cb = item.get('projectDataGuid'), self._fix_datetime(item.get('begin'))
+                                pg, cb = item.get('projectDataGuid'), fix_datetime(item.get('begin'))
                                 if not pg or not cb: continue
                                 for e in events:
                                     if e['guid'] == pg and e['begin'].date() == cb.date():
@@ -233,18 +235,11 @@ class IncodeRequests:
             guid = self.org_unit_data_guid or DEFAULT_GUID
             if not guid: return []
             resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'})
-            if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode='include_all')
+            if resp.status_code == 200: return parse_personal_duties(resp.json(), filter_mode='include_all')
         except: pass
         return []
 
-    def _calculate_staff_score(self, p: Dict[str, Any]) -> int:
-        score = 0
-        if p.get('telefon'): score += 10
-        if p.get('email'): score += 10
-        if p.get('ressourceToOccupations'): score += 5 * len(p.get('ressourceToOccupations', []))
-        if p.get('maportal_role') and p.get('maportal_role') != 'dutytype_active': score += 5
-        score += len(str(p.get('_display_name', '')))
-        return score
+    # _calculate_staff_score moved to src.parser
 
     def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
         now = datetime.now()
@@ -266,7 +261,7 @@ class IncodeRequests:
             try:
                 resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
                 if resp.status_code == 200: 
-                    return self._parse_staff_contact(resp.json(), query_name)
+                    return parse_staff_contact(resp.json(), query_name)
             except Exception: pass
             return []
 
@@ -277,7 +272,7 @@ class IncodeRequests:
                 for p in found:
                     name = str(p.get('_display_name', ''))
                     pnr = str(p.get('personalnummer', '')) if p.get('personalnummer') else None
-                    score = self._calculate_staff_score(p)
+                    score = calculate_staff_score(p)
                     p['_score'] = score
                     
                     if pnr:
@@ -309,27 +304,9 @@ class IncodeRequests:
         results.sort(key=lambda x: x.get('_display_name', ''))
         return results
 
-    def _parse_staff_contact(self, data: Dict[str, Any], query_name: str) -> List[Dict[str, Any]]:
-        results, staff_list, q = [], data.get('data', []), query_name.lower()
-        for p in staff_list:
-            full_name = f"{str(p.get('vorname', '')).strip()} {str(p.get('nachname', '')).strip()}".strip() or str(p.get('name', '')).strip()
-            
-            # Build comprehensive search text
-            search_text = (full_name + str(p.get('personalnummer', '')) + str(p.get('email', ''))).lower()
-            # Add extra contact fields to search
-            for k in ['telefon', 'telefon_privat', 'handy', 'mobile', 'email_privat']:
-                val = p.get(k)
-                if val: search_text += str(val).lower()
-            
-            for occ in p.get('ressourceToOccupations', []): search_text += (str(occ.get('name', '')) + str(occ.get('externalId', '')) + str(occ.get('ressourceIndicator', ''))).lower()
-            
-            if q in search_text: p['_display_name'] = full_name; results.append(p)
-        results.sort(key=lambda x: x.get('_display_name', ''))
-        return results
+    # _parse_staff_contact moved to src.parser
 
-    def _extract_role(self, person_data: Dict[str, Any]) -> str:
-        roles = [occ.get('name', '') for occ in person_data.get('ressourceToOccupations', []) if occ.get('name')]
-        return ", ".join(roles) if roles else "-"
+    # _extract_role moved to src.parser
 
     def load_absences(self) -> List[Dict[str, Any]]:
         """
@@ -358,7 +335,7 @@ class IncodeRequests:
             if resp.status_code == 200:
                 for item in resp.json().get('data', []):
                     reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
-                    b, e = norm_start(self._fix_datetime(item.get('begin'))), self._fix_datetime(item.get('end'))
+                    b, e = norm_start(fix_datetime(item.get('begin'))), fix_datetime(item.get('end'))
                     if not b or not e: continue
                     if e.hour == 0 and e.minute == 0: e -= timedelta(seconds=1)
                     curr = b.date()
@@ -387,7 +364,7 @@ class IncodeRequests:
                     reason_str = str(item.get('reasonName') or item.get('absenceTypeName') or "Abwesend")
                     status_text = " [yellow](Beantragt)[/yellow]" if state == 0 else " [green](Gen. / n. eingetr.)[/green]"
                     
-                    b, end_dt = norm_start(self._fix_datetime(item.get('begin'))), self._fix_datetime(item.get('end'))
+                    b, end_dt = norm_start(fix_datetime(item.get('begin'))), fix_datetime(item.get('end'))
                     if not b or not end_dt: continue
                     if end_dt.hour == 0 and end_dt.minute == 0: end_dt -= timedelta(seconds=1)
                     curr = b.date()
@@ -457,7 +434,7 @@ class IncodeRequests:
     @handle_api_errors([])
     def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
         resp = self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'})
-        if resp.status_code == 200: return self._parse_personal_duties(resp.json(), filter_mode)
+        if resp.status_code == 200: return parse_personal_duties(resp.json(), filter_mode)
         return []
 
     @handle_api_errors([])
@@ -500,7 +477,7 @@ class IncodeRequests:
         
         resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': start_fetch.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': nm_end.strftime('%Y-%m-%dT23:59:59.000Z'), 'from': str(ts_s), 'to': str(ts_e), 'start': str(ts_s), 'end': str(ts_e), 'includeFinished': '1', 'view': 'month'})
         resp.raise_for_status()
-        duties = self._parse_personal_duties(resp.json(), filter_mode)
+        duties = parse_personal_duties(resp.json(), filter_mode)
         archive = self.load_archive_duties(now.year, filter_mode)
         
         # Merge logic
@@ -568,53 +545,9 @@ class IncodeRequests:
             hydrated.append(ni)
         return hydrated
 
-    def _parse_personal_duties(self, data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Duty]:
-        results, fw = [], ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung", "dienstfrei", "ausbildung", "lehrgang"]
-        for item in data.get('data', []):
-            if not isinstance(item, dict): continue
-            dt_name = str(item.get('dutyTypeName') or item.get('absenceTypeName') or item.get('type') or item.get('text') or "")
-            loc, comm = str(item.get('orgUnitName', '')), str(item.get('comment', ''))
-            alloc = item.get('allocationInfo', {})
-            al = next(iter(alloc.values())) if isinstance(alloc, dict) and alloc.values() else (alloc if isinstance(alloc, list) else [])
-            content = (dt_name + loc + comm + str(al)).lower()
-            is_abs = bool(item.get('absenceTypeName')) or any(w in content for w in fw)
-            if filter_mode == 'exclude_absences' and is_abs: continue
-            if filter_mode == 'only_absences' and not is_abs: continue
-            b, e = self._fix_datetime(item.get('begin')), self._fix_datetime(item.get('end'))
-            if not b or not e: continue
-            veh, crew = "", []
-            if len(al) > 1:
-                last = str(al[-1])
-                if last and (last[0].isdigit() or any(vt in last.upper() for vt in ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"])): veh, crew = last, [str(x) for x in al[1:-1]]
-                else: veh, crew = "", [str(x) for x in al[1:]]
-            
-            # Create Duty Object
-            results.append(Duty(
-                begin=b,
-                end=e,
-                location=loc,
-                vehicle=veh,
-                duty_type=dt_name,
-                crew=crew,
-                comment=comm
-            ))
-        return results
+    # _parse_personal_duties moved to src.parser
 
-    def _parse_daily_plan_raw(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        grouped, it = {}, data.get('data', {}).values() if isinstance(data.get('data'), dict) else data.get('data', [])
-        for i in it:
-            pg = i.get('parentDataGuid')
-            if not pg: continue
-            if pg not in grouped: grouped[pg] = {"crew": {}, "vehicle": "", "begin": None, "end": None}
-            # Explicit cast for type checkers
-            entry: Dict[str, Any] = grouped[pg]
-            eid, rn = str(i.get('externalId', '')).upper(), str(i.get('additionalInfos', {}).get('ressource_name', '')).strip()
-            b, e = self._fix_datetime(i.get('begin')), self._fix_datetime(i.get('end'))
-            if eid == "KFZ": entry["vehicle"], entry["begin"], entry["end"] = rn, b, e
-            elif eid in ["FAHRER", "SANITAETER1", "SANITAETER2"] and rn:
-                entry["crew"][eid] = rn
-                if not entry["begin"]: entry["begin"], entry["end"] = b, e
-        return [v for v in grouped.values() if v["begin"] and v["end"]]
+    # _parse_daily_plan_raw moved to src.parser
 
     def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
@@ -638,7 +571,7 @@ class IncodeRequests:
                 if r.status_code == 200:
                     data = r.json()
                     if data.get('data'):
-                        for item in self._parse_daily_plan_raw(data):
+                        for item in parse_daily_plan_raw(data):
                             if item['begin'] and item['end'] and not (item['end'] < date_from or item['begin'] > date_to):
                                 sig = (item['vehicle'], item['begin'], item['end'], tuple(sorted(item['crew'].items())))
                                 if sig not in seen: seen.add(sig); results.append(item)
