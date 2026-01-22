@@ -38,11 +38,16 @@ def _prompt_new_user() -> Tuple[str, str, str, Optional[List[str]]]:
     p = centered_input("[bold green]>[/bold green] ", password=True)
     
     console.print()
+    console.print(Align.center("[bold]Anzeigename (Optional)[/bold]"))
+    real_name = centered_input("[bold green]>[/bold green] ")
+    if not real_name or not real_name.strip(): real_name = None
+    
+    console.print()
     base_url = "https://dienstplan.k.roteskreuz.at" 
     extra_guids: Optional[List[str]] = None
     if not u or not p:
         sys.exit(0) # Exit if inputs are cancelled
-    save_credentials(u, p, base_url, extra_guids, None)
+    save_credentials(u, p, base_url, extra_guids, real_name)
     return u, p, base_url, extra_guids
 
 def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str], Optional[List[str]]]:
@@ -70,9 +75,13 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
         
         options: List[Tuple[str, Any]] = []
         for user in users:
-            options.append((f"Login als {user['username']}", user))
+            display_str = f"👤  Login als {user['username']}"
+            if user.get('real_name'):
+                display_str += f" ({user['real_name']})"
+            options.append((display_str, user))
             
         options.append(("➕  Neuen Benutzer hinzufügen", "new"))
+        options.append(("✏️  Anzeigenamen ändern", "edit_alias"))
         options.append(("🗑️   Benutzer entfernen", "delete"))
         options.append(("🚪  Beenden", "exit"))
         
@@ -84,7 +93,7 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
             return _prompt_new_user()
         elif selected == "delete":
             # Sub-menu for deletion
-            del_options: List[Tuple[str, Any]] = [(f"Lösche {u['username']}", u['username']) for u in users]
+            del_options: List[Tuple[str, Any]] = [(f"🗑️  Lösche {u['username']}", u['username']) for u in users]
             del_options.append(("🔙  Zurück", "back"))
             to_delete = interactive_menu(del_options, title="BENUTZER LÖSCHEN")
             if to_delete and to_delete != "back":
@@ -93,6 +102,29 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
                 creds_data = load_credentials()
                 users = creds_data.get('users', [])
                 if not users: return _prompt_new_user()
+        elif selected == "edit_alias":
+            # Sub-menu for editing alias
+            edit_options: List[Tuple[str, Any]] = []
+            for u in users:
+                label = f"✏️  {u['username']}"
+                if u.get('real_name'): label += f" ({u['real_name']})"
+                edit_options.append((label, u))
+            edit_options.append(("🔙  Zurück", "back"))
+            
+            target_u = interactive_menu(edit_options, title="ANZEIGENAMEN ÄNDERN")
+            if target_u and target_u != "back":
+                console.print()
+                console.print(Align.center(f"[bold]Neuer Anzeigename für {target_u['username']}[/bold]"))
+                console.print(Align.center("[dim](Leer lassen um zu löschen)[/dim]"))
+                console.print()
+                new_alias = centered_input("[bold green]>[/bold green] ")
+                if new_alias is None: continue
+                final_alias = new_alias.strip() if new_alias.strip() else None
+                
+                update_credentials({'real_name': final_alias}, username=target_u['username'])
+                # Reload users loop
+                creds_data = load_credentials()
+                users = creds_data.get('users', [])
         else:
             # User selected
             u = selected
@@ -183,6 +215,23 @@ def run_cli(debug: bool = False) -> None:
             continue
         
         # Save last active user on successful login
+        # Try to fetch real name if missing
+        # We need to check if we already have a real name saved
+        from src.config import load_credentials
+        current_creds = load_credentials().get('users', [])
+        current_user_obj = next((user for user in current_creds if user['username'] == u), {})
+        real_name = current_user_obj.get('real_name')
+        
+        if not real_name:
+            try:
+                # Need to use the API to find the name
+                fetched_name = incode.get_user_name(u)
+                if fetched_name:
+                    real_name = fetched_name
+                    # Update immediately in config
+                    update_credentials({'real_name': real_name}, username=u)
+            except: pass
+
         update_credentials({}, username=u)
         
         # Pre-fetch next duty for dashboard

@@ -140,6 +140,28 @@ class IncodeRequests:
                 if not self.header_key or not self.header_value:
                     return False, "Login fehlgeschlagen (Keine API-Token gefunden)."
 
+                # EXTRACT NAME FROM LOGIN PAGE
+                # Try common patterns for user name in the dashboard
+                self.discovered_name = None
+                
+                # Pattern 1: JS Variable user_name
+                nm = re.search(r'''["']user_name["']\s*:\s*["']([^"']+)["']''', content)
+                if nm: self.discovered_name = nm.group(1)
+                
+                # Pattern 2: HTML element with class username or user-name
+                if not self.discovered_name:
+                    soup = BeautifulSoup(content, 'html.parser')
+                    u_tag = soup.find(class_=lambda x: x and x in ['username', 'user-name', 'user'])
+                    if u_tag: self.discovered_name = u_tag.get_text(strip=True)
+                    
+                    # Pattern 3: Look for greeting "Hallo, Name" or similar if simple tag failed
+                    # Often in a dropdown toggle
+                    if not self.discovered_name:
+                        # Try finding the PNR and looking nearby
+                        # or find the specific user menu link
+                        user_link = soup.find('a', attrs={'href': re.compile(r'user|profile')})
+                        if user_link: self.discovered_name = user_link.get_text(strip=True)
+
                 return True, "Eingeloggt."
             except Exception as e: return False, f"Fehler: {e}"
 
@@ -241,7 +263,39 @@ class IncodeRequests:
 
     # _calculate_staff_score moved to src.parser
 
+    def get_user_name(self, pnr: str) -> Optional[str]:
+        """
+        Attempts to find the real name for a given personnel number.
+        """
+        try:
+            results = self.search_staff_contact(pnr)
+            for res in results:
+                # Direct match on PNR
+                if str(res.get('personalnummer', '')) == str(pnr):
+                    return str(res.get('_display_name', ''))
+                # Or if search returned exactly one result and it matches reasonably
+                # (search_staff_contact does loose matching, so rely on PNR check primarily)
+            
+            # If search by PNR didn't work directly, it might be because pnr is just 3127 but full is 7003127
+            # search_staff_contact handles this via 'query in search_text'.
+            # Let's take the first result if it contains the PNR in its dataset
+            for res in results:
+                 if str(pnr) in str(res.get('personalnummer', '')):
+                     return str(res.get('_display_name', ''))
+
+            # Fallback to name discovered during login (if any)
+            if getattr(self, 'discovered_name', None):
+                return self.discovered_name
+            
+            return None
+        except Exception as e:
+            console.print(f"[debug] get_user_name error: {e}")
+            if getattr(self, 'discovered_name', None):
+                return self.discovered_name
+            return None
+
     def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
+        console.print(f"[debug] Searching staff: {query_name}")
         now = datetime.now()
         df, dt = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z'), (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
         
@@ -251,6 +305,7 @@ class IncodeRequests:
         if DEFAULT_GUID: guids.add(DEFAULT_GUID)
         
         sorted_guids = sorted([g for g in guids if g])
+        console.print(f"[debug] GUIDs to search: {len(sorted_guids)}")
         
         # Intermediate storage for merging
         pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
@@ -259,9 +314,12 @@ class IncodeRequests:
         
         def fetch_guid(guid: str) -> List[Dict[str, Any]]:
             try:
+                console.print(f"[debug] Fetching staff for GUID {guid[:5]}...")
                 resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
                 if resp.status_code == 200: 
-                    return parse_staff_contact(resp.json(), query_name)
+                    data = resp.json()
+                    console.print(f"[debug] GUID {guid[:5]} returned {len(data.get('data', []))} records.")
+                    return parse_staff_contact(data, query_name)
             except Exception: pass
             return []
 

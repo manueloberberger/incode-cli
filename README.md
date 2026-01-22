@@ -1,10 +1,15 @@
 # Incode CLI 🚑
 
-![Version](https://img.shields.io/badge/version-2.6.1-blue?style=flat-square) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.6.2-blue?style=flat-square) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
 
 **The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
 
 ---
+
+## ✨ New in v2.6.2
+- **Anzeigenamen (Aliases)**: The app now automatically fetches your name for a friendly greeting.
+- **Customizable**: You can manually edit your display name in the login menu.
+- **Improved UI**: Cleaner menus with perfect alignment and icons.
 
 ## 🚀 Installation
 

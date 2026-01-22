@@ -103,25 +103,58 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
             render_next_duty_panel(dashboard_data)
         
         if current_user:
+            # Try to find alias
+            real_name = None
+            try:
+                creds = load_credentials()
+                for u in creds.get('users', []):
+                    if u['username'] == current_user:
+                        real_name = u.get('real_name')
+                        break
+            except: pass
+            
+            display_user = current_user
+            if real_name:
+                display_user += f" ({real_name})"
+
             s_status = get_storage_status(current_user)
             s_short = "✅ JSON" 
             s_color = "green"
-            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{current_user}[/bold white] [{s_color}]({s_short})[/{s_color}][/dim]"))
+            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{display_user}[/bold white] [{s_color}]({s_short})[/{s_color}][/dim]"))
             console.print() # Spacer
         
         console.print(Align.center(f"[header]{title}[/header]\n"))
 
         
-        menu_grid = Table.grid(padding=(0, 0))
-        menu_grid.add_column()
+        # Use a 3-column grid: Cursor (2) | Icon (4) | Text (Auto)
+        menu_grid = Table.grid(padding=(0, 1))
+        menu_grid.add_column(width=2, justify="right")   # Cursor
+        menu_grid.add_column(width=4, justify="center")  # Icon (fixed width for alignment)
+        menu_grid.add_column(justify="left")             # Text
         
         for idx, (label, _) in enumerate(options):
-            if idx == selected_idx:
-                menu_grid.add_row(f"[bold green]> {label}[/bold green]")
-            else:
-                menu_grid.add_row(f"  {label}")
+            # Parse label: Check if we have an icon separator "  "
+            # Standard format in this app is "ICON  Text"
+            icon = ""
+            text = label
+            if "  " in label:
+                parts = label.split("  ", 1)
+                if len(parts) == 2 and len(parts[0]) <= 5: # Heuristic: Icon part shouldn't be too long
+                    icon = parts[0].strip()
+                    text = parts[1].strip()
+            
+            cursor = ">" if idx == selected_idx else ""
+            style_start = "[bold green]" if idx == selected_idx else ""
+            style_end = "[/bold green]" if idx == selected_idx else ""
+            
+            # Row content
+            menu_grid.add_row(
+                f"{style_start}{cursor}{style_end}",
+                f"{icon}",
+                f"{style_start}{text}{style_end}"
+            )
             # Add empty row for spacing
-            menu_grid.add_row("")
+            menu_grid.add_row("", "", "")
         
         console.print(Align.center(menu_grid))
         

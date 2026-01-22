@@ -23,11 +23,22 @@ def calculate_staff_score(p: Dict[str, Any]) -> int:
 
 def parse_staff_contact(data: Dict[str, Any], query_name: str) -> List[Dict[str, Any]]:
     results, staff_list, q = [], data.get('data', []), query_name.lower()
+    # Debug: Check if we see the PNR
+    # from src.config import console
+    # console.print(f"[debug-parser] pars_staff_contact: {len(staff_list)} items, q={q}")
+    
+    count_with_pnr = 0
     for p in staff_list:
         full_name = f"{str(p.get('vorname', '')).strip()} {str(p.get('nachname', '')).strip()}".strip() or str(p.get('name', '')).strip()
+        pnr = str(p.get('personalnummer', ''))
+        if pnr: count_with_pnr += 1
         
+        # Debug: Check specifically for our target PNR if it's numeric/close
+        if q in pnr:
+            pass # console.print(f"[debug-parser] FOUND partial match in PNR! {pnr} for {full_name}")
+
         # Build comprehensive search text
-        search_text = (full_name + str(p.get('personalnummer', '')) + str(p.get('email', ''))).lower()
+        search_text = (full_name + pnr + str(p.get('email', ''))).lower()
         # Add extra contact fields to search
         for k in ['telefon', 'telefon_privat', 'handy', 'mobile', 'email_privat']:
             val = p.get(k)
@@ -35,7 +46,11 @@ def parse_staff_contact(data: Dict[str, Any], query_name: str) -> List[Dict[str,
         
         for occ in p.get('ressourceToOccupations', []): search_text += (str(occ.get('name', '')) + str(occ.get('externalId', '')) + str(occ.get('ressourceIndicator', ''))).lower()
         
-        if q in search_text: p['_display_name'] = full_name; results.append(p)
+        if q in search_text: 
+            p['_display_name'] = full_name
+            results.append(p)
+    
+    # console.print(f"[debug-parser] Matches found: {len(results)}. Records with PNR: {count_with_pnr}")
     results.sort(key=lambda x: x.get('_display_name', ''))
     return results
 
