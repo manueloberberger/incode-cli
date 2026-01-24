@@ -29,18 +29,16 @@ logger = logging.getLogger(__name__)
 
 class ConflictFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        # Check tracebacks
+        # Check tracebacks for Conflict
         if record.exc_info:
             exc_type = record.exc_info[0]
-            exc_val = record.exc_info[1]
             if exc_type and "Conflict" in str(exc_type):
                 return False
-            if exc_val and "Conflict" in str(exc_val):
-                return False
         
-        # Check message content just in case
-        msg = record.getMessage()
-        if "Conflict" in msg and "getUpdates" in msg:
+        msg = str(record.getMessage())
+        if "Conflict" in msg:
+            return False
+        if "Exception happened while polling for updates" in msg:
             return False
             
         return True
@@ -329,11 +327,17 @@ class IncodeBot:
             # Silence technical logs to keep UI clean
             logging.getLogger("telegram").setLevel(logging.WARNING)
             logging.getLogger("httpx").setLevel(logging.WARNING)
-            # Filter out Conflict errors from specific loggers that might report it
+            # Filter out Conflict errors from ALL telegram loggers
             conflict_filter = ConflictFilter()
-            logging.getLogger("telegram.ext._updater").addFilter(conflict_filter)
-            logging.getLogger("telegram.ext._utils.networkloop").addFilter(conflict_filter)
+            
+            # Apply to known critical usage
             logging.getLogger("telegram").addFilter(conflict_filter)
+            logging.getLogger("telegram.ext._updater").addFilter(conflict_filter)
+            
+            # Nuclear option: Iterate all known loggers to catch sub-modules
+            for name in logging.root.manager.loggerDict:
+                if name.startswith("telegram"):
+                    logging.getLogger(name).addFilter(conflict_filter)
         
         application = ApplicationBuilder().token(token).build()
 
