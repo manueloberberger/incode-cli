@@ -246,7 +246,6 @@ def run_cli(debug: bool = False) -> None:
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
             ("📺  Live-Monitor", "live"),
             ("🤖  Telegram Bot", "bot"),
-            ("⚙️   Systemdienst (Bot installieren/deinstallieren)", "service"),
             ("⚙️   Einstellungen", "settings"),
             ("👤  Benutzer wechseln / Logout", "logout"),
             ("🚪  Beenden", "exit")
@@ -276,9 +275,7 @@ def run_cli(debug: bool = False) -> None:
             elif selection == "live":
                 show_live_monitor(incode)
             elif selection == "bot":
-                start_bot_mode(incode)
-            elif selection == "service":
-                show_service_menu()
+                show_bot_menu(incode)
             elif selection == "settings":
                 show_settings_menu()
             elif selection == "logout":
@@ -293,8 +290,8 @@ def run_cli(debug: bool = False) -> None:
         if should_logout:
             continue
 
-def show_service_menu() -> None:
-    """Show service management submenu."""
+def show_bot_menu(incode_instance: Any) -> None:
+    """Show unified bot menu with interactive start and service management."""
     from src.ui import interactive_menu
     from src.service import install_service, uninstall_service, check_service_status, has_installed_services
     from src.utils import wait_for_return
@@ -308,20 +305,23 @@ def show_service_menu() -> None:
         services_exist = has_installed_services()
         
         options: List[Tuple[str, Any]] = [
-            ("🟢  Service installieren", "install"),
+            ("▶️  Bot jetzt starten (interaktiv)", "start"),
+            ("🟢  Als Systemdienst installieren", "install"),
         ]
         
         if services_exist:
-            options.append(("🔴  Service deinstallieren", "uninstall"))
+            options.append(("🔴  Systemdienst deinstallieren", "uninstall"))
         
         options.extend([
-            ("📊  Service Status anzeigen", "status"),
+            ("📊  Systemdienst Status anzeigen", "status"),
             ("🔙  Zurück zum Hauptmenü", "back")
         ])
         
-        selection = interactive_menu(options, title="SYSTEMDIENST VERWALTUNG")
+        selection = interactive_menu(options, title="TELEGRAM BOT")
         
-        if selection == "install":
+        if selection == "start":
+            start_bot_mode(incode_instance)
+        elif selection == "install":
             install_service()
             wait_for_return()
         elif selection == "uninstall":
