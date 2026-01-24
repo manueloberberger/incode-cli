@@ -5,7 +5,7 @@ import asyncio
 import re
 import warnings
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 from dataclasses import asdict
 
 
@@ -28,7 +28,7 @@ from src.pdf import export_to_pdf
 logger = logging.getLogger(__name__)
 
 class ConflictFilter(logging.Filter):
-    def __init__(self, on_conflict_callback: Optional[callable] = None):
+    def __init__(self, on_conflict_callback: Optional[Callable[[], None]] = None):
         super().__init__()
         self.on_conflict = on_conflict_callback
 
@@ -339,7 +339,7 @@ class IncodeBot:
             logging.getLogger("httpx").setLevel(logging.WARNING)
             # Filter out Conflict errors from ALL telegram loggers
             # Trigger shutdown on conflict
-            def shutdown_trigger():
+            def shutdown_trigger() -> None:
                 # We can't await here, so we set a flag
                 self._stop_signal = True
 
