@@ -29,8 +29,20 @@ logger = logging.getLogger(__name__)
 
 class ConflictFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        if record.exc_info and "Conflict" in str(record.exc_info[0]):
+        # Check tracebacks
+        if record.exc_info:
+            exc_type = record.exc_info[0]
+            exc_val = record.exc_info[1]
+            if exc_type and "Conflict" in str(exc_type):
+                return False
+            if exc_val and "Conflict" in str(exc_val):
+                return False
+        
+        # Check message content just in case
+        msg = record.getMessage()
+        if "Conflict" in msg and "getUpdates" in msg:
             return False
+            
         return True
 
 # States for ConversationHandler
