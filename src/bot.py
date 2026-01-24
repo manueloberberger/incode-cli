@@ -387,3 +387,8 @@ class IncodeBot:
             asyncio.run(main_loop())
         except KeyboardInterrupt:
             pass
+        except Conflict:
+            console.print(Align.center("\n[bold red]⚠️  Verbindung durch neue Session beendet.[/bold red]"))
+            console.print(Align.center("[yellow]Der Bot wurde auf einem anderen Gerät gestartet.[/yellow]"))
+        except Exception as e:
+            logger.error(f"Unexpected bot error: {e}")
