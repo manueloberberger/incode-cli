@@ -28,17 +28,27 @@ from src.pdf import export_to_pdf
 logger = logging.getLogger(__name__)
 
 class ConflictFilter(logging.Filter):
+    def __init__(self, on_conflict_callback: Optional[callable] = None):
+        super().__init__()
+        self.on_conflict = on_conflict_callback
+
     def filter(self, record: logging.LogRecord) -> bool:
         # Check tracebacks for Conflict
+        is_conflict = False
         if record.exc_info:
             exc_type = record.exc_info[0]
             if exc_type and "Conflict" in str(exc_type):
-                return False
+                is_conflict = True
         
         msg = str(record.getMessage())
-        if "Conflict" in msg:
-            return False
-        if "Exception happened while polling for updates" in msg:
+        if "Conflict" in msg or "Exception happened while polling for updates" in msg:
+             is_conflict = True
+
+        if is_conflict:
+            if self.on_conflict:
+                try:
+                    self.on_conflict()
+                except: pass
             return False
             
         return True
@@ -328,7 +338,13 @@ class IncodeBot:
             logging.getLogger("telegram").setLevel(logging.WARNING)
             logging.getLogger("httpx").setLevel(logging.WARNING)
             # Filter out Conflict errors from ALL telegram loggers
-            conflict_filter = ConflictFilter()
+            # Trigger shutdown on conflict
+            def shutdown_trigger():
+                # We can't await here, so we set a flag
+                self._stop_signal = True
+
+            self._stop_signal = False
+            conflict_filter = ConflictFilter(on_conflict_callback=shutdown_trigger)
             
             # Apply to known critical usage
             logging.getLogger("telegram").addFilter(conflict_filter)
@@ -393,6 +409,12 @@ class IncodeBot:
                 while True:
                     # Check if stopped by error handler (Conflict)
                     if not application.running:
+                        break
+                    
+                    # Check our custom stop signal from the log filter
+                    if getattr(self, '_stop_signal', False):
+                        console.print(Align.center("\n[bold red]⚠️  Verbindung durch neue Session beendet.[/bold red]"))
+                        console.print(Align.center("[yellow]Der Bot wurde auf einem anderen Gerät gestartet.[/yellow]"))
                         break
                         
                     await asyncio.sleep(0.1)
