@@ -2,7 +2,7 @@ import os
 import sys
 import platform
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from rich.align import Align
 from src.config import console, load_credentials
 from src.ui import interactive_menu
@@ -23,18 +23,18 @@ def select_user_for_service(specific_user: Optional[str] = None) -> Dict[str, An
         if not target_user:
             console.print(Align.center(f"[red]Benutzer '{specific_user}' nicht gefunden.[/red]"))
             sys.exit(1)
-        return target_user
+        return target_user  # type: ignore[no-any-return]
     
     # If only one user, auto-select
     if len(users) == 1:
-        return users[0]
+        return users[0]  # type: ignore[no-any-return]
     
     # Multiple users - show menu
     console.print()
     console.print(Align.center("[bold cyan]Für welchen Benutzer soll der Service installiert werden?[/bold cyan]"))
     console.print()
     
-    options: List[tuple] = []
+    options: List[Tuple[str, Any]] = []
     for user in users:
         display_str = f"👤  {user['username']}"
         if user.get('real_name'):
@@ -46,7 +46,7 @@ def select_user_for_service(specific_user: Optional[str] = None) -> Dict[str, An
         console.print(Align.center("[yellow]Abgebrochen.[/yellow]"))
         sys.exit(0)
     
-    return selected
+    return selected  # type: ignore[no-any-return]
 
 def install_systemd_service(bot_user: Dict[str, Any]) -> None:
     """Install systemd service for Linux."""
