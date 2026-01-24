@@ -242,8 +242,24 @@ def uninstall_service(specific_user: Optional[str] = None) -> None:
         console.print(Align.center(f"[red]OS '{os_type}' wird nicht unterstützt.[/red]"))
         return
     
-    bot_user = select_user_for_service(specific_user)
-    bot_username = bot_user['username']
+    # Get list of installed services
+    installed_services = get_installed_services()
+    
+    if not installed_services:
+        console.print()
+        console.print(Align.center("[yellow]Keine Services installiert.[/yellow]"))
+        return
+    
+    # If only one service installed, auto-select it
+    if len(installed_services) == 1 and not specific_user:
+        bot_username = installed_services[0]
+        console.print()
+        console.print(Align.center(f"[dim]Deinstalliere Service für {bot_username}...[/dim]"))
+    else:
+        # Multiple services or specific user requested
+        bot_user = select_user_for_service(specific_user)
+        bot_username = bot_user['username']
+    
     safe_name = bot_username.replace(" ", "_").lower()
     
     console.print()
@@ -307,7 +323,12 @@ def check_service_status() -> None:
 
 def has_installed_services() -> bool:
     """Check if any services are installed."""
+    return len(get_installed_services()) > 0
+
+def get_installed_services() -> List[str]:
+    """Get list of usernames with installed services."""
     os_type = platform.system()
+    services = []
     
     if os_type == "Linux":
         import subprocess
@@ -315,13 +336,25 @@ def has_installed_services() -> bool:
             ["systemctl", "list-units", "incode-bot-*", "--all", "--no-pager", "--no-legend"],
             capture_output=True, text=True
         )
-        return bool(result.stdout.strip())
+        for line in result.stdout.strip().split('\n'):
+            if line and 'incode-bot-' in line:
+                # Extract username from service name
+                parts = line.split()
+                if parts:
+                    service_name = parts[0]
+                    # incode-bot-7003127.service -> 7003127
+                    username = service_name.replace('incode-bot-', '').replace('.service', '')
+                    services.append(username)
     elif os_type == "Darwin":
         home = os.path.expanduser("~")
         launchagents_dir = os.path.join(home, "Library", "LaunchAgents")
         if os.path.exists(launchagents_dir):
             import glob
             plists = glob.glob(os.path.join(launchagents_dir, "com.incode.bot.*.plist"))
-            return len(plists) > 0
-        return False
-    return False
+            for plist in plists:
+                # com.incode.bot.7003127.plist -> 7003127
+                basename = os.path.basename(plist)
+                username = basename.replace('com.incode.bot.', '').replace('.plist', '')
+                services.append(username)
+    
+    return services
