@@ -1,6 +1,6 @@
 # Incode CLI 🚑
 
-[![Version](https://img.shields.io/badge/version-2.10.3-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
+[![Version](https://img.shields.io/badge/version-2.10.4-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
 
 **The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
 
