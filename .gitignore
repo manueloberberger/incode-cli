@@ -14,3 +14,4 @@ js_urls.txt
 .venv/
 venv_ci/
 env/
+incode.db
