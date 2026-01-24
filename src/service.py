@@ -304,6 +304,7 @@ def uninstall_service(specific_user: Optional[str] = None) -> None:
 
 def check_service_status() -> None:
     """Check status of installed services."""
+    import subprocess
     os_type = platform.system()
     
     console.print()
@@ -313,11 +314,36 @@ def check_service_status() -> None:
     if os_type == "Linux":
         console.print(Align.center("[dim]Installierte Incode Bot Services:[/dim]"))
         console.print()
-        os.system("systemctl list-units 'incode-bot-*' --all")
+        
+        result = subprocess.run(
+            ["systemctl", "list-units", "incode-bot-*", "--all"],
+            capture_output=True, text=True
+        )
+        
+        if result.stdout.strip():
+            for line in result.stdout.split('\n'):
+                if line.strip():
+                    console.print(Align.center(f"[dim]{line}[/dim]"))
+        else:
+            console.print(Align.center("[yellow]Keine Services gefunden.[/yellow]"))
+            
     elif os_type == "Darwin":
         console.print(Align.center("[dim]Installierte Incode Bot Services:[/dim]"))
         console.print()
-        os.system("launchctl list | grep -i incode")
+        
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True, text=True
+        )
+        
+        found = False
+        for line in result.stdout.split('\n'):
+            if 'incode' in line.lower():
+                console.print(Align.center(f"[dim]{line}[/dim]"))
+                found = True
+        
+        if not found:
+            console.print(Align.center("[yellow]Keine Services gefunden.[/yellow]"))
     else:
         console.print(Align.center(f"[yellow]OS '{os_type}' wird nicht unterstützt.[/yellow]"))
 
