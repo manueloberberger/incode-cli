@@ -27,7 +27,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
     
     console.print()
     with Live(Align.center(Spinner("dots", text=" Lade Dienstplan ...")), console=console, transient=True):
-        duties = incode.load_future_duties()
+        duties = incode.load_future_duties(override_name=search_colleague)
     if not duties: 
         if search_colleague:
             console.print(Align.center(f"\n[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]"))

@@ -303,10 +303,13 @@ from src.config import console
 
 T = TypeVar("T")
 
+import logging
+logger = logging.getLogger(__name__)
+
 def handle_api_errors(default_return: Any = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator to handle API errors gracefully.
-    Logs error to console and returns default_return.
+    Logs error and returns default_return.
     """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
@@ -314,9 +317,9 @@ def handle_api_errors(default_return: Any = None) -> Callable[[Callable[..., T]]
             try:
                 return func(*args, **kwargs)
             except RequestException as e:
-                console.print(Align.center(f"[dim red]Netzwerk-Fehler in {func.__name__}: {e}[/dim red]"))
+                logger.error(f"Netzwerk-Fehler in {func.__name__}: {e}")
             except Exception as e:
-                console.print(Align.center(f"[dim red]Unerwarteter Fehler in {func.__name__}: {e}[/dim red]"))
+                logger.error(f"Unerwarteter Fehler in {func.__name__}: {e}")
             return default_return # type: ignore
         return wrapper
     return decorator

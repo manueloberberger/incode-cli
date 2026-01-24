@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import time
@@ -204,12 +205,20 @@ def run_cli(debug: bool = False) -> None:
                 border_style="dim"
             )
         ))
-        time.sleep(0.7) # Give user time to read
+        # time.sleep(0.7) # Removing artificial delay
         
-        s, m = incode.login(u, p)
-        if not s: 
-            console.print(Align.center(f"[error]{m}[/error]"))
+        from src.exceptions import LoginError, IncodeError
+        try:
+            incode.login(u, p)
+            # time.sleep(1) # Removing artificial delay
+        except LoginError as e:
+            console.print(Align.center(f"[error]{e}[/error]"))
             # If login failed, force menu next time to allow choosing another user or fixing credentials
+            wait_for_return()
+            force_menu = True
+            continue
+        except Exception as e:
+            console.print(Align.center(f"[error]Unerwarteter Fehler: {e}[/error]"))
             wait_for_return()
             force_menu = True
             continue

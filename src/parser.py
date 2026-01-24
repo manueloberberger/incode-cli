@@ -50,8 +50,8 @@ def extract_role(person_data: Dict[str, Any]) -> str:
     roles = [occ.get('name', '') for occ in person_data.get('ressourceToOccupations', []) if occ.get('name')]
     return ", ".join(roles) if roles else "-"
 
-def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_absences') -> List[Duty]:
-    results, fw = [], ["urlaub", "frei", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung", "dienstfrei", "ausbildung", "lehrgang"]
+def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_absences', my_name: Optional[str] = None) -> List[Duty]:
+    results, fw = [], ["urlaub", "wunsch", "abwesenheit", "abwesend", "pflege", "krank", "zeitausgleich", "sonderabwesenheit", "ersatzruhe", "ruhetag", "seminar", "fortbildung", "schulung", "dienstfrei", "ausbildung", "lehrgang"]
     for item in data.get('data', []):
         if not isinstance(item, dict): continue
         dt_name = str(item.get('dutyTypeName') or item.get('absenceTypeName') or item.get('type') or item.get('text') or "")
@@ -60,16 +60,46 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
         al = next(iter(alloc.values())) if isinstance(alloc, dict) and alloc.values() else (alloc if isinstance(alloc, list) else [])
         content = (dt_name + loc + comm + str(al)).lower()
         is_abs = bool(item.get('absenceTypeName')) or any(w in content for w in fw)
+        
         if filter_mode == 'exclude_absences' and is_abs: continue
         if filter_mode == 'only_absences' and not is_abs: continue
+            
         b, e = fix_datetime(item.get('begin')), fix_datetime(item.get('end'))
         if not b or not e: continue
+
         veh, crew = "", []
         if len(al) > 1:
             last = str(al[-1])
             if last and (last[0].isdigit() or any(vt in last.upper() for vt in ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"])): veh, crew = last, [str(x) for x in al[1:-1]]
             else: veh, crew = "", [str(x) for x in al[1:]]
         
+        if my_name and crew:
+            # Flexible matching (last name or full name)
+            # Split my_name into parts to handle "First Last" vs "Last First"
+            my_parts = [p for p in my_name.lower().replace(',', '').split() if len(p) > 2]
+            
+            def match_score(name):
+                n_lower = name.lower()
+                score = 0
+                for part in my_parts:
+                    if part in n_lower: score += 1
+                return score
+                
+            # Find best match
+            best_match_idx = -1
+            best_score = 0
+            
+            for i, member in enumerate(crew):
+                s = match_score(member)
+                if s > best_score:
+                    best_score = s
+                    best_match_idx = i
+            
+            if best_match_idx >= 0 and best_score > 0:
+                # Move to front
+                me = crew.pop(best_match_idx)
+                crew.insert(0, me)
+
         # Create Duty Object
         results.append(Duty(
             begin=b,

@@ -145,7 +145,7 @@ def _display_staff_details_loop(p: Any) -> None:
                 za_color = "white"
             
             stats_grid.add_row(
-                f"[bold]Urlaub:[/bold] [{u_color}]{saldo_u or '0'}h[/{u_color}]",
+                f"[bold]Urlaub:[/bold] [{u_color}]{saldo_u or '0'} Tage[/{u_color}]",
                 f"[bold]Zeitausgleich:[/bold] [{za_color}]{saldo_za or '0'}h[/{za_color}]"
             )
             console.print(Align.center(Panel(stats_grid, title="Salden (Live)", border_style="yellow", expand=False)))

@@ -1,637 +1,93 @@
-import requests
-import time
-import json
-import os
-import re
-from urllib3.util.retry import Retry
-from datetime import datetime, timedelta, date
-from bs4 import BeautifulSoup
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.spinner import Spinner
-from rich.live import Live
-from rich.align import Align
-from typing import Optional, List, Dict, Any, Tuple, Union
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+import logging
+from datetime import datetime
+from typing import Optional, List, Dict, Any, Tuple
 
-from src.config import console, DEFAULT_GUID
-from src.utils import TimeoutHTTPAdapter, get_holidays, handle_api_errors
-from src.parser import (
-    fix_datetime,
-    calculate_staff_score,
-    parse_staff_contact,
-    extract_role,
-    parse_personal_duties,
-    parse_daily_plan_raw
-)
-from src.models import Duty, StaffMember, Absence
+from src.api_async import AsyncIncodeRequests
+from src.models import Duty
+from src.exceptions import LoginError, ApiError
+from src.utils import handle_api_errors
 
-CACHE_FILE = ".incode_cache.json"
-CACHE_TTL = 900  # 15 Minutes validity
+logger = logging.getLogger(__name__)
 
 class IncodeRequests:
+    """
+    Synchronous Facade for AsyncIncodeRequests.
+    Allows existing synchronous UI code to benefit from Async I/O (parallel fetching)
+    without rewriting the entire application logic.
+    """
     def __init__(self, base_url: str, extra_guids: Optional[List[str]] = None, username: Optional[str] = None) -> None:
-        self.session = requests.Session()
-        retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        adapter = TimeoutHTTPAdapter(max_retries=retries)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
-        self.header_key: Optional[str] = None
-        self.header_value: Optional[str] = None
-        self.org_unit_data_guid: Optional[str] = None
-        self.base_url: str = base_url
-        self.extra_guids: List[str] = extra_guids if extra_guids else []
-        self.user_agent: str = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Safari/605.1.15'
-        self.username = username
-        self.cache = self._load_cache()
-
-    def _get_cache_key(self, key_base: str) -> str:
-        """Helper to qualify cache keys with username if available."""
-        if self.username:
-            return f"{self.username}_{key_base}"
-        return key_base
-
-    def _load_cache(self) -> Dict[str, Any]:
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                    from typing import cast
-                    return cast(Dict[str, Any], json.load(f))
-            except Exception:
-                return {}
-        return {}
-
-    def _save_cache(self) -> None:
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.client = AsyncIncodeRequests(base_url, extra_guids, username)
+        
+    def __del__(self):
         try:
-            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            console.print(Align.center(f"[warning]Cache konnte nicht gespeichert werden: {e}[/warning]"))
+            if not self.loop.is_closed():
+                self.loop.run_until_complete(self.client.close())
+                self.loop.close()
+        except: pass
 
-    def _get_cached_data(self, key: str) -> Optional[Any]:
-        key = self._get_cache_key(key)
-        if key in self.cache:
-            entry = self.cache[key]
-            timestamp = entry.get('timestamp', 0)
-            if time.time() - timestamp < CACHE_TTL:
-                return entry.get('data')
-        return None
+    @property
+    def discovered_name(self) -> Optional[str]:
+        return self.client.discovered_name
 
-    def _set_cached_data(self, key: str, data: Any) -> None:
-        key = self._get_cache_key(key)
-        self.cache[key] = {'timestamp': time.time(), 'data': data}
-        self._save_cache()
+    @property
+    def org_unit_data_guid(self) -> Optional[str]:
+        return self.client.org_unit_data_guid
 
-    def login(self, username: str, password: str) -> Tuple[bool, str]:
-        """
-        Authenticates against the web portal.
-        
-        1. Posts credentials to /login.php
-        2. Scrapes the response to find the 'orgUnitDataGuid' and custom 'x-incode' headers
-           required for subsequent JSON API calls.
-        
-        Returns:
-            Tuple[bool, str]: (Success, Message)
-        """
-        login_url = f"{self.base_url}/login.php"
-        with Live(Align.center(Spinner("dots", text="Authentifizierung ...")), console=console, transient=True):
-            login_headers = {'User-Agent': self.user_agent, 'Content-Type': 'application/x-www-form-urlencoded'}
-            login_body = {'client': 'dienstplan', 'login': username, 'password': password}
-            try:
-                self.session.post(login_url, headers=login_headers, data=login_body)
-                if 'PHPSESSID' not in self.session.cookies: return False, "Login fehlgeschlagen."
-                
-                resp = self.session.get(f"{self.base_url}/", headers={'User-Agent': self.user_agent})
-                content = resp.text
-                inc_m = re.search(r'''['"](x-incode-[^'" ]+)['"]\s*:\s*['"]([^'" ]+)['"]''', content)
-                if inc_m: self.header_key, self.header_value = inc_m.group(1), inc_m.group(2)
-                
-                dispo_resp = self.session.get(f"{self.base_url}/StaffPortal/dispo.php", headers={'User-Agent': self.user_agent})
-                guids = re.findall(r'''["']orgUnitDataGuid["']\s*:\s*["']([^"]+)["']''', dispo_resp.text)
-                
-                discovered_guids = list(set(guids))
-                if discovered_guids:
-                    self.org_unit_data_guid = discovered_guids[-1]
-                    for g in discovered_guids:
-                        if g not in self.extra_guids: self.extra_guids.append(g)
-                else:
-                    guids = re.findall(r'''["']orgUnitDataGuid["']\s*:\s*["']([^"]+)["']''', content)
-                    if guids: self.org_unit_data_guid = guids[-1]
-                
-                if not self.header_key:
-                    soup = BeautifulSoup(content, 'html.parser')
-                    for s in soup.find_all('script'):
-                        if s.get('src'):
-                            js_url = s.get('src') if s.get('src').startswith('http') else f"{self.base_url}/{s.get('src').lstrip('/')}"
-                            try:
-                                js_resp = self.session.get(js_url, headers={'User-Agent': self.user_agent})
-                                js = js_resp.text
-                                m = re.search(r'''['"](x-incode-[^'" ]+)['"]\s*:\s*['"]([^'" ]+)['"]''', js)
-                                if m: self.header_key, self.header_value = m.group(1), m.group(2)
-                                g = re.findall(r'''["']orgUnitDataGuid["']\s*:\s*["']([^"]+)["']''', js)
-                                if g: 
-                                    for found_g in g:
-                                        if found_g not in self.extra_guids: self.extra_guids.append(found_g)
-                                    self.org_unit_data_guid = g[-1]
-                            except Exception: pass
-                        if self.header_key: break
-                
-                # FINAL VALIDATION: Without x-incode headers, API calls will fail. 
-                # Be strict here: If we didn't find them, we can't be logged in correctly.
-                if not self.header_key or not self.header_value:
-                    return False, "Login fehlgeschlagen (Keine API-Token gefunden)."
+    @property
+    def username(self) -> Optional[str]:
+        return self.client.username
 
-                # EXTRACT NAME FROM LOGIN PAGE
-                # Try common patterns for user name in the dashboard
-                self.discovered_name = None
-                
-                # Pattern 1: JS Variable user_name
-                nm = re.search(r'''["']user_name["']\s*:\s*["']([^"']+)["']''', content)
-                if nm: self.discovered_name = nm.group(1)
-                
-                # Pattern 2: HTML element with class username or user-name
-                if not self.discovered_name:
-                    soup = BeautifulSoup(content, 'html.parser')
-                    u_tag = soup.find(class_=lambda x: x and x in ['username', 'user-name', 'user'])
-                    if u_tag: self.discovered_name = u_tag.get_text(strip=True)
-                    
-                    # Pattern 3: Look for greeting "Hallo, Name" or similar if simple tag failed
-                    # Often in a dropdown toggle
-                    if not self.discovered_name:
-                        # Try finding the PNR and looking nearby
-                        # or find the specific user menu link
-                        user_link = soup.find('a', attrs={'href': re.compile(r'user|profile')})
-                        if user_link: self.discovered_name = user_link.get_text(strip=True)
+    @property
+    def base_url(self) -> str:
+        return self.client.base_url
 
-                return True, "Eingeloggt."
-            except Exception as e: return False, f"Fehler: {e}"
-
-    def _get_api_headers(self) -> Dict[str, str]:
-        headers = {'Accept': 'application/json, text/javascript, */*; q=0.01', 'X-Requested-With': 'XMLHttpRequest', 'User-Agent': self.user_agent}
-        if self.header_key and self.header_value: headers[self.header_key] = self.header_value
-        return headers
-
-    # _fix_datetime moved to src.parser
+    def login(self, username: str, password: str) -> bool:
+        return self.loop.run_until_complete(self.client.login(username, password))
 
     def get_project_guids(self) -> Dict[str, str]:
-        """Fetches available project GUIDs and Names from the projects page."""
-        r_proj = self.session.get(f"{self.base_url}/StaffPortal/projects.php", headers=self._get_api_headers())
-        guid_pattern = r'([a-f0-9]{40}(?:_\d+)+)'
-        all_raw = set(re.findall(guid_pattern, r_proj.text))
-        if self.org_unit_data_guid: all_raw.add(self.org_unit_data_guid)
-        if self.extra_guids: all_raw.update(self.extra_guids)
-        guids_to_try = list(all_raw)
-        if DEFAULT_GUID:
-            guids_to_try.append(DEFAULT_GUID)
-        if not guids_to_try:
-             # Fallback if really nothing found, maybe empty list is fine or handle error
-             pass
-        project_map = {}
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'})
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                for inp in soup.find_all('input', value=True):
-                    val = inp['value']
-                    if re.match(r'^[a-f0-9]{40}(?:_\d+)+$', val) and val not in guids_to_try:
-                        name, row = "Event", inp.find_parent('tr')
-                        if row:
-                            txt = " ".join(row.get_text(separator=" ").split()).replace(val, "").strip()
-                            if len(txt) > 3: name = txt
-                        if name == "Event" and inp.get('id'):
-                            lbl = soup.find('label', attrs={'for': inp.get('id')})
-                            if lbl: name = lbl.get_text(strip=True)
-                        project_map[val] = name
-                for g in re.findall(guid_pattern, resp.text):
-                    if g not in project_map and g not in guids_to_try: project_map[g] = "Event"
-        except: pass
-        return project_map
+        return self.loop.run_until_complete(self.client.get_project_guids())
 
-    def load_events_plan(self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        """Loads roster for events by parsing HTML cards and augmenting with JSON data."""
-        project_map = self.get_project_guids()
-        guids_to_try = [self.org_unit_data_guid] + self.extra_guids
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'})
-            if resp.status_code == 200:
-                events, soup = [], BeautifulSoup(resp.text, 'html.parser')
-                for card in soup.find_all('div', attrs={'data-role': 'incode-project'}):
-                    guid, b_s, e_s = card.get('data-dataguid'), card.get('data-begin'), card.get('data-end')
-                    if not guid or not b_s: continue
-                    b_dt, e_dt = fix_datetime(b_s), fix_datetime(e_s)
-                    if not b_dt: continue
-                    t_tag = card.find('h3', class_='card-title')
-                    events.append({'guid': guid, 'begin': b_dt, 'end': e_dt, 'vehicle': t_tag.get_text(strip=True) if t_tag else "Event", 'location': '', 'crew': {}, 'open_slots': 0})
-                if events:
-                    start, end = min(e['begin'] for e in events), max(e['end'] for e in events)
-                    guids = list(set([e['guid'] for e in events]))
-                    main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else DEFAULT_GUID)
-                    if not main_org and DEFAULT_GUID is None:
-                        main_org = "" # Avoid None
-                    for i in range(0, len(guids), 30):
-                        r = self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': guids[i:i+30]})
-                        if r.status_code == 200:
-                            data = r.json()
-                            it = data.get('data', {}).values() if isinstance(data.get('data'), dict) else data.get('data', [])
-                            for item in it:
-                                if not isinstance(item, dict): continue
-                                pg, cb = item.get('projectDataGuid'), fix_datetime(item.get('begin'))
-                                if not pg or not cb: continue
-                                for e in events:
-                                    if e['guid'] == pg and e['begin'].date() == cb.date():
-                                        infos = item.get('additionalInfos', {})
-                                        rn, pn, loc = str(infos.get('ressource_name', '')).strip(), str(infos.get('project_name', '')).strip(), str(item.get('orgUnitName', '')).strip()
-                                        if pn and (e['vehicle'] == "Event" or len(pn) > len(e['vehicle'])): e['vehicle'] = pn
-                                        if loc: e['location'] = loc
-                                        eid = str(item.get('externalId', '')).upper()
-                                        if not rn or rn == '*':
-                                            if eid != "KFZ": e['open_slots'] += 1
-                                        elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
-                return events
-        except Exception as e:
-            console.print(Align.center(f"[dim red]Fehler beim Laden der Events: {e}[/dim red]"))
-        return []
+    def load_events_plan(self) -> List[Dict[str, Any]]:
+        return self.loop.run_until_complete(self.client.load_events_plan())
+
+    def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
+        return self.loop.run_until_complete(self.client.load_future_duties(use_cache, filter_mode, override_name))
+
+    def get_next_duty(self) -> Optional[Duty]:
+        return self.loop.run_until_complete(self.client.get_next_duty())
+
+    def load_absences(self) -> List[Dict[str, Any]]:
+        return self.loop.run_until_complete(self.client.load_absences())
+    
+    def search_staff_contact(self, query: str) -> List[Dict[str, Any]]:
+        return self.loop.run_until_complete(self.client.search_staff_contact(query))
+
+    def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
+        return self.loop.run_until_complete(self.client.load_daily_plan(date, use_cache))
 
     def load_my_event_duties(self) -> List[Duty]:
-        df, dt = datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'), (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
-        try:
-            guid = self.org_unit_data_guid or DEFAULT_GUID
-            if not guid: return []
-            resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'})
-            if resp.status_code == 200: return parse_personal_duties(resp.json(), filter_mode='include_all')
-        except: pass
-        return []
+        return self.loop.run_until_complete(self.client.load_my_event_duties())
 
-    # _calculate_staff_score moved to src.parser
+    def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
+        return self.loop.run_until_complete(self.client.load_archive_duties(year, filter_mode))
 
     def get_user_name(self, pnr: str) -> Optional[str]:
-        """
-        Attempts to find the real name for a given personnel number.
-        """
         try:
             results = self.search_staff_contact(pnr)
             for res in results:
-                # Direct match on PNR
                 if str(res.get('personalnummer', '')) == str(pnr):
                     return str(res.get('_display_name', ''))
-                # Or if search returned exactly one result and it matches reasonably
-                # (search_staff_contact does loose matching, so rely on PNR check primarily)
             
-            # If search by PNR didn't work directly, it might be because pnr is just 3127 but full is 7003127
-            # search_staff_contact handles this via 'query in search_text'.
-            # Let's take the first result if it contains the PNR in its dataset
             for res in results:
                  if str(pnr) in str(res.get('personalnummer', '')):
                      return str(res.get('_display_name', ''))
-
-            # Fallback to name discovered during login (if any)
-            if getattr(self, 'discovered_name', None):
-                return self.discovered_name
             
+            if self.discovered_name: return self.discovered_name
             return None
         except Exception as e:
-            console.print(f"[debug] get_user_name error: {e}")
-            if getattr(self, 'discovered_name', None):
-                return self.discovered_name
+            logger.debug(f"get_user_name error: {e}")
+            if self.discovered_name: return self.discovered_name
             return None
-
-    def search_staff_contact(self, query_name: str) -> List[Dict[str, str]]:
-        console.print(f"[debug] Searching staff: {query_name}")
-        now = datetime.now()
-        df, dt = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00.000Z'), (now + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
-        
-        guids = set()
-        if self.org_unit_data_guid: guids.add(self.org_unit_data_guid)
-        if self.extra_guids: guids.update(self.extra_guids)
-        if DEFAULT_GUID: guids.add(DEFAULT_GUID)
-        
-        sorted_guids = sorted([g for g in guids if g])
-        console.print(f"[debug] GUIDs to search: {len(sorted_guids)}")
-        
-        # Intermediate storage for merging
-        pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
-        name_to_pnr: Dict[str, str] = {}
-        name_no_pnr_to_best_record: Dict[str, Dict[str, Any]] = {}
-        
-        def fetch_guid(guid: str) -> List[Dict[str, Any]]:
-            try:
-                console.print(f"[debug] Fetching staff for GUID {guid[:5]}...")
-                resp = self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt})
-                if resp.status_code == 200: 
-                    data = resp.json()
-                    console.print(f"[debug] GUID {guid[:5]} returned {len(data.get('data', []))} records.")
-                    return parse_staff_contact(data, query_name)
-            except Exception: pass
-            return []
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_guid = {executor.submit(fetch_guid, g): g for g in sorted_guids}
-            for future in as_completed(future_to_guid):
-                found = future.result()
-                for p in found:
-                    name = str(p.get('_display_name', ''))
-                    pnr = str(p.get('personalnummer', '')) if p.get('personalnummer') else None
-                    score = calculate_staff_score(p)
-                    p['_score'] = score
-                    
-                    if pnr:
-                        # We have a PNR. 
-                        name_to_pnr[name] = pnr
-                        if pnr not in pnr_to_best_record or score > pnr_to_best_record[pnr].get('_score', 0):
-                            pnr_to_best_record[pnr] = p
-                    else:
-                        # No PNR. Check if we already know a PNR for this name
-                        known_pnr = name_to_pnr.get(name)
-                        if known_pnr:
-                            # Merge with the PNR record
-                            if score > pnr_to_best_record[known_pnr].get('_score', 0):
-                                # Update info but keep the PNR from the existing best
-                                p['personalnummer'] = known_pnr
-                                pnr_to_best_record[known_pnr] = p
-                        else:
-                            # Truly no PNR yet. Store by name
-                            if name not in name_no_pnr_to_best_record or score > name_no_pnr_to_best_record[name].get('_score', 0):
-                                name_no_pnr_to_best_record[name] = p
-
-        # Final aggregation: records with PNR + records with NO PNR that aren't duplicates
-        results_map = {**pnr_to_best_record}
-        for name, record in name_no_pnr_to_best_record.items():
-            if name not in name_to_pnr: # Don't add if we now have a PNR version
-                results_map[f"no_pnr_{name}"] = record
-                
-        results = list(results_map.values())
-        results.sort(key=lambda x: x.get('_display_name', ''))
-        return results
-
-    # _parse_staff_contact moved to src.parser
-
-    # _extract_role moved to src.parser
-
-    def load_absences(self) -> List[Dict[str, Any]]:
-        """
-        Loads absences and wishes from the backend.
-        
-        Merges actual absences (sickness, vacation) with requested wishes.
-        Applies logic to handle weekends (e.g. 'Freies Wochenende' vs 'Abwesend') based on 
-        surrounding vacation blocks.
-        """
-        results: List[Dict[str, Any]] = []
-        daily_map: Dict[date, Dict[str, Any]] = {}
-        now = datetime.now()
-        start_date, end_date = now - timedelta(days=30), now + timedelta(days=400)
-        df_str, dt_str = start_date.strftime('%Y-%m-%dT00:00:00.000Z'), end_date.strftime('%Y-%m-%dT23:59:59.000Z')
-        def norm_start(dt: Optional[datetime]) -> Optional[datetime]: return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0) if dt and dt.hour >= 20 else dt
-        holiday_cache: Dict[int, Any] = {}
-        def is_h(d: date) -> bool:
-            if d.year not in holiday_cache: holiday_cache[d.year] = get_holidays(d.year)
-            return d in holiday_cache[d.year]
-        
-        # v1.7 style body (no orgUnitDataGuid)
-        body = {'max': '1000', 'dateFrom': df_str, 'dateTo': dt_str, 'reason': '', 'form.event.onsubmit': 'searchForm'}
-        
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data=body)
-            if resp.status_code == 200:
-                for item in resp.json().get('data', []):
-                    reason = item.get('reasonName') or item.get('absenceTypeName') or "Abwesend"
-                    b, e = norm_start(fix_datetime(item.get('begin'))), fix_datetime(item.get('end'))
-                    if not b or not e: continue
-                    if e.hour == 0 and e.minute == 0: e -= timedelta(seconds=1)
-                    curr = b.date()
-                    while curr <= e.date():
-                        lbl = reason
-                        # Rule: Holidays are 'Geplante Sonderabwesenheit', but if they fall on a Sunday, they are just 'Abwesend'
-                        if is_h(curr):
-                            lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
-                        
-                        # Priority: Holidays and actual absences over general weekend markers
-                        if curr not in daily_map or is_h(curr) or any(w in lbl.lower() for w in ["urlaub", "abwesend", "krank"]):
-                            daily_map[curr] = {'label': lbl, 'fixed': True}
-                        curr += timedelta(days=1)
-        except Exception as e:
-            console.print(Align.center(f"[dim red]Fehler beim Laden der Abwesenheiten: {e}[/dim red]"))
-
-        try:
-            resp = self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body)
-            if resp.status_code == 200:
-                for item in resp.json().get('data', []):
-                    try: state = int(item.get('approvalState'))
-                    except: state = 0
-                    # state 0 = requested, state 1 = approved
-                    if state not in [0, 1] or item.get('withdrawn') in [1, True]: continue
-                    
-                    reason_str = str(item.get('reasonName') or item.get('absenceTypeName') or "Abwesend")
-                    status_text = " [yellow](Beantragt)[/yellow]" if state == 0 else " [green](Gen. / n. eingetr.)[/green]"
-                    
-                    b, end_dt = norm_start(fix_datetime(item.get('begin'))), fix_datetime(item.get('end'))
-                    if not b or not end_dt: continue
-                    if end_dt.hour == 0 and end_dt.minute == 0: end_dt -= timedelta(seconds=1)
-                    curr = b.date()
-                    while curr <= end_dt.date():
-                        if curr not in daily_map or not daily_map[curr].get('fixed'):
-                            lbl = reason_str
-                            if is_h(curr):
-                                lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
-                            
-                            if curr not in daily_map or is_h(curr) or "urlaub" in lbl.lower():
-                                daily_map[curr] = {'label': lbl + status_text, 'fixed': False}
-                        curr += timedelta(days=1)
-        except Exception as e:
-            console.print(Align.center(f"[dim red]Fehler beim Laden der Wünsche: {e}[/dim red]"))
-        
-        # Weekend / Sunday Logic
-        sorted_d = sorted(daily_map.keys())
-        # 1. Sunday BEFORE vacation/holiday block (if starts on Monday)
-        for d in sorted_d:
-            if d.weekday() == 0:
-                lbl_mon = str(daily_map[d]['label']).lower()
-                if "urlaub" in lbl_mon or "sonderabwesenheit" in lbl_mon:
-                    prev_sun = d - timedelta(days=1)
-                    prev_fri = d - timedelta(days=3)
-                    
-                    # Check if Friday was also Urlaub (Continuous vacation)
-                    is_connecting = False
-                    if prev_fri in daily_map:
-                        lbl_fri = str(daily_map[prev_fri]['label']).lower()
-                        if "urlaub" in lbl_fri or "sonderabwesenheit" in lbl_fri:
-                            is_connecting = True
-                    
-                    if is_connecting:
-                        # Connecting weekend -> Should be Abwesend
-                        if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Freies Wochenende":
-                            daily_map[prev_sun] = {'label': "Abwesend", 'fixed': False}
-                    else:
-                        # Start of vacation -> Pre-vacation Sunday is Free
-                        # Use 'Freies Wochenende' even if it was previously marked as 'Abwesend'
-                        if prev_sun not in daily_map or daily_map[prev_sun]['label'] == "Abwesend":
-                            daily_map[prev_sun] = {'label': "Freies Wochenende", 'fixed': False}
-        
-        # 2. Sunday AFTER vacation (if vacation ends on/covers Saturday) -> Abwesend
-        # Refresh sorted list after potential additions
-        sorted_d = sorted(daily_map.keys())
-        for d in sorted_d:
-            if d.weekday() == 5 and "urlaub" in str(daily_map[d]['label']).lower():
-                sun = d + timedelta(days=1)
-                if sun not in daily_map:
-                    suffix = ""
-                    if "[yellow]" in str(daily_map[d]['label']): suffix = " [yellow](Beantragt)[/yellow]"
-                    elif "[green]" in str(daily_map[d]['label']): suffix = " [green](Gen. / n. eingetr.)[/green]"
-                    daily_map[sun] = {'label': "Abwesend" + suffix, 'fixed': False}
-                    
-        if not daily_map: return []
-        fd = sorted(daily_map.keys())
-        curr_s, curr_e, curr_l = fd[0], fd[0], daily_map[fd[0]]['label']
-        for i in range(1, len(fd)):
-            d = fd[i]
-            if d == curr_e + timedelta(days=1) and daily_map[d]['label'] == curr_l: curr_e = d
-            else:
-                results.append({'begin': datetime.combine(curr_s, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%S'), 'end': datetime.combine(curr_e, datetime.max.time().replace(microsecond=0)).strftime('%Y-%m-%dT%H:%M:%S'), 'location': '', 'vehicle': '', 'duty_type': curr_l, 'crew': []})
-                curr_s, curr_e, curr_l = d, d, daily_map[d]['label']
-        results.append({'begin': datetime.combine(curr_s, datetime.min.time()).strftime('%Y-%m-%dT%H:%M:%S'), 'end': datetime.combine(curr_e, datetime.max.time().replace(microsecond=0)).strftime('%Y-%m-%dT%H:%M:%S'), 'location': '', 'vehicle': '', 'duty_type': curr_l, 'crew': []})
-        return results
-
-    @handle_api_errors([])
-    def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
-        resp = self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'})
-        if resp.status_code == 200: return parse_personal_duties(resp.json(), filter_mode)
-        return []
-
-    @handle_api_errors([])
-    def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences') -> List[Duty]:
-        """
-        Loads future duties from the monthly view.
-        
-        Args:
-            use_cache (bool): Whether to use cached data (valid for 15m).
-            filter_mode (str): 'exclude_absences', 'only_absences', or 'include_all'.
-        
-        Returns:
-            List[Duty]: List of duties sorted by date.
-        """
-        cache_key = f"future_duties_{filter_mode}"
-        # Serialization for objects is tricky with simple json dump. 
-        # For now, we skip cache reading for objects or we'd need a serializer.
-        # To keep it simple and working: Disable read-cache for objects momentarily or implement hydration.
-        # Actually, let's keep it simple: If cache is dict, we need to convert back.
-        # But wait, self._get_cached_data returns dicts.
-        if use_cache:
-            cached_data = self._get_cached_data(cache_key)
-            if cached_data:
-                # Hydrate
-                return [Duty(
-                    begin=datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S'),
-                    end=datetime.strptime(d['end'], '%Y-%m-%dT%H:%M:%S'),
-                    vehicle=d['vehicle'],
-                    location=d['location'],
-                    duty_type=d['duty_type'],
-                    crew=d['crew'],
-                    comment=d.get('comment')
-                ) for d in cached_data]
-
-        now = datetime.now()
-        start_fetch = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        next_month = now.replace(year=now.year + 1, month=1, day=1) if now.month == 12 else now.replace(month=now.month + 1, day=1)
-        nm_end = next_month.replace(year=next_month.year + 1, month=1, day=1) - timedelta(seconds=1) if next_month.month == 12 else next_month.replace(month=next_month.month + 1, day=1) - timedelta(seconds=1)
-        ts_s, ts_e = int(start_fetch.timestamp()), int(nm_end.timestamp())
-        
-        resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '1000', 'dateFrom': start_fetch.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': nm_end.strftime('%Y-%m-%dT23:59:59.000Z'), 'from': str(ts_s), 'to': str(ts_e), 'start': str(ts_s), 'end': str(ts_e), 'includeFinished': '1', 'view': 'month'})
-        resp.raise_for_status()
-        duties = parse_personal_duties(resp.json(), filter_mode)
-        archive = self.load_archive_duties(now.year, filter_mode)
-        
-        # Merge logic
-        d_map = {d.begin: d for d in duties}
-        for ad in archive:
-            if ad.begin not in d_map: d_map[ad.begin] = ad
-            elif not d_map[ad.begin].location and ad.location: d_map[ad.begin] = ad
-            
-        duties = sorted(d_map.values(), key=lambda x: x.begin)
-        
-        # Cache as dicts
-        serializable = [{
-            'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'),
-            'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'),
-            'vehicle': d.vehicle,
-            'location': d.location,
-            'duty_type': d.duty_type,
-            'crew': d.crew,
-            'comment': d.comment
-        } for d in duties]
-        self._set_cached_data(cache_key, serializable)
-        return duties
-
-    def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
-        cache_key = f"daily_{date.strftime('%Y-%m-%d')}"
-        if use_cache:
-            cached = self._get_cached_data(cache_key)
-            if cached: return self._rehydrate_cache(cached)
-        sd, ed = date.replace(hour=0, minute=0, second=0, microsecond=0), date.replace(hour=23, minute=59, second=59, microsecond=999999)
-        try:
-            results = self._fetch_daily_plan_items(sd, ed)
-            serializable = [{'begin': i['begin'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('begin'), datetime) else i.get('begin'), 'end': i['end'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('end'), datetime) else i.get('end'), 'vehicle': i['vehicle'], 'crew': i['crew']} for i in results]
-            self._set_cached_data(cache_key, serializable)
-            return results
-        except:
-            if cache_key in self.cache: return self._rehydrate_cache(self.cache[cache_key]['data'])
-            return []
-
-    @handle_api_errors(None)
-    def get_next_duty(self) -> Optional[Duty]:
-        """
-        Efficiently retrieves the very next duty from cache or short-term fetch.
-        Does not force a full reload if cache is reasonably fresh.
-        """
-        # 1. Try Cache first (future duties are often cached)
-        cached_duties = self.load_future_duties(use_cache=True)
-        now = datetime.now()
-        
-        if cached_duties:
-            for d in cached_duties:
-                if d.begin > now:
-                    return d
-        
-        # 2. If nothing in cache or cache empty, we might need to fetch
-        # But load_future_duties already fetches if cache is missing/expired.
-        # So if we are here, it means we have no future duties in the current month/view.
-        return None
-
-    def _rehydrate_cache(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        hydrated = []
-        for item in data:
-            ni = item.copy()
-            if isinstance(ni.get('begin'), str): ni['begin'] = datetime.strptime(ni['begin'], '%Y-%m-%dT%H:%M:%S')
-            if isinstance(ni.get('end'), str): ni['end'] = datetime.strptime(ni['end'], '%Y-%m-%dT%H:%M:%S')
-            hydrated.append(ni)
-        return hydrated
-
-    # _parse_personal_duties moved to src.parser
-
-    # _parse_daily_plan_raw moved to src.parser
-
-    def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
-        
-        guids_set = {self.org_unit_data_guid} if self.org_unit_data_guid else set()
-        guids_set.update(self.extra_guids)
-        if DEFAULT_GUID: guids_set.add(DEFAULT_GUID)
-        guids_list = list(guids_set)
-        
-        try:
-            d_resp = self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data={'max': '20'})
-            if d_resp.status_code == 200:
-                for item in d_resp.json().get('data', []):
-                    og = item.get('orgUnitDataGuid')
-                    if og and og not in guids_list: guids_list.append(og)
-        except: pass
-        results, seen = [], set()
-        for g in [x for x in guids_list if x]:
-            try:
-                r = self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'})
-                if r.status_code == 200:
-                    data = r.json()
-                    if data.get('data'):
-                        for item in parse_daily_plan_raw(data):
-                            if item['begin'] and item['end'] and not (item['end'] < date_from or item['begin'] > date_to):
-                                sig = (item['vehicle'], item['begin'], item['end'], tuple(sorted(item['crew'].items())))
-                                if sig not in seen: seen.add(sig); results.append(item)
-            except: continue
-        return results
