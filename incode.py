@@ -298,7 +298,24 @@ def start_bot_mode(incode_instance: Any = None, debug: bool = False) -> None:
     console.print()
     
     if not incode_instance:
-        u, p, base_url, extra_guids = setup_auth()
+        # Try to auto-login with last active user if multiple users exist
+        # to avoid blocking menu in headless mode
+        from src.config import load_credentials
+        creds = load_credentials()
+        last_active = creds.get('last_active')
+        users = creds.get('users', [])
+        target_user = next((u for u in users if u['username'] == last_active), None)
+        
+        if target_user:
+            u = target_user['username']
+            p = target_user['password']
+            base_url = target_user.get('base_url')
+            extra_guids = target_user.get('extra_guids')
+            console.print(Align.center(f"[dim]Auto-Login als {u}[/dim]"))
+        else:
+            # Fallback to menu if no last active user found
+            u, p, base_url, extra_guids = setup_auth()
+
         from src.api import IncodeRequests
         incode_instance = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
     
