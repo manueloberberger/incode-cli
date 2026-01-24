@@ -14,8 +14,9 @@ import os
 import re
 import logging
 from datetime import datetime, timedelta, date
+from yarl import URL
 from bs4 import BeautifulSoup
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any, Tuple, Union, cast
 from rich.align import Align
 from src.config import DEFAULT_GUID, console
 from src.exceptions import LoginError, ApiError
@@ -47,19 +48,19 @@ class AsyncIncodeRequests:
         self.cache = self._load_cache()
         self.discovered_name: Optional[str] = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncIncodeRequests":
         await self.ensure_session()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         await self.close()
 
-    async def close(self):
+    async def close(self) -> None:
         if self.session:
             await self.session.close()
             self.session = None
 
-    async def ensure_session(self):
+    async def ensure_session(self) -> None:
         if not self.session:
              self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent})
 
@@ -72,7 +73,7 @@ class AsyncIncodeRequests:
         if os.path.exists(CACHE_FILE):
             try:
                 with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    return cast(Dict[str, Any], json.load(f))
             except Exception:
                 return {}
         return {}
@@ -108,12 +109,14 @@ class AsyncIncodeRequests:
         login_body = {'client': 'dienstplan', 'login': username, 'password': password}
         
         try:
+            if not self.session: raise LoginError("Session initialization failed")
             async with self.session.post(login_url, data=login_body) as resp:
                 # Check cookies
-                cookies = self.session.cookie_jar.filter_cookies(self.base_url)
+                cookies = self.session.cookie_jar.filter_cookies(URL(self.base_url))
                 if 'PHPSESSID' not in cookies:
                      raise LoginError("Login fehlgeschlagen (Keine Session-ID)")
 
+            if not self.session: raise LoginError("Session lost")
             async with self.session.get(f"{self.base_url}/") as resp:
                 content = await resp.text()
 
@@ -126,6 +129,7 @@ class AsyncIncodeRequests:
             
             if not guids:
                 # Fallback to dispo.php if not found on main page
+                if not self.session: raise LoginError("Session lost")
                 async with self.session.get(f"{self.base_url}/StaffPortal/dispo.php") as disp_resp:
                     disp_text = await disp_resp.text()
                     guids = re.findall(r'''["']orgUnitDataGuid["']\s*:\s*["']([^"]+)["']''', disp_text)
@@ -150,8 +154,9 @@ class AsyncIncodeRequests:
             if isinstance(e, LoginError): raise e
             raise LoginError(f"Systemfehler beim Login: {e}")
 
-    async def get_project_guids(self) -> Dict[str, str]:
+    async def get_project_guids(self) -> Dict[str, Any]:
         await self.ensure_session()
+        assert self.session is not None
         project_map = {}
         try:
             async with self.session.get(f"{self.base_url}/StaffPortal/projects.php", headers=self._get_api_headers()) as r_proj:
@@ -192,6 +197,8 @@ class AsyncIncodeRequests:
         events = []
         
         try:
+            if not self.session: await self.ensure_session()
+            assert self.session is not None
             async with self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     soup = BeautifulSoup(await resp.text(), 'html.parser')
@@ -202,8 +209,8 @@ class AsyncIncodeRequests:
                         if not b_dt: continue
                         t_tag = card.find('h3', class_='card-title')
                         events.append({'guid': guid, 'begin': b_dt, 'end': e_dt, 'vehicle': t_tag.get_text(strip=True) if t_tag else "Event", 'location': '', 'crew': {}, 'open_slots': 0})
-        except Exception as e:
-            logger.warning(f"Events load error: {e}")
+        except Exception as exc:
+            logger.warning(f"Events load error: {exc}")
             return []
 
         if not events: return []
@@ -212,11 +219,13 @@ class AsyncIncodeRequests:
         guids = list(set([e['guid'] for e in events]))
         main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else DEFAULT_GUID) or ""
 
-        async def fetch_chunk(chunk_guids):
+        async def fetch_chunk(chunk_guids: List[str]) -> Optional[Dict[str, Any]]:
              try:
+                 # asserted self.session
+                 if not self.session: return None
                  async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': chunk_guids}) as r:
                      if r.status == 200:
-                         return await r.json(content_type=None)
+                         return cast(Dict[str, Any], await r.json(content_type=None))
              except: pass
              return None
 
@@ -248,6 +257,8 @@ class AsyncIncodeRequests:
 
     async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
         try:
+            if not self.session: await self.ensure_session()
+            assert self.session is not None
             async with self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode)
@@ -282,6 +293,7 @@ class AsyncIncodeRequests:
             data['orgUnitDataGuid'] = self.org_unit_data_guid
         
         try:
+            assert self.session is not None
             async with self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data=data) as resp:
                 if resp.status != 200: 
                     logger.error(f"Async Load Error: Status {resp.status}")
@@ -334,14 +346,16 @@ class AsyncIncodeRequests:
             
         body = {'max': '1000', 'dateFrom': df, 'dateTo': dt, 'reason': '', 'form.event.onsubmit': 'searchForm'}
         
-        async def fetch_abs():
+        async def fetch_abs() -> Optional[Dict[str, Any]]:
             try:
+                if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
             except: return None
             
-        async def fetch_wishes():
+        async def fetch_wishes() -> Optional[Dict[str, Any]]:
             try:
+                if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
             except: return None
@@ -435,8 +449,10 @@ class AsyncIncodeRequests:
         if DEFAULT_GUID: guids.add(DEFAULT_GUID)
         sorted_guids = sorted([g for g in guids if g])
         
-        async def fetch_one(g):
+        async def fetch_one(g: str) -> List[Dict[str, Any]]:
             try:
+                # self.session guaranteed by ensure_session above
+                if not self.session: return []
                 data = {'orgUnitDataGuid': g, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt}
                 async with self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data=data) as resp:
                     if resp.status == 200:
@@ -469,6 +485,8 @@ class AsyncIncodeRequests:
         try:
             guid = self.org_unit_data_guid or DEFAULT_GUID
             if not guid: return []
+            if not self.session: await self.ensure_session()
+            assert self.session is not None
             async with self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode='include_all')
@@ -501,7 +519,8 @@ class AsyncIncodeRequests:
             return []
 
     async def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        await self.ensure_session()
+        if not self.session: await self.ensure_session()
+        assert self.session is not None
         df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
         
         guids_set = {self.org_unit_data_guid} if self.org_unit_data_guid else set()
@@ -523,9 +542,11 @@ class AsyncIncodeRequests:
         # Phase 2: Parallel Fetch
         async def fetch_plan(g: str) -> Optional[Dict[str, Any]]:
             try:
+                # self.session is asserted above
+                if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'}) as r:
                     if r.status == 200:
-                        return await r.json(content_type=None)
+                        return cast(Dict[str, Any], await r.json(content_type=None))
             except: pass
             return None
 

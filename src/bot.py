@@ -277,9 +277,10 @@ class IncodeBot:
             if not self.user_config.get('username'):
                  raise Exception("Keine gültigen Zugangsdaten gefunden.")
 
-            ok, msg = self.api.login(self.user_config['username'], self.user_config['password'])
-            if not ok:
-                raise Exception(f"Login fehlgeschlagen: {msg}")
+            try:
+                self.api.login(self.user_config['username'], self.user_config['password'])
+            except Exception as e:
+                raise Exception(f"Login fehlgeschlagen: {e}")
 
         if custom_date:
              return self.api.load_daily_plan(custom_date)

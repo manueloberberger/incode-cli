@@ -21,7 +21,7 @@ class IncodeRequests:
         asyncio.set_event_loop(self.loop)
         self.client = AsyncIncodeRequests(base_url, extra_guids, username)
         
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             if not self.loop.is_closed():
                 self.loop.run_until_complete(self.client.close())

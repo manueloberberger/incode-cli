@@ -69,8 +69,8 @@ def show_events_menu(incode: Any) -> None:
                         loc or info,
                         vehicle or info
                     )
-                except Exception as e: 
-                    # console.print(e)
+                except Exception as exc: 
+                    # console.print(exc)
                     pass
             console.print(Align.center(table))
             wait_for_return()

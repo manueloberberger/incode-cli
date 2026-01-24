@@ -33,6 +33,5 @@ jobs:
 
     # Optional: Fail on type errors? For now just run it to see output in logs
     - name: Run Type Checks
-      continue-on-error: true
       run: |
         mypy src/
