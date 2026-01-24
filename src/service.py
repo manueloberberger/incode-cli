@@ -121,19 +121,49 @@ WantedBy=multi-user.target
             sys.exit(1)
     else:
         temp_file = f"/tmp/incode-bot-{safe_name}.service"
+        script_file = f"/tmp/install-incode-bot-{safe_name}.sh"
+        
         with open(temp_file, 'w') as f:
             f.write(service_content)
         
-        console.print(Align.center("[yellow]Keine Root-Rechte erkannt. Manuelle Installation erforderlich.[/yellow]"))
+        # Create installation script
+        install_script = f"""#!/bin/bash
+set -e
+
+echo "🚀 Installiere Incode Bot Service für {bot_username}..."
+echo ""
+
+cp {temp_file} {service_file_path}
+echo "✓ Service-Datei kopiert"
+
+systemctl daemon-reload
+echo "✓ Systemd neu geladen"
+
+systemctl enable incode-bot-{safe_name}.service
+echo "✓ Service aktiviert (Auto-Start)"
+
+systemctl start incode-bot-{safe_name}.service
+echo "✓ Service gestartet"
+
+echo ""
+echo "✅ Installation erfolgreich!"
+echo ""
+echo "Nützliche Befehle:"
+echo "  systemctl status incode-bot-{safe_name}"
+echo "  journalctl -u incode-bot-{safe_name} -f"
+"""
+        
+        with open(script_file, 'w') as f:
+            f.write(install_script)
+        os.chmod(script_file, 0o755)
+        
+        console.print(Align.center("[yellow]Keine Root-Rechte erkannt.[/yellow]"))
         console.print()
-        console.print(Align.center("[bold]Führe die folgenden Befehle aus:[/bold]"))
+        console.print(Align.center("[bold]Führe diesen Befehl aus:[/bold]"))
         console.print()
-        console.print(Align.center(f"[info]sudo cp {temp_file} {service_file_path}[/info]"))
-        console.print(Align.center("[info]sudo systemctl daemon-reload[/info]"))
-        console.print(Align.center(f"[info]sudo systemctl enable incode-bot-{safe_name}.service[/info]"))
-        console.print(Align.center(f"[info]sudo systemctl start incode-bot-{safe_name}.service[/info]"))
+        console.print(Align.center(f"[info]sudo bash {script_file}[/info]"))
         console.print()
-        console.print(Align.center(f"[dim]Service-Datei vorbereitet: {temp_file}[/dim]"))
+        console.print(Align.center(f"[dim]Installation wird automatisch durchgeführt.[/dim]"))
 
 def install_launchd_service(bot_user: Dict[str, Any]) -> None:
     """Install launchd service for macOS."""
