@@ -313,8 +313,6 @@ def show_service_menu() -> None:
         
         if services_exist:
             options.append(("🔴  Service deinstallieren", "uninstall"))
-        else:
-            options.append(("🔴  Service deinstallieren (keine Services vorhanden)", "uninstall_disabled"))
         
         options.extend([
             ("📊  Service Status anzeigen", "status"),
@@ -328,11 +326,6 @@ def show_service_menu() -> None:
             wait_for_return()
         elif selection == "uninstall":
             uninstall_service()
-            wait_for_return()
-        elif selection == "uninstall_disabled":
-            console.print()
-            console.print(Align.center("[yellow]Keine Services installiert.[/yellow]"))
-            console.print(Align.center("[dim]Nutze 'Service installieren' um einen Bot-Service zu erstellen.[/dim]"))
             wait_for_return()
         elif selection == "status":
             check_service_status()
