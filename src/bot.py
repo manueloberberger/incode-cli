@@ -13,6 +13,7 @@ from dataclasses import asdict
 from rich.align import Align
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ConversationHandler
+from telegram.error import Conflict
 from telegram.warnings import PTBUserWarning
 
 # Suppress specific PTB warning about CallbackQueryHandler tracking
@@ -314,6 +315,23 @@ class IncodeBot:
         
         application = ApplicationBuilder().token(token).build()
 
+        # Error Handler for Conflicts
+        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+            if isinstance(context.error, Conflict):
+                console.print()
+                console.print(Align.center("[bold red]⚠️  Verbindung getrennt![/bold red]"))
+                console.print(Align.center("[yellow]Der Bot wurde auf einem anderen Gerät gestartet.[/yellow]"))
+                console.print(Align.center("[dim]Polling gestoppt. Drücke ESC um zum Menü zurückzukehren.[/dim]"))
+                # We can try to stop the updater to prevent further noise
+                if context.application.updater and context.application.updater.running:
+                    await context.application.updater.stop()
+                if context.application.running:
+                    await context.application.stop()
+            else:
+                logger.error(f"Update {update} caused error {context.error}")
+
+        application.add_error_handler(error_handler)
+
         # Conversation Handler for Date Selection
         conv_handler = ConversationHandler(
             entry_points=[
@@ -347,6 +365,10 @@ class IncodeBot:
 
             try:
                 while True:
+                    # Check if stopped by error handler (Conflict)
+                    if not application.running:
+                        break
+                        
                     await asyncio.sleep(0.1)
                     k = get_key(timeout=0.05)
                     if k == KEY_ESC:

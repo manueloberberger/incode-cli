@@ -178,6 +178,8 @@ def run_cli(debug: bool = False) -> None:
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search, show_settings_menu
     from src.utils import prompt_yes_no
+    from rich.live import Live
+    from rich.spinner import Spinner
     
     force_menu = False
     
@@ -196,7 +198,8 @@ def run_cli(debug: bool = False) -> None:
         
         from src.exceptions import LoginError, IncodeError
         try:
-            incode.login(u, p)
+            with Live(Align.center(Spinner("dots", text=f" Melde an als {u} ...")), console=console, transient=True):
+                incode.login(u, p)
             # time.sleep(1) # Removing artificial delay
         except LoginError as e:
             console.print(Align.center(f"[error]{e}[/error]"))

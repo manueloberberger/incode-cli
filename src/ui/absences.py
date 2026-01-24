@@ -7,13 +7,11 @@ from rich.live import Live
 from rich.spinner import Spinner
 
 from src.config import console, BANNER
-from src.utils import clear_screen, wait_for_return, get_holidays
+from src.utils import clear_screen, wait_for_return, get_holidays, get_key, KEY_ENTER, KEY_ESC
 
 def show_absences(incode: Any) -> None:
     clear_screen()
     console.print(Align.center(BANNER))
-    console.print()
-    console.print()
     with Live(Align.center(Spinner("dots", text=" Lade Abwesenheiten ...")), console=console, transient=True):
         # Try the dedicated endpoint first (this was the v1.7 behavior)
         absences = incode.load_absences()
@@ -22,12 +20,82 @@ def show_absences(incode: Any) -> None:
         if not absences:
              absences = incode.load_future_duties(filter_mode='only_absences')
 
-    if not absences: 
+        # NEW: Fetch Live Balance (Saldo)
+        user_balance = None
+        try:
+             # Strategy 1: Search by Username
+             candidates = []
+             if incode.username:
+                 candidates = incode.search_staff_contact(incode.username)
+             
+             # Strategy 2: Search by Real Name (from DB or Discovered)
+             search_name = incode.discovered_name
+             
+             if not search_name and incode.username:
+                 # Try loading from DB config
+                 from src.config import load_credentials
+                 creds = load_credentials()
+                 for u in creds.get('users', []):
+                     if str(u.get('username')) == str(incode.username):
+                         search_name = u.get('real_name')
+                         break
+             
+             if not candidates and search_name:
+                 candidates = incode.search_staff_contact(search_name)
+
+             # Pick best match
+             if candidates:
+                 # If multiple, try to find one that matches username in PNR or Name
+                 user_balance = candidates[0] # Default to first
+                 for c in candidates:
+                     pnr = str(c.get('personalnummer', ''))
+                     name = str(c.get('_display_name', ''))
+                     # Exact PNR match with username (rare but perfect)
+                     if pnr and incode.username and pnr == incode.username:
+                         user_balance = c
+                         break
+                     # If we searched by name, exact name match is good
+                     if incode.discovered_name and incode.discovered_name.lower() in name.lower():
+                         user_balance = c
+                         # Don't break yet, look for better PNR match potentially? no, name is good enough usually.
+        except: pass
+
+    if not absences and not user_balance: 
         console.print(Align.center(f"\n[info]Keine geplanten Abwesenheiten gefunden.[/info]"))
         wait_for_return()
         return
 
-    table = Table(title="🌴  Meine Abwesenheiten", header_style="header", expand=False, box=None, padding=(0, 1), show_header=True)
+    # --- RENDER BALANCE PANEL ---
+    if user_balance:
+        from rich.panel import Panel
+        saldo_u = user_balance.get('saldo_urlaub')
+        saldo_za = user_balance.get('saldo_za')
+        
+        if saldo_u or saldo_za:
+            try:
+                u_val = float(str(saldo_u or 0).replace(',', '.'))
+                u_color = "green" if u_val > 0 else "red"
+            except: u_color = "white"
+            
+            try:
+                za_val = float(str(saldo_za or 0).replace(',', '.'))
+                za_color = "green" if za_val > 0 else "red"
+            except: za_color = "white"
+
+            # Use a single centered line for robustness against width issues
+            # Format: Resturlaub: 38 Tage   •   Zeitausgleich: 0.02h
+            
+            text = f"[bold]Resturlaub (Saldo):[/bold] [{u_color}]{saldo_u or '0'} Tage[/{u_color}]   [dim]•[/dim]   [bold]Zeitausgleich:[/bold] [{za_color}]{saldo_za or '0'}h[/{za_color}]"
+            
+            console.print(Align.center(Panel(Align.center(text), title="Aktueller Anspruch (Live)", border_style="yellow", expand=False)))
+            console.print() 
+
+    # Removed extra top spacer based on feedback
+    # Title separate to allow spacing below it
+    console.print(Align.center("🌴  Meine Abwesenheiten"))
+    console.print()
+    
+    table = Table(header_style="header", expand=False, box=None, padding=(0, 1), show_header=True)
     table.add_column("Datum", style="info")
     table.add_column("Art", style="warning")
     table.add_column("Dauer", style="dim")
@@ -89,6 +157,44 @@ def show_absences(incode: Any) -> None:
     console.print(Align.center(table))
     
     if total_vacation_days > 0:
-        console.print(Align.center(f"\n[bold green]Gesamtanspruch Urlaub: {total_vacation_days} Tage[/bold green]"))
+        console.print(Align.center(f"\n[dim]Geplanter Urlaub (in dieser Liste): {total_vacation_days} Tage[/dim]"))
 
-    wait_for_return()
+    console.print(Align.center("\n[dim]Drücke 'p' für PDF, 't' für Telegram oder ENTER zum Beenden ...[/dim]"))
+
+    while True:
+        k = get_key()
+        if not k: continue
+        
+        if k.lower() == 'p':
+            pdf_file = "abwesenheiten.pdf"
+            with Live(Align.center(Spinner("dots", text="Erstelle PDF ...")), console=console, transient=True):
+                from src.pdf import export_absences_to_pdf
+                success = export_absences_to_pdf(absences, pdf_file)
+            
+            if success:
+                console.print(Align.center(f"\n[success]PDF erfolgreich gespeichert: {pdf_file}[/success]"))
+                console.print(Align.center("[dim](Datei liegt im Programm-Ordner)[/dim]"))
+            else:
+                console.print(Align.center("\n[error]Fehler beim Speichern des PDF.[/error]"))
+        
+        elif k.lower() == 't':
+            pdf_file = "abwesenheiten.pdf"
+            with Live(Align.center(Spinner("dots", text="Erstelle PDF & Sende an Telegram ...")), console=console, transient=True):
+                from src.pdf import export_absences_to_pdf
+                from src.ui.components import send_pdf_via_bot
+                
+                if export_absences_to_pdf(absences, pdf_file):
+                    sent = send_pdf_via_bot(incode, pdf_file, caption="🌴 Meine Abwesenheiten")
+                    
+                    # Cleanup after sending
+                    import os
+                    if os.path.exists(pdf_file):
+                        os.remove(pdf_file)
+                        
+                    if sent:
+                         console.print(Align.center(f"\n[success]Erfolgreich an Telegram gesendet![/success]"))
+                    else:
+                         console.print(Align.center(f"\n[error]Fehler beim Senden. Bot konfiguriert?[/error]"))
+
+        elif k == KEY_ENTER or (k and k.lower() == 'q') or k == KEY_ESC:
+            return
