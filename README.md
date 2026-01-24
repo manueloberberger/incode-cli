@@ -1,6 +1,6 @@
 # Incode CLI 🚑
 
-![Version](https://img.shields.io/badge/version-2.7.1-blue?style=flat-square) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.8.0-blue?style=flat-square) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square)
 
 **The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
 
@@ -15,6 +15,9 @@ git clone https://github.com/manueloberberger/incode-cli.git
 cd incode-cli
 
 # 2. Install & Setup (Automated)
+./install.sh
+```
+
 ## 💡 Usage
 
 Simply run the wrapper script. It automatically manages the virtual environment for you:
