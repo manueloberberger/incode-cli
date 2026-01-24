@@ -304,3 +304,24 @@ def check_service_status() -> None:
         os.system("launchctl list | grep -i incode")
     else:
         console.print(Align.center(f"[yellow]OS '{os_type}' wird nicht unterstützt.[/yellow]"))
+
+def has_installed_services() -> bool:
+    """Check if any services are installed."""
+    os_type = platform.system()
+    
+    if os_type == "Linux":
+        import subprocess
+        result = subprocess.run(
+            ["systemctl", "list-units", "incode-bot-*", "--all", "--no-pager", "--no-legend"],
+            capture_output=True, text=True
+        )
+        return bool(result.stdout.strip())
+    elif os_type == "Darwin":
+        home = os.path.expanduser("~")
+        launchagents_dir = os.path.join(home, "Library", "LaunchAgents")
+        if os.path.exists(launchagents_dir):
+            import glob
+            plists = glob.glob(os.path.join(launchagents_dir, "com.incode.bot.*.plist"))
+            return len(plists) > 0
+        return False
+    return False

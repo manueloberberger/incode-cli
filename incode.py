@@ -296,7 +296,7 @@ def run_cli(debug: bool = False) -> None:
 def show_service_menu() -> None:
     """Show service management submenu."""
     from src.ui import interactive_menu
-    from src.service import install_service, uninstall_service, check_service_status
+    from src.service import install_service, uninstall_service, check_service_status, has_installed_services
     from src.utils import wait_for_return
     
     while True:
@@ -304,12 +304,22 @@ def show_service_menu() -> None:
         console.print(Align.center(BANNER))
         console.print()
         
+        # Check if services are installed
+        services_exist = has_installed_services()
+        
         options: List[Tuple[str, Any]] = [
             ("🟢  Service installieren", "install"),
-            ("🔴  Service deinstallieren", "uninstall"),
+        ]
+        
+        if services_exist:
+            options.append(("🔴  Service deinstallieren", "uninstall"))
+        else:
+            options.append(("🔴  Service deinstallieren (keine Services vorhanden)", "uninstall_disabled"))
+        
+        options.extend([
             ("📊  Service Status anzeigen", "status"),
             ("🔙  Zurück zum Hauptmenü", "back")
-        ]
+        ])
         
         selection = interactive_menu(options, title="SYSTEMDIENST VERWALTUNG")
         
@@ -318,6 +328,11 @@ def show_service_menu() -> None:
             wait_for_return()
         elif selection == "uninstall":
             uninstall_service()
+            wait_for_return()
+        elif selection == "uninstall_disabled":
+            console.print()
+            console.print(Align.center("[yellow]Keine Services installiert.[/yellow]"))
+            console.print(Align.center("[dim]Nutze 'Service installieren' um einen Bot-Service zu erstellen.[/dim]"))
             wait_for_return()
         elif selection == "status":
             check_service_status()
