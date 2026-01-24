@@ -6,10 +6,6 @@
 
 ---
 
-## ✨ New in v2.7.0
-- **Turbo Login**: Instant startup with optimized network calls (no more waiting).
-- **Smart Sorting**: You are now always displayed first in the crew list ("Me First").
-- **Async Core**: Complete backend rewrite for parallel data fetching and reliability.
 
 ## 🚀 Installation
 
