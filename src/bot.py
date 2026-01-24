@@ -317,8 +317,11 @@ class IncodeBot:
             # Silence technical logs to keep UI clean
             logging.getLogger("telegram").setLevel(logging.WARNING)
             logging.getLogger("httpx").setLevel(logging.WARNING)
-            # Filter out Conflict errors from telegram logger
-            logging.getLogger("telegram.ext._updater").addFilter(ConflictFilter())
+            # Filter out Conflict errors from specific loggers that might report it
+            conflict_filter = ConflictFilter()
+            logging.getLogger("telegram.ext._updater").addFilter(conflict_filter)
+            logging.getLogger("telegram.ext._utils.networkloop").addFilter(conflict_filter)
+            logging.getLogger("telegram").addFilter(conflict_filter)
         
         application = ApplicationBuilder().token(token).build()
 
