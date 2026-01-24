@@ -316,16 +316,21 @@ def check_service_status() -> None:
         console.print()
         
         result = subprocess.run(
-            ["systemctl", "list-units", "incode-bot-*", "--all"],
+            ["systemctl", "list-units", "incode-bot-*", "--all", "--no-legend"],
             capture_output=True, text=True
         )
         
         if result.stdout.strip():
+            # Show service lines
             for line in result.stdout.split('\n'):
-                if line.strip():
-                    console.print(Align.center(f"[dim]{line}[/dim]"))
+                if line.strip() and 'incode-bot-' in line:
+                    console.print(Align.center(f"[green]{line}[/green]"))
+            console.print()
+            console.print(Align.center("[dim]Tipp: 'journalctl -u incode-bot-<name> -f' für Live-Logs[/dim]"))
         else:
-            console.print(Align.center("[yellow]Keine Services gefunden.[/yellow]"))
+            console.print(Align.center("[yellow]💤 Keine Services installiert[/yellow]"))
+            console.print()
+            console.print(Align.center("[dim]Nutze '🟢 Als Systemdienst installieren' um den Bot zu installieren.[/dim]"))
             
     elif os_type == "Darwin":
         console.print(Align.center("[dim]Installierte Incode Bot Services:[/dim]"))
@@ -339,11 +344,16 @@ def check_service_status() -> None:
         found = False
         for line in result.stdout.split('\n'):
             if 'incode' in line.lower():
-                console.print(Align.center(f"[dim]{line}[/dim]"))
+                console.print(Align.center(f"[green]{line}[/green]"))
                 found = True
         
-        if not found:
-            console.print(Align.center("[yellow]Keine Services gefunden.[/yellow]"))
+        if found:
+            console.print()
+            console.print(Align.center("[dim]Tipp: 'tail -f logs/bot-<name>.log' für Live-Logs[/dim]"))
+        else:
+            console.print(Align.center("[yellow]💤 Keine Services installiert[/yellow]"))
+            console.print()
+            console.print(Align.center("[dim]Nutze '🟢 Als Systemdienst installieren' um den Bot zu installieren.[/dim]"))
     else:
         console.print(Align.center(f"[yellow]OS '{os_type}' wird nicht unterstützt.[/yellow]"))
 
