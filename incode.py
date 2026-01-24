@@ -290,7 +290,7 @@ def run_cli(debug: bool = False) -> None:
         if should_logout:
             continue
 
-def start_bot_mode(incode_instance: Any = None, debug: bool = False) -> None:
+def start_bot_mode(incode_instance: Any = None, debug: bool = False, specific_user: Optional[str] = None, force_menu: bool = False) -> None:
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()
@@ -298,26 +298,47 @@ def start_bot_mode(incode_instance: Any = None, debug: bool = False) -> None:
     console.print()
     
     if not incode_instance:
-        # Try to auto-login with last active user if multiple users exist
-        # to avoid blocking menu in headless mode
+        u = None
+        # Valid logic:
+        # 1. If --user passed, try to find that user
+        # 2. If --select passed, force setup_auth
+        # 3. Else try auto-login with last active
+        
         from src.config import load_credentials
         creds = load_credentials()
-        last_active = creds.get('last_active')
         users = creds.get('users', [])
-        target_user = next((u for u in users if u['username'] == last_active), None)
         
-        if target_user:
+        target_user = None
+        
+        if force_menu:
+             # Force interactive
+             pass
+        elif specific_user:
+             target_user = next((u for u in users if u['username'].lower() == specific_user.lower() or (u.get('real_name') and specific_user.lower() in u['real_name'].lower())), None)
+             if not target_user:
+                 console.print(Align.center(f"[red]Benutzer '{specific_user}' nicht gefunden.[/red]"))
+                 sys.exit(1)
+        else:
+             # Auto-login default
+            last_active = creds.get('last_active')
+            target_user = next((u for u in users if u['username'] == last_active), None)
+        
+        if target_user and not force_menu:
             u = target_user['username']
             p = target_user['password']
             base_url = target_user.get('base_url')
             extra_guids = target_user.get('extra_guids')
             console.print(Align.center(f"[dim]Auto-Login als {u}[/dim]"))
+            
+            from src.api import IncodeRequests
+            incode_instance = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
+            # Ensure we update last_active so next run uses this one too
+            update_credentials({}, username=u)
         else:
-            # Fallback to menu if no last active user found
-            u, p, base_url, extra_guids = setup_auth()
-
-        from src.api import IncodeRequests
-        incode_instance = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
+            # Fallback to menu if no last active user found OR forced
+            u, p, base_url, extra_guids = setup_auth(force_interactive=True) # Force menu if we land here
+            from src.api import IncodeRequests
+            incode_instance = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
     
     from src.bot import IncodeBot
     bot = IncodeBot(incode_instance)
@@ -326,9 +347,6 @@ def start_bot_mode(incode_instance: Any = None, debug: bool = False) -> None:
     except KeyboardInterrupt:
         console.print()
         console.print(Align.center("[bold yellow]Beende Telegram Bot... Bitte warten (nicht mehrmals klicken) ...[/bold yellow]"))
-        # Allow some time or just let it exit naturally if possible, 
-        # but usually KeyboardInterrupt stops the loop.
-        # We catch it so we can print the message cleanly.
         pass
 
 def show_help() -> None:
@@ -342,8 +360,10 @@ def show_help() -> None:
         ("Befehl", "Beschreibung"),
         ("---", "---"),
         ("./incode", "Startet das interaktive Hauptmenü (Standard)."),
-        ("./incode bot", "Startet den Telegram Bot Modus."),
+        ("./incode bot", "Startet den Telegram Bot Modus (Auto-Login)."),
         ("./incode bot --debug", "Startet den Bot mit erweiterten technischen Logs."),
+        ("./incode bot --select", "Startet den Bot mit Benutzer-Auswahlmenü."),
+        ("./incode bot --user <NAME>", "Startet den Bot für einen spezifischen Benutzer (User/Name)."),
         ("./incode --no-keyring", "Zwingt die Nutzung der Datei anstatt des System-Keyrings (für Linux/Kali)."),
         ("./incode --help", "Zeigt diese Hilfeübersicht an."),
         ("./incode --version", "Zeigt die aktuelle Programmversion.")
@@ -373,8 +393,18 @@ if __name__ == "__main__":
             sys.exit(0)
 
         debug_mode = "--debug" in sys.argv
+        force_select = "--select" in sys.argv
+        
+        specific_user = None
+        if "--user" in sys.argv:
+            try:
+                idx = sys.argv.index("--user")
+                if idx + 1 < len(sys.argv):
+                    specific_user = sys.argv[idx + 1]
+            except: pass
+
         if len(sys.argv) > 1 and "bot" in sys.argv:
-            start_bot_mode(debug=debug_mode)
+            start_bot_mode(debug=debug_mode, specific_user=specific_user, force_menu=force_select)
         else:
             run_cli(debug=debug_mode)
     except KeyboardInterrupt:
