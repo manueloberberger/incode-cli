@@ -44,6 +44,14 @@ class IncodeRequests:
     def base_url(self) -> str:
         return self.client.base_url
 
+    @property
+    def header_key(self) -> Optional[str]:
+        return self.client.header_key
+
+    @property
+    def header_value(self) -> Optional[str]:
+        return self.client.header_value
+
     def login(self, username: str, password: str) -> bool:
         return self.loop.run_until_complete(self.client.login(username, password))
 

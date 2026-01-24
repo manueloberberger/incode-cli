@@ -78,7 +78,7 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
             # Split my_name into parts to handle "First Last" vs "Last First"
             my_parts = [p for p in my_name.lower().replace(',', '').split() if len(p) > 2]
             
-            def match_score(name):
+            def match_score(name: str) -> int:
                 n_lower = name.lower()
                 score = 0
                 for part in my_parts:

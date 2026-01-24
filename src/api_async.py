@@ -521,7 +521,7 @@ class AsyncIncodeRequests:
             logger.warning(f"Failed to fetch initial daily plan data: {e}")
 
         # Phase 2: Parallel Fetch
-        async def fetch_plan(g):
+        async def fetch_plan(g: str) -> Optional[Dict[str, Any]]:
             try:
                 async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'}) as r:
                     if r.status == 200:
