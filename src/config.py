@@ -25,7 +25,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.9.0"
+VERSION = "2.10.0"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -54,7 +54,7 @@ def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
         'last_active': last_active
     }
 
-def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None) -> None:
+def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFAULT, extra_guids: Optional[List[str]] = None, real_name: Optional[str] = None, telegram_token: Optional[str] = None, allowed_user_id: Optional[int] = None) -> None:
     """
     Saves or updates a specific user to the DB.
     """
@@ -66,7 +66,9 @@ def save_credentials(username: str, password: str, base_url: str = BASE_URL_DEFA
         password=password,
         base_url=base_url,
         extra_guids=extra_guids,
-        real_name=real_name
+        real_name=real_name,
+        telegram_token=telegram_token,
+        allowed_user_id=allowed_user_id
     )
     db.set_active_user(username)
 
@@ -101,7 +103,9 @@ def update_credentials(updates: Dict[str, Any], username: Optional[str] = None) 
         password=new_user['password'],
         base_url=new_user.get('base_url', BASE_URL_DEFAULT),
         extra_guids=new_user.get('extra_guids', []),
-        real_name=new_user.get('real_name')
+        real_name=new_user.get('real_name'),
+        telegram_token=new_user.get('telegram_token'),
+        allowed_user_id=new_user.get('allowed_user_id')
     )
 
 def get_update_interval() -> int:

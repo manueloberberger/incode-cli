@@ -50,7 +50,6 @@ class IncodeBot:
         """Ensures Telegram config exists for current user."""
         if not self.user_config.get("telegram_token") or not self.user_config.get("allowed_user_id"):
             console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
-            console.print(Align.center("[bold yellow]Telegram Konfiguration fehlt.[/bold yellow]"))
             token = centered_input("Telegram Bot Token: ")
             if not token: 
                  console.print(Align.center("[yellow]Abbruch.[/yellow]"))

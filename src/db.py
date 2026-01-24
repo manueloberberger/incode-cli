@@ -41,9 +41,23 @@ class DatabaseManager:
                 base_url TEXT,
                 extra_guids TEXT,
                 real_name TEXT,
-                is_active INTEGER DEFAULT 0
+                is_active INTEGER DEFAULT 0,
+                telegram_token TEXT,
+                allowed_user_id INTEGER
             )
         """)
+
+        # Migration: Add columns if they don't exist (for existing users tables)
+        try:
+            cursor.execute("SELECT telegram_token FROM users LIMIT 1")
+        except sqlite3.OperationalError:
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN telegram_token TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN allowed_user_id INTEGER")
+                conn.commit()
+            except Exception as e:
+                print(f"Migration error: {e}")
+
         
         # Key-Value Store (Settings)
         cursor.execute("""
@@ -100,18 +114,20 @@ class DatabaseManager:
             return u
         return None
 
-    def upsert_user(self, username: str, password: str, base_url: str, extra_guids: List[str], real_name: Optional[str] = None) -> None:
+    def upsert_user(self, username: str, password: str, base_url: str, extra_guids: List[str], real_name: Optional[str] = None, telegram_token: Optional[str] = None, allowed_user_id: Optional[int] = None) -> None:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO users (username, password, base_url, extra_guids, real_name)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (username, password, base_url, extra_guids, real_name, telegram_token, allowed_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 password=excluded.password,
                 base_url=excluded.base_url,
                 extra_guids=excluded.extra_guids,
-                real_name=excluded.real_name
-        """, (username, password, base_url, json.dumps(extra_guids), real_name))
+                real_name=excluded.real_name,
+                telegram_token=excluded.telegram_token,
+                allowed_user_id=excluded.allowed_user_id
+        """, (username, password, base_url, json.dumps(extra_guids), real_name, telegram_token, allowed_user_id))
         conn.commit()
         conn.close()
 
