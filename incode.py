@@ -246,6 +246,7 @@ def run_cli(debug: bool = False) -> None:
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
             ("📺  Live-Monitor", "live"),
             ("🤖  Telegram Bot", "bot"),
+            ("⚙️   Systemdienst (Bot installieren/deinstallieren)", "service"),
             ("⚙️   Einstellungen", "settings"),
             ("👤  Benutzer wechseln / Logout", "logout"),
             ("🚪  Beenden", "exit")
@@ -276,6 +277,8 @@ def run_cli(debug: bool = False) -> None:
                 show_live_monitor(incode)
             elif selection == "bot":
                 start_bot_mode(incode)
+            elif selection == "service":
+                show_service_menu()
             elif selection == "settings":
                 show_settings_menu()
             elif selection == "logout":
@@ -289,6 +292,38 @@ def run_cli(debug: bool = False) -> None:
         
         if should_logout:
             continue
+
+def show_service_menu() -> None:
+    """Show service management submenu."""
+    from src.ui import interactive_menu
+    from src.service import install_service, uninstall_service, check_service_status
+    from src.utils import wait_for_return
+    
+    while True:
+        clear_screen()
+        console.print(Align.center(BANNER))
+        console.print()
+        
+        options: List[Tuple[str, Any]] = [
+            ("🟢  Service installieren", "install"),
+            ("🔴  Service deinstallieren", "uninstall"),
+            ("📊  Service Status anzeigen", "status"),
+            ("🔙  Zurück zum Hauptmenü", "back")
+        ]
+        
+        selection = interactive_menu(options, title="SYSTEMDIENST VERWALTUNG")
+        
+        if selection == "install":
+            install_service()
+            wait_for_return()
+        elif selection == "uninstall":
+            uninstall_service()
+            wait_for_return()
+        elif selection == "status":
+            check_service_status()
+            wait_for_return()
+        elif selection == "back" or selection is None:
+            break
 
 def start_bot_mode(incode_instance: Any = None, debug: bool = False, specific_user: Optional[str] = None, force_menu: bool = False) -> None:
     clear_screen()
@@ -405,8 +440,18 @@ if __name__ == "__main__":
             except: pass
 
         if len(sys.argv) > 1 and "install-service" in sys.argv:
-            from src.service import install_systemd_service
-            install_systemd_service()
+            from src.service import install_service
+            
+            # Check for --user argument
+            service_user = None
+            if "--user" in sys.argv:
+                try:
+                    idx = sys.argv.index("--user")
+                    if idx + 1 < len(sys.argv):
+                        service_user = sys.argv[idx + 1]
+                except: pass
+            
+            install_service(specific_user=service_user)
         elif len(sys.argv) > 1 and "bot" in sys.argv:
             start_bot_mode(debug=debug_mode, specific_user=specific_user, force_menu=force_select)
         else:
