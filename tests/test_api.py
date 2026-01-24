@@ -33,7 +33,8 @@ MOCK_DUTIES_JSON = {
 async def api():
     client = AsyncIncodeRequests(base_url=MOCK_BASE_URL)
     await client.ensure_session()
-    return client
+    yield client
+    await client.close()
 
 
 @pytest.mark.asyncio

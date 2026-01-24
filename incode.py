@@ -4,7 +4,7 @@ import sys
 import time
 import shutil
 from datetime import datetime
-from typing import Any, Tuple, Optional, List
+from typing import Any, Tuple, Optional, List, Dict
 import sys
 import os
 import shutil
@@ -228,7 +228,7 @@ def run_cli(debug: bool = False) -> None:
         # We need to check if we already have a real name saved
         from src.config import load_credentials
         current_creds = load_credentials().get('users', [])
-        current_user_obj = next((user for user in current_creds if user['username'] == u), {})
+        current_user_obj: Dict[str, Any] = next((user for user in current_creds if user['username'] == u), {})
         real_name = current_user_obj.get('real_name')
         
         if not real_name:
