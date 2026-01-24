@@ -151,6 +151,9 @@ echo ""
 echo "Nützliche Befehle:"
 echo "  systemctl status incode-bot-{safe_name}"
 echo "  journalctl -u incode-bot-{safe_name} -f"
+
+# Cleanup
+rm -f {temp_file} {script_file}
 """
         
         with open(script_file, 'w') as f:
@@ -312,11 +315,45 @@ def uninstall_service(specific_user: Optional[str] = None) -> None:
             except Exception as e:
                 console.print(Align.center(f"[red]Fehler: {e}[/red]"))
         else:
-            console.print(Align.center("[yellow]Root-Rechte erforderlich. Führe aus:[/yellow]"))
-            console.print(Align.center(f"[info]sudo systemctl stop {service_name}[/info]"))
-            console.print(Align.center(f"[info]sudo systemctl disable {service_name}[/info]"))
-            console.print(Align.center(f"[info]sudo rm {service_file}[/info]"))
-            console.print(Align.center("[info]sudo systemctl daemon-reload[/info]"))
+            # Generate uninstall script for non-root users
+            script_file = f"/tmp/uninstall-incode-bot-{safe_name}.sh"
+            
+            uninstall_script = f"""#!/bin/bash
+set -e
+
+echo "🗑️  Deinstalliere Incode Bot Service für {bot_username}..."
+echo ""
+
+systemctl stop {service_name}
+echo "✓ Service gestoppt"
+
+systemctl disable {service_name}
+echo "✓ Service deaktiviert"
+
+rm -f {service_file}
+echo "✓ Service-Datei gelöscht"
+
+systemctl daemon-reload
+echo "✓ Systemd neu geladen"
+
+echo ""
+echo "✅ Deinstallation erfolgreich!"
+
+# Cleanup
+rm -f {script_file}
+"""
+            
+            with open(script_file, 'w') as f:
+                f.write(uninstall_script)
+            os.chmod(script_file, 0o755)
+            
+            console.print(Align.center("[yellow]Keine Root-Rechte erkannt.[/yellow]"))
+            console.print()
+            console.print(Align.center("[bold]Führe diesen Befehl aus:[/bold]"))
+            console.print()
+            console.print(Align.center(f"[info]sudo bash {script_file}[/info]"))
+            console.print()
+            console.print(Align.center(f"[dim]Deinstallation wird automatisch durchgeführt.[/dim]"))
     
     elif os_type == "Darwin":
         home = os.path.expanduser("~")
