@@ -27,6 +27,12 @@ from src.pdf import export_to_pdf
 # Logging Configuration
 logger = logging.getLogger(__name__)
 
+class ConflictFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info and "Conflict" in str(record.exc_info[0]):
+            return False
+        return True
+
 # States for ConversationHandler
 WAITING_FOR_DATE = 1
 
@@ -311,6 +317,8 @@ class IncodeBot:
             # Silence technical logs to keep UI clean
             logging.getLogger("telegram").setLevel(logging.WARNING)
             logging.getLogger("httpx").setLevel(logging.WARNING)
+            # Filter out Conflict errors from telegram logger
+            logging.getLogger("telegram.ext._updater").addFilter(ConflictFilter())
         
         application = ApplicationBuilder().token(token).build()
 
