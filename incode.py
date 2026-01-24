@@ -192,20 +192,7 @@ def run_cli(debug: bool = False) -> None:
         
         incode = IncodeRequests(base_url or "https://dienstplan.k.roteskreuz.at", extra_guids, username=u)
         
-        status = get_storage_status(u)
-        # Create a nice looking panel or text for the status
-        from rich.panel import Panel
-        
-        status_color = "green" if "Verschlüsselt" in status else "yellow"
-        console.print()
-        console.print(Align.center(
-            Panel.fit(
-                f"[{status_color}]{status}[/{status_color}]",
-                title="Sicherheits-Status",
-                border_style="dim"
-            )
-        ))
-        # time.sleep(0.7) # Removing artificial delay
+        # Status display removed as per user request
         
         from src.exceptions import LoginError, IncodeError
         try:

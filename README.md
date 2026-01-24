@@ -18,6 +18,15 @@ cd incode-cli
 ./install.sh
 ```
 
+## ✨ Features
+
+- **⚡️ Lightning Fast**: Instant startup and navigation thanks to local SQLite caching.
+- **👥 Multi-User**: Seamlessly manage and switch between multiple accounts.
+- **🔍 Smart Search**: Fuzzy search for staff, colleagues, and projects across your organization.
+- **📅 Interactive Roster**: View your duties, absences, and team schedules in a beautiful TUI.
+- **📺 Live Monitor**: Real-time dashboard for vehicle status and crew info.
+- **🤖 Telegram Bot**: Integrated bot for easy PDF export and mobile access.
+
 ## 💡 Usage
 
 Simply run the wrapper script. It automatically manages the virtual environment for you:
@@ -26,4 +35,4 @@ Simply run the wrapper script. It automatically manages the virtual environment 
 ./incode
 ```
 
-*On the first run, you will be prompted for your Incode credentials. They are stored securely and locally on your machine.*
+*On the first run, you will be prompted for your Incode credentials. They are stored locally in a portable **SQLite database** (`incode.db`) within the project folder.*

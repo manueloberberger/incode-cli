@@ -118,9 +118,11 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
                 display_user += f" ({real_name})"
 
             s_status = get_storage_status(current_user)
-            s_short = "✅ JSON" 
+            s_short = s_status 
             s_color = "green"
-            console.print(Align.center(f"[dim]Angemeldet als: [bold white]{display_user}[/bold white] [{s_color}]({s_short})[/{s_color}][/dim]"))
+            # Clean Modern Design
+            # 👤 Name  •  🔒 SQLite
+            console.print(Align.center(f"[bold white]👤 {display_user}[/bold white]  [dim]•[/dim]  [{s_color}]🔒 {s_short}[/{s_color}]"))
             console.print() # Spacer
         
         console.print(Align.center(f"[header]{title}[/header]\n"))

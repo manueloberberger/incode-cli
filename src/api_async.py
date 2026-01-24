@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from typing import Optional, List, Dict, Any, Tuple, Union, cast
 from rich.align import Align
 from src.config import DEFAULT_GUID, console
+from src.db import db
 from src.exceptions import LoginError, ApiError
 from src.utils import get_holidays
 from src.parser import (
@@ -32,7 +33,6 @@ from src.models import Duty
 
 logger = logging.getLogger(__name__)
 
-CACHE_FILE = ".incode_cache.json"
 CACHE_TTL = 900
 
 class AsyncIncodeRequests:
@@ -45,7 +45,6 @@ class AsyncIncodeRequests:
         self.header_key: Optional[str] = None
         self.header_value: Optional[str] = None
         self.org_unit_data_guid: Optional[str] = None
-        self.cache = self._load_cache()
         self.discovered_name: Optional[str] = None
 
     async def __aenter__(self) -> "AsyncIncodeRequests":
@@ -69,34 +68,13 @@ class AsyncIncodeRequests:
             return f"{self.username}_{key_base}"
         return key_base
 
-    def _load_cache(self) -> Dict[str, Any]:
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                    return cast(Dict[str, Any], json.load(f))
-            except Exception:
-                return {}
-        return {}
-
-    def _save_cache(self) -> None:
-        try:
-            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.warning(f"Cache konnte nicht gespeichert werden: {e}")
-
     def _get_cached_data(self, key: str) -> Optional[Any]:
         key = self._get_cache_key(key)
-        if key in self.cache:
-            entry = self.cache[key]
-            if time.time() - entry.get('timestamp', 0) < CACHE_TTL:
-                return entry.get('data')
-        return None
+        return db.get_cache(key, CACHE_TTL)
 
     def _set_cached_data(self, key: str, data: Any) -> None:
         key = self._get_cache_key(key)
-        self.cache[key] = {'timestamp': time.time(), 'data': data}
-        self._save_cache()
+        db.set_cache(key, data)
 
     def _get_api_headers(self) -> Dict[str, str]:
         headers = {'Accept': 'application/json, text/javascript, */*; q=0.01', 'X-Requested-With': 'XMLHttpRequest'}
