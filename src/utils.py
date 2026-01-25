@@ -278,6 +278,16 @@ def update_app() -> bool:
         else:
             console.print(Align.center("[dim]Keine neuen Abhängigkeiten. Überspringe pip install.[/dim]"))
         
+        # 5. Restart Services (if any)
+        try:
+            # Local import to avoid circular dependency
+            from src.service import restart_services
+            restart_services()
+        except Exception as e:
+            # Don't fail the update just because service restart failed
+            console.print(Align.center(f"[yellow]Warnung: Konnte Services nicht neustarten ({e})[/yellow]"))
+
+        
         console.print() # Spacer before success message
         console.print(Align.center("[success]Update erfolgreich abgeschlossen !!![/success]"))
         console.print() # Final Spacer

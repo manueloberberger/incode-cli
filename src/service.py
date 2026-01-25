@@ -1,6 +1,8 @@
 import os
 import sys
 import platform
+import subprocess
+import time
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Tuple
 from rich.align import Align
@@ -461,3 +463,50 @@ def get_installed_services() -> List[str]:
                 services.append(username)
     
     return services
+
+def restart_services() -> None:
+    """Restarts all installed incode services."""
+    services = get_installed_services()
+    if not services:
+        return
+
+    console.print()
+    console.print(Align.center("[bold blue]Starte Hintergrund-Dienste neu ...[/bold blue]"))
+    
+    os_type = platform.system()
+    
+    for username in services:
+        safe_name = username.replace(" ", "_").lower()
+        
+        if os_type == "Linux":
+            service_name = f"incode-bot-{safe_name}.service"
+            console.print(Align.center(f"[dim]Starte {service_name} neu ...[/dim]"))
+            
+            # Check if root
+            if os.geteuid() == 0:
+                cmd = ["systemctl", "restart", service_name]
+            else:
+                # Use sudo if not root
+                cmd = ["sudo", "systemctl", "restart", service_name]
+                
+            try:
+                subprocess.run(cmd, check=True)
+                console.print(Align.center(f"[green]✓ {username}: Service neustartet[/green]"))
+            except subprocess.CalledProcessError:
+                console.print(Align.center(f"[red]❌ {username}: Neustart fehlgeschlagen (sudo benötigt?)[/red]"))
+                
+        elif os_type == "Darwin":
+            home = os.path.expanduser("~")
+            plist_path = os.path.join(home, "Library", "LaunchAgents", f"com.incode.bot.{safe_name}.plist")
+            
+            if os.path.exists(plist_path):
+                console.print(Align.center(f"[dim]Starte Bot für {username} neu ...[/dim]"))
+                try:
+                    # Silence output mostly
+                    subprocess.run(["launchctl", "unload", plist_path], stderr=subprocess.DEVNULL)
+                    time.sleep(0.5)
+                    subprocess.run(["launchctl", "load", plist_path], check=True, stderr=subprocess.PIPE)
+                    console.print(Align.center(f"[green]✓ {username}: Service neustartet[/green]"))
+                except subprocess.CalledProcessError:
+                    console.print(Align.center(f"[red]❌ {username}: Neustart fehlgeschlagen[/red]"))
+

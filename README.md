@@ -2,7 +2,7 @@
 
 ![incode-cli Banner](.github/banner.png)
 
-[![Version](https://img.shields.io/badge/version-2.14.0-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.15.0-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 **The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
 
@@ -20,7 +20,7 @@
 - 📊 **Duty Roster Management**: View and manage your shifts
 - 📇 **Staff Directory**: Quick access to contact information
 - 📈 **Statistics & Analytics**: Track your work hours
-- 🔄 **Auto-Updates**: Stay up-to-date automatically
+- 🔄 **Smart Auto-Updates**: Self-updating app & background services
 - 🔒 **Secure & Local**: Credentials stored locally on your machine
 
 ---
