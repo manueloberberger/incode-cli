@@ -85,6 +85,23 @@ Or use the local wrapper:
 
 ---
 
+## 🧪 Testing
+
+To verify cross-platform compatibility on your system:
+
+```bash
+./test-compatibility.sh
+```
+
+This script checks:
+- Bash syntax of installation scripts
+- Required commands (python3, git, curl, etc.)
+- Platform detection
+- Python version
+- PATH configuration
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get started.
