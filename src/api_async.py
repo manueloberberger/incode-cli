@@ -1,3 +1,17 @@
+"""
+Asynchronous API client for incode-cli.
+
+This module provides the core async API client for communicating with the
+Incode duty roster system. It handles authentication, session management,
+and all API requests using aiohttp for efficient parallel network operations.
+
+The AsyncIncodeRequests class supports:
+- Login and authentication token management
+- Loading duties, absences, and events
+- Staff directory search
+- Daily plan retrieval
+- Caching for improved performance
+"""
 import sys
 try:
     import aiohttp
@@ -36,7 +50,38 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 900
 
 class AsyncIncodeRequests:
+    """
+    Asynchronous API client for the Incode duty roster system.
+    
+    This class handles all communication with the Incode API using aiohttp
+    for efficient async I/O. It supports parallel fetching of data from
+    multiple organizational units.
+    
+    Attributes:
+        base_url: The base URL of the Incode system.
+        extra_guids: Additional organization unit GUIDs to query.
+        username: Current user's username for cache differentiation.
+        session: The aiohttp ClientSession for making requests.
+        header_key: API authentication header name.
+        header_value: API authentication token.
+        org_unit_data_guid: Primary organization unit GUID.
+        discovered_name: User's display name discovered during login.
+        
+    Example:
+        >>> async with AsyncIncodeRequests("https://example.com") as api:
+        ...     await api.login("user", "pass")
+        ...     duties = await api.load_future_duties()
+    """
+    
     def __init__(self, base_url: str, extra_guids: Optional[List[str]] = None, username: Optional[str] = None) -> None:
+        """
+        Initialize the async API client.
+        
+        Args:
+            base_url: Base URL of the Incode system.
+            extra_guids: Optional list of additional organization unit GUIDs.
+            username: Optional username for cache key differentiation.
+        """
         self.base_url = base_url
         self.extra_guids = extra_guids if extra_guids else []
         self.username = username
@@ -55,33 +100,55 @@ class AsyncIncodeRequests:
         await self.close()
 
     async def close(self) -> None:
+        """Close the aiohttp session and clean up resources."""
         if self.session:
             await self.session.close()
             self.session = None
 
     async def ensure_session(self) -> None:
+        """Ensure an aiohttp session exists, creating one if necessary."""
         if not self.session:
              self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent})
 
     def _get_cache_key(self, key_base: str) -> str:
+        """Generate a user-specific cache key."""
         if self.username:
             return f"{self.username}_{key_base}"
         return key_base
 
     def _get_cached_data(self, key: str) -> Optional[Any]:
+        """Retrieve data from cache if not expired."""
         key = self._get_cache_key(key)
         return db.get_cache(key, CACHE_TTL)
 
     def _set_cached_data(self, key: str, data: Any) -> None:
+        """Store data in cache with current timestamp."""
         key = self._get_cache_key(key)
         db.set_cache(key, data)
 
     def _get_api_headers(self) -> Dict[str, str]:
+        """Build HTTP headers for API requests including auth token."""
         headers = {'Accept': 'application/json, text/javascript, */*; q=0.01', 'X-Requested-With': 'XMLHttpRequest'}
         if self.header_key and self.header_value: headers[self.header_key] = self.header_value
         return headers
 
     async def login(self, username: str, password: str) -> bool:
+        """
+        Authenticate with the Incode system.
+        
+        Performs login, extracts auth tokens from response, and discovers
+        available organization unit GUIDs.
+        
+        Args:
+            username: The user's login name (personnel number).
+            password: The user's password.
+            
+        Returns:
+            True if login was successful.
+            
+        Raises:
+            LoginError: If authentication fails or tokens cannot be extracted.
+        """
         await self.ensure_session()
         login_url = f"{self.base_url}/login.php"
         login_body = {'client': 'dienstplan', 'login': username, 'password': password}
@@ -133,6 +200,15 @@ class AsyncIncodeRequests:
             raise LoginError(f"Systemfehler beim Login: {e}")
 
     async def get_project_guids(self) -> Dict[str, Any]:
+        """
+        Retrieve available project/event GUIDs.
+        
+        Discovers project GUIDs from the projects page and maps them
+        to their display names.
+        
+        Returns:
+            Dictionary mapping project GUIDs to project names.
+        """
         await self.ensure_session()
         assert self.session is not None
         project_map = {}
@@ -235,6 +311,16 @@ class AsyncIncodeRequests:
         return events
 
     async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
+        """
+        Load archived duties from a specific year.
+        
+        Args:
+            year: The year to load duties from.
+            filter_mode: 'exclude_absences', 'only_absences', or 'include_all'.
+            
+        Returns:
+            List of Duty objects from the archive.
+        """
         try:
             if not self.session: await self.ensure_session()
             assert self.session is not None
@@ -246,6 +332,20 @@ class AsyncIncodeRequests:
         return []
 
     async def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
+        """
+        Load future duties for the current user.
+        
+        Fetches duties from both the main duties endpoint and the archive,
+        merging results and applying caching for performance.
+        
+        Args:
+            use_cache: Whether to use cached data if available.
+            filter_mode: 'exclude_absences', 'only_absences', or 'include_all'.
+            override_name: Override name for crew list reordering.
+            
+        Returns:
+            List of Duty objects sorted by begin date.
+        """
         cache_key = f"future_duties_{filter_mode}"
         if use_cache:
             cd = self._get_cached_data(cache_key)

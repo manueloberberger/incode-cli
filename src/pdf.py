@@ -1,3 +1,9 @@
+"""
+PDF export functionality for incode-cli.
+
+This module provides functions to generate professional PDF reports
+for duty schedules and absences using ReportLab.
+"""
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table as PDFTable, TableStyle, Paragraph, Spacer
@@ -5,14 +11,30 @@ from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime, timedelta
 from src.config import console
 
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any
+
 
 def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf", title_text: str = "Dienstplan Übersicht") -> bool:
+    """
+    Export duties to a formatted PDF document.
+    
+    Creates a professional-looking PDF with Red Cross themed styling,
+    including a table of all duties with date, time, duration, vehicle,
+    and crew information.
+    
+    Args:
+        duties: List of duty dictionaries with 'begin', 'end', 'vehicle', and 'crew' keys.
+        filename: Output filename (default: 'dienstplan.pdf').
+        title_text: Title to display at the top of the PDF.
+        
+    Returns:
+        True if export was successful, False otherwise.
+    """
     doc = SimpleDocTemplate(filename, pagesize=A4)
     elements = []
     styles = getSampleStyleSheet()
     
-    # Custom Colors
+    # Custom Colors - Red Cross theme
     rk_red = colors.HexColor("#E3001B")
     light_grey = colors.HexColor("#F2F2F2")
     
@@ -24,6 +46,7 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
     elements.append(Paragraph(f"Erstellt am: {timestamp}", styles['Normal']))
     elements.append(Spacer(1, 12))
     
+    # Table header
     data = [["Datum", "Zeit", "Std.", "Fahrzeug", "Besatzung"]]
     
     if not duties:
@@ -36,37 +59,42 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
 
     for d in duties:
         try:
-            # Parse Dates
+            # Parse Dates - handle both string and datetime inputs
             b, e = d.get('begin'), d.get('end')
             
-            # If string, parse it
             if isinstance(b, str):
-                if 'T' in b: b = datetime.strptime(b[:19], '%Y-%m-%dT%H:%M:%S')
-                else: b = datetime.strptime(b, '%Y-%m-%d %H:%M:%S')
+                if 'T' in b: 
+                    b = datetime.strptime(b[:19], '%Y-%m-%dT%H:%M:%S')
+                else: 
+                    b = datetime.strptime(b, '%Y-%m-%d %H:%M:%S')
             
             if isinstance(e, str):
-                if 'T' in e: e = datetime.strptime(e[:19], '%Y-%m-%dT%H:%M:%S')
-                else: e = datetime.strptime(e, '%Y-%m-%d %H:%M:%S')
+                if 'T' in e: 
+                    e = datetime.strptime(e[:19], '%Y-%m-%dT%H:%M:%S')
+                else: 
+                    e = datetime.strptime(e, '%Y-%m-%d %H:%M:%S')
             
-            # If still not datetime (e.g. None), skip or handle
             if not isinstance(b, datetime) or not isinstance(e, datetime):
                 continue
                 
             h = (e - b).total_seconds() / 3600
             
-            # Format Crew
+            # Format Crew - handle list, dict, or string
             crew_raw = d.get('crew')
             crew_str = "-"
             
             if isinstance(crew_raw, list):
                 crew_str = "\n".join(crew_raw)
             elif isinstance(crew_raw, dict):
-                # Format dict (e.g. daily plan)
+                # Format dict (e.g. from daily plan)
                 parts = []
-                if "FAHRER" in crew_raw: parts.append(f"F: {crew_raw['FAHRER']}")
-                if "SANITAETER1" in crew_raw: parts.append(f"S1: {crew_raw['SANITAETER1']}")
-                if "SANITAETER2" in crew_raw: parts.append(f"S2: {crew_raw['SANITAETER2']}")
-                # Add others if any
+                if "FAHRER" in crew_raw: 
+                    parts.append(f"F: {crew_raw['FAHRER']}")
+                if "SANITAETER1" in crew_raw: 
+                    parts.append(f"S1: {crew_raw['SANITAETER1']}")
+                if "SANITAETER2" in crew_raw: 
+                    parts.append(f"S2: {crew_raw['SANITAETER2']}")
+                # Add any other roles
                 for k, v in crew_raw.items():
                     if k not in ["FAHRER", "SANITAETER1", "SANITAETER2"]:
                         parts.append(f"{k}: {v}")
@@ -74,7 +102,8 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
             elif isinstance(crew_raw, str):
                 crew_str = crew_raw
                 
-            if not crew_str: crew_str = "-"
+            if not crew_str: 
+                crew_str = "-"
 
             data.append([
                 b.strftime('%d.%m.%Y'),
@@ -83,16 +112,16 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
                 d.get('vehicle') or "-",
                 crew_str
             ])
-        except (ValueError, AttributeError, KeyError, TypeError) as ex:
+        except (ValueError, AttributeError, KeyError, TypeError):
             pass  # Skip malformed duty entries
 
-    # Column Widths
+    # Column Widths optimized for A4
     col_widths = [70, 90, 40, 90, 160]
     
     table = PDFTable(data, colWidths=col_widths, repeatRows=1)
     
     table_style = TableStyle([
-        # Header
+        # Header styling
         ('BACKGROUND', (0, 0), (-1, 0), rk_red),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -101,13 +130,13 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
         
-        # Rows
+        # Row styling
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
         
-        # Striping (Zebra)
+        # Zebra striping for readability
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light_grey]),
         
         # Grid
@@ -125,14 +154,27 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
     elements.append(table)
     try:
         doc.build(elements)
-        # console.print(f"[success]PDF gespeichert als: {filename}[/success]")
         return True
     except Exception as e:
         console.print(f"[error]Fehler beim Erstellen des PDF: {e}[/error]")
         return False
 
+
 def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwesenheiten.pdf", title_text: str = "Meine Abwesenheiten") -> bool:
-    """Generates a PDF for absences list."""
+    """
+    Generate a PDF report of absences (vacation, sick leave, etc.).
+    
+    Creates a formatted PDF document listing all absences with their
+    time periods, reasons, and durations.
+    
+    Args:
+        absences: List of absence dictionaries with 'begin', 'end', and 'duty_type' keys.
+        filename: Output filename (default: 'abwesenheiten.pdf').
+        title_text: Title to display at the top of the PDF.
+        
+    Returns:
+        True if export was successful, False otherwise.
+    """
     doc = SimpleDocTemplate(filename, pagesize=A4)
     elements = []
     styles = getSampleStyleSheet()
@@ -168,7 +210,7 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
             e_raw = datetime.strptime(a['end'], '%Y-%m-%dT%H:%M:%S')
             reason = a.get('duty_type', '')
             
-            # Logic copy-paste from UI to keep consistency
+            # Adjust times for display (handle overnight shifts)
             b = b_raw
             if b_raw.hour >= 20: 
                 b = b_raw + timedelta(days=1)
@@ -181,6 +223,7 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
             total_seconds = int((e_raw - b_raw).total_seconds())
             days_diff = (e.date() - b.date()).days + 1
             
+            # Format duration based on absence type
             dur_str = ""
             if "urlaub" in reason.lower() or "abwesend" in reason.lower() or "sonderabwesenheit" in reason.lower() or "frei" in reason.lower() or total_seconds >= 86000:
                 dur_str = "1 Tag" if days_diff == 1 else f"{days_diff} Tage"
@@ -188,6 +231,7 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
                 h = total_seconds / 3600
                 dur_str = f"{int(h)} Std." if h == int(h) else f"{h:g} Std."
 
+            # Format date range with weekday
             wd_start = weekday_map[b.weekday()]
             date_str = f"{wd_start} {b.strftime('%d.%m.%Y')}"
             if e.date() > b.date():
@@ -203,7 +247,6 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
             pass  # Skip malformed absence entries
 
     # Column Widths (A4 Width ~ 450-500 printable)
-    # Total ~ 450
     col_widths = [180, 180, 90]
     
     table = PDFTable(data, colWidths=col_widths, repeatRows=1)
