@@ -1,6 +1,6 @@
 from src.config import console, BANNER, get_update_interval, set_update_interval, VERSION, update_credentials
 from src.db import db
-from rich.prompt import Prompt
+
 from src.ui.components import interactive_menu
 from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, prompt_yes_no, centered_input
 import time

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-from typing import Optional, List, Any, Dict
+from typing import List, Any, Dict
 from rich.table import Table
 from rich.align import Align
 from rich.live import Live
@@ -7,7 +7,7 @@ from rich.spinner import Spinner
 from rich.panel import Panel
 
 from src.config import console, BANNER
-from src.utils import clear_screen, wait_for_return, flush_input, get_key
+from src.utils import clear_screen, wait_for_return, get_key
 from src.ui import interactive_menu
 
 def show_plan_list(incode: Any) -> None:
@@ -37,7 +37,7 @@ def show_plan_list(incode: Any) -> None:
     end_date = start_date + timedelta(days=days-1)
     
     console.print()
-    results: List[Any] = []
+
     
     # We use a custom fetch loop or if we exposed the range fetch in sync API we use that
     # Since api_async.py's load_daily_plan is single day, but _fetch_daily_plan_items handles ranges...

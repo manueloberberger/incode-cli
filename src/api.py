@@ -8,12 +8,10 @@ allowing the existing synchronous UI code to use async I/O for better performanc
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 from src.api_async import AsyncIncodeRequests
 from src.models import Duty
-from src.exceptions import LoginError, ApiError
-from src.utils import handle_api_errors
 
 logger = logging.getLogger(__name__)
 

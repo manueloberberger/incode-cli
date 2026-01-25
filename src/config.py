@@ -1,14 +1,8 @@
-import os
-import sys
 from typing import Optional, Dict, List, Any
-
 import logging
 from logging.handlers import RotatingFileHandler
 from rich.console import Console
 from rich.theme import Theme
-from rich.prompt import Prompt
-from rich.align import Align
-
 from src.db import db
 
 # Setup Logging
@@ -44,7 +38,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.16.2"
+VERSION = "2.16.3"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]

@@ -3,7 +3,7 @@ import sys
 import platform
 import subprocess
 import time
-from pathlib import Path
+
 from typing import Optional, Dict, List, Any, Tuple
 from rich.align import Align
 from src.config import console, load_credentials

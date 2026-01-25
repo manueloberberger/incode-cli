@@ -22,27 +22,23 @@ except ImportError:
     print("Please run: python3 -m pip install aiohttp --break-system-packages")
     sys.exit(1)
 import asyncio
-import time
-import json
-import os
 import re
 import logging
 from datetime import datetime, timedelta, date
 from yarl import URL
 from bs4 import BeautifulSoup
-from typing import Optional, List, Dict, Any, Tuple, Union, cast
-from rich.align import Align
-from src.config import console
+from typing import Optional, List, Dict, Any, cast
+
 from src.db import db
 from src.exceptions import LoginError, ApiError
 from src.utils import get_holidays
 from src.parser import (
     fix_datetime,
-    calculate_staff_score,
     parse_staff_contact,
     parse_personal_duties,
     parse_daily_plan_raw
 )
+
 from src.models import Duty
 
 logger = logging.getLogger(__name__)
@@ -246,7 +242,7 @@ class AsyncIncodeRequests:
         return project_map
 
     async def load_events_plan(self) -> List[Dict[str, Any]]:
-        pm = await self.get_project_guids()
+        # pm = await self.get_project_guids() # Unused
         guids_to_try = [self.org_unit_data_guid] + self.extra_guids
         events = []
         

@@ -9,7 +9,7 @@ from dataclasses import asdict, is_dataclass
 from icalendar import Calendar, Event, vText
 from src.config import console
 
-from typing import List, Dict, Any, Union, Sequence
+from typing import Dict, Any, Union, Sequence
 from src.models import Duty
 
 

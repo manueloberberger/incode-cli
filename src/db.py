@@ -1,8 +1,8 @@
 import sqlite3
 import json
-import os
+
 import time
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 from threading import Lock
 
 DB_FILE = "incode.db"

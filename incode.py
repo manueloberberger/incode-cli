@@ -3,29 +3,27 @@ import os
 import sys
 import time
 import shutil
-from datetime import datetime
+import shutil
+
 from typing import Any, Tuple, Optional, List, Dict
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from rich.prompt import Prompt
-from rich.console import Console
 from rich.align import Align
 from rich.table import Table
-from rich.text import Text
+
 
 try:
-    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status, VERSION
+    from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, VERSION
     from src.db import db
     # Import lightweight utils needed for basic UI/params
-    from src.utils import clear_screen, centered_input, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
+    from src.utils import clear_screen, centered_input, wait_for_return
 except ImportError as e:
     print(f"Fehler: Abhängigkeiten konnten nicht geladen werden ({e}).")
     print("Bitte führe 'pip install -r requirements.txt' aus.")
     sys.exit(1)
 
 def _prompt_new_user() -> Tuple[str, str, str, Optional[List[str]]]:
-    width = shutil.get_terminal_size().columns
-    padding = (width // 2) - 4
+
     
     console.print()
     console.print(Align.center("[bold]Incode Benutzername[/bold]"))
@@ -175,7 +173,6 @@ def run_cli(debug: bool = False) -> None:
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search, show_settings_menu
     from src.ui.list_view import show_plan_list
-    from src.utils import prompt_yes_no
     from rich.live import Live
     from rich.spinner import Spinner
     
@@ -194,7 +191,7 @@ def run_cli(debug: bool = False) -> None:
         
         # Status display removed as per user request
         
-        from src.exceptions import LoginError, IncodeError
+        from src.exceptions import LoginError
         try:
             with Live(Align.center(Spinner("dots", text=f" Melde an als {u} ...")), console=console, transient=True):
                 incode.login(u, p)

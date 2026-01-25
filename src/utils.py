@@ -9,7 +9,7 @@ import logging
 from requests import RequestException
 from requests.adapters import HTTPAdapter
 
-from src.config import DEFAULT_TIMEOUT, console
+from src.config import DEFAULT_TIMEOUT
 
 # Re-exports for backwards compatibility
 from src.input import (
