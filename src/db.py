@@ -92,7 +92,7 @@ class DatabaseManager:
             if u['extra_guids']:
                 try:
                     u['extra_guids'] = json.loads(u['extra_guids'])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     u['extra_guids'] = []
             users.append(u)
         conn.close()
@@ -109,7 +109,7 @@ class DatabaseManager:
             if u['extra_guids']:
                 try:
                     u['extra_guids'] = json.loads(u['extra_guids'])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     u['extra_guids'] = []
             return u
         return None
@@ -159,7 +159,7 @@ class DatabaseManager:
         if row:
             try:
                 return json.loads(row['value'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return row['value']
         return default
 
@@ -189,7 +189,7 @@ class DatabaseManager:
             if time.time() - ts < ttl:
                 try:
                     return json.loads(row['value'])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     return None
             else:
                 # Cleanup old cache immediately? Or lazy?

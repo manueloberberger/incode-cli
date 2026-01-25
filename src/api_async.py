@@ -204,7 +204,8 @@ class AsyncIncodeRequests:
                  async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': chunk_guids}) as r:
                      if r.status == 200:
                          return cast(Dict[str, Any], await r.json(content_type=None))
-             except: pass
+             except Exception:
+                pass  # Skip failed fetches
              return None
 
         # PARALLEL FETCHING
@@ -240,7 +241,8 @@ class AsyncIncodeRequests:
             async with self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode)
-        except: pass
+        except Exception:
+            pass  # Skip failed archive fetches
         return []
 
     async def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
@@ -329,14 +331,16 @@ class AsyncIncodeRequests:
                 if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
-            except: return None
+            except Exception:
+                return None
             
         async def fetch_wishes() -> Optional[Dict[str, Any]]:
             try:
                 if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
-            except: return None
+            except Exception:
+                return None
 
         res_abs, res_wishes = await asyncio.gather(fetch_abs(), fetch_wishes())
         
@@ -358,8 +362,10 @@ class AsyncIncodeRequests:
 
         if res_wishes:
             for item in res_wishes.get('data', []):
-                try: state = int(item.get('approvalState'))
-                except: state = 0
+                try:
+                    state = int(item.get('approvalState'))
+                except (ValueError, TypeError):
+                    state = 0
                 if state not in [0, 1] or item.get('withdrawn') in [1, True]: continue
                 reason_str = str(item.get('reasonName') or item.get('absenceTypeName') or "Abwesend")
                 status_text = " [yellow](Beantragt)[/yellow]" if state == 0 else " [green](Gen. / n. eingetr.)[/green]"
@@ -436,7 +442,8 @@ class AsyncIncodeRequests:
                     if resp.status == 200:
                         j = await resp.json(content_type=None)
                         return parse_staff_contact(j, query)
-            except: pass
+            except Exception:
+                pass  # Skip failed staff fetches
             return []
 
         results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids])
@@ -493,7 +500,7 @@ class AsyncIncodeRequests:
             serializable = [{'begin': i['begin'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('begin'), datetime) else i.get('begin'), 'end': i['end'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('end'), datetime) else i.get('end'), 'vehicle': i['vehicle'], 'crew': i['crew']} for i in results]
             self._set_cached_data(cache_key, serializable)
             return results
-        except:
+        except Exception:
             return []
 
     async def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -525,7 +532,8 @@ class AsyncIncodeRequests:
                 async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'}) as r:
                     if r.status == 200:
                         return cast(Dict[str, Any], await r.json(content_type=None))
-            except: pass
+            except Exception:
+                pass  # Skip failed plan fetches
             return None
 
         plan_results = await asyncio.gather(*[fetch_plan(g) for g in guids_list if g])

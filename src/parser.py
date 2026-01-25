@@ -10,7 +10,8 @@ def fix_datetime(s: Optional[str]) -> Optional[datetime]:
         dt = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')
         offset = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
         return dt + timedelta(seconds=offset)
-    except: return None
+    except (ValueError, IndexError):
+        return None
 
 def calculate_staff_score(p: Dict[str, Any]) -> int:
     score = 0

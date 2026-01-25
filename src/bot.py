@@ -48,7 +48,8 @@ class ConflictFilter(logging.Filter):
             if self.on_conflict:
                 try:
                     self.on_conflict()
-                except: pass
+                except Exception:
+                    pass  # Silently ignore callback errors
             return False
             
         return True

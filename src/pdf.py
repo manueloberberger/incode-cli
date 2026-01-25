@@ -31,7 +31,8 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
         try:
             doc.build(elements)
             return True
-        except: return False
+        except Exception:
+            return False
 
     for d in duties:
         try:
@@ -82,8 +83,8 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
                 d.get('vehicle') or "-",
                 crew_str
             ])
-        except Exception as ex: 
-            pass
+        except (ValueError, AttributeError, KeyError, TypeError) as ex:
+            pass  # Skip malformed duty entries
 
     # Column Widths
     col_widths = [70, 90, 40, 90, 160]
@@ -156,7 +157,8 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
         try:
             doc.build(elements)
             return True
-        except: return False
+        except Exception:
+            return False
 
     weekday_map = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -197,7 +199,8 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
                 reason,
                 dur_str
             ])
-        except: pass
+        except (ValueError, KeyError, TypeError):
+            pass  # Skip malformed absence entries
 
     # Column Widths (A4 Width ~ 450-500 printable)
     # Total ~ 450

@@ -60,7 +60,8 @@ def _display_staff_details_loop(p: Any) -> None:
         if not s or len(str(s)) < 10: return "-"
         try:
             return datetime.strptime(str(s)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
-        except: return str(s)
+        except ValueError:
+            return str(s)
 
     # Helper for phone numbers
     def fmt_phone(s: Any) -> str:
@@ -140,7 +141,7 @@ def _display_staff_details_loop(p: Any) -> None:
             try:
                 u_color = "green" if float(str(saldo_u or 0).replace(',', '.')) > 0 else "red"
                 za_color = "green" if float(str(saldo_za or 0).replace(',', '.')) > 0 else "red"
-            except:
+            except (ValueError, AttributeError):
                 u_color = "white"
                 za_color = "white"
             

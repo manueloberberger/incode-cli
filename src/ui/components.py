@@ -111,7 +111,8 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
                     if u['username'] == current_user:
                         real_name = u.get('real_name')
                         break
-            except: pass
+            except Exception:
+                pass  # Skip if credential loading fails
             
             display_user = current_user
             if real_name:

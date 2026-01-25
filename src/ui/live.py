@@ -50,7 +50,7 @@ def show_live_monitor(incode: Any) -> None:
              return # Cancel monitor start
         refresh_interval = int(min_str) * 60
         if refresh_interval < 60: refresh_interval = 60
-    except:
+    except (ValueError, TypeError):
         refresh_interval = 300
     
     last_plan = None
@@ -96,7 +96,8 @@ def show_live_monitor(incode: Any) -> None:
                                 'end': p['end'].strftime('%Y-%m-%dT%H:%M:%S'),
                                 'location': "", 'vehicle': p['vehicle'], 'duty_type': "", 'crew': cl
                             })
-                        except: pass
+                        except (KeyError, AttributeError):
+                            pass  # Skip malformed duty entries
                     
                     ts = datetime.now().strftime('%H:%M')
                     # Optimized filename for live updates

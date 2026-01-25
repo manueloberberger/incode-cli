@@ -99,7 +99,7 @@ def _read_windows_key_blocking() -> Optional[str]:
         if isinstance(ch, bytes):
             return ch.decode('utf-8')
         return None
-    except:
+    except (UnicodeDecodeError, AttributeError):
         return None
 
 def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
@@ -203,7 +203,8 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
                         match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', ver_res.stdout)
                         if match:
                             return match.group(1)
-                except: pass
+                except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                    pass
                 return "Neu" # Fallback if version extraction fails but update exists
         elif debug:
             console.print(f"[yellow]Debug: git rev-list failed: {res.stderr}[/yellow]")

@@ -58,7 +58,8 @@ def show_absences(incode: Any) -> None:
                      if incode.discovered_name and incode.discovered_name.lower() in name.lower():
                          user_balance = c
                          # Don't break yet, look for better PNR match potentially? no, name is good enough usually.
-        except: pass
+        except Exception:
+            pass  # Skip balance fetch errors
 
     if not absences and not user_balance: 
         console.print(Align.center(f"\n[info]Keine geplanten Abwesenheiten gefunden.[/info]"))
@@ -75,12 +76,14 @@ def show_absences(incode: Any) -> None:
             try:
                 u_val = float(str(saldo_u or 0).replace(',', '.'))
                 u_color = "green" if u_val > 0 else "red"
-            except: u_color = "white"
+            except (ValueError, AttributeError):
+                u_color = "white"
             
             try:
                 za_val = float(str(saldo_za or 0).replace(',', '.'))
                 za_color = "green" if za_val > 0 else "red"
-            except: za_color = "white"
+            except (ValueError, AttributeError):
+                za_color = "white"
 
             # Use a single centered line for robustness against width issues
             # Format: Resturlaub: 38 Tage   •   Zeitausgleich: 0.02h
@@ -152,7 +155,8 @@ def show_absences(incode: Any) -> None:
                  date_str = f"{wd_start} {b.strftime('%d.%m.')} - {wd_end} {e.strftime('%d.%m.%Y')}"
 
             table.add_row(date_str, reason, dur_str)
-        except Exception: pass
+        except (ValueError, KeyError):
+            pass  # Skip malformed absence entries
         
     console.print(Align.center(table))
     

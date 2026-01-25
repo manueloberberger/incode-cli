@@ -26,7 +26,8 @@ class IncodeRequests:
             if not self.loop.is_closed():
                 self.loop.run_until_complete(self.client.close())
                 self.loop.close()
-        except: pass
+        except Exception:
+            pass  # Silently ignore cleanup errors during garbage collection
 
     @property
     def discovered_name(self) -> Optional[str]:
