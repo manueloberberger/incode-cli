@@ -103,10 +103,11 @@ class TestEasterHolidays:
         assert easter_monday in holidays
 
     def test_karfreitag_2026(self):
-        """Test Good Friday 2026 (Easter - 2 days)."""
+        """Test Good Friday 2026 (Easter - 2 days). Not a public holiday."""
         holidays = get_holidays(2026)
         # Easter 2026 is April 5, so Good Friday is April 3
-        assert date(2026, 4, 3) in holidays
+        # Karfreitag requires vacation day, so NOT in list
+        assert date(2026, 4, 3) not in holidays
 
     def test_christi_himmelfahrt_2026(self):
         """Test Ascension Day 2026 (Easter + 39 days)."""
@@ -136,10 +137,10 @@ class TestHolidayCount:
         """Test that we have the expected number of holidays."""
         holidays = get_holidays(2026)
         
-        # 12 fixed + 7 Easter-based = 19 total
+        # 12 fixed + 6 Easter-based = 18 total
         # Fixed: Jan 1, Jan 6, May 1, Aug 15, Oct 10, Oct 26, Nov 1, Dec 8, Dec 24, Dec 25, Dec 26, Dec 31
-        # Easter: Easter Sunday, Easter Monday, Good Friday, Ascension, Whit Sunday, Whit Monday, Corpus Christi
-        assert len(holidays) == 19
+        # Easter: Easter Sunday, Easter Monday, Ascension, Whit Sunday, Whit Monday, Corpus Christi
+        assert len(holidays) == 18
 
     def test_no_duplicates(self):
         """Test that there are no duplicate holidays."""
