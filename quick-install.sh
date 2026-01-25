@@ -41,5 +41,5 @@ bash install.sh
 echo ""
 echo -e "${GREEN}${BOLD}✅ Installation complete!${NC}"
 echo ""
-echo "Run with: ${BOLD}incode${NC}"
+echo -e "Run with: ${BOLD}incode${NC}"
 echo ""
