@@ -2,12 +2,31 @@ import os
 import sys
 from typing import Optional, Dict, List, Any
 
+import logging
+from logging.handlers import RotatingFileHandler
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
 from rich.align import Align
 
 from src.db import db
+
+# Setup Logging
+def setup_logging(verbose: bool = False) -> None:
+    """Configures application-wide logging to file."""
+    log_level = logging.DEBUG if verbose else logging.INFO
+    
+    # Log to incode.log in the current directory
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            RotatingFileHandler("incode.log", maxBytes=5*1024*1024, backupCount=2, encoding='utf-8')
+        ]
+    )
+    # Silence noisy libraries
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
 # Custom Theme
 theme = Theme({

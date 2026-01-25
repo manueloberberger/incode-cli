@@ -428,7 +428,10 @@ def show_help() -> None:
 
 if __name__ == "__main__":
     try:
-        from src.config import VERSION
+        from src.config import VERSION, setup_logging
+        
+        debug_mode = "--debug" in sys.argv
+        setup_logging(verbose=debug_mode)
         
         if "--help" in sys.argv or "-h" in sys.argv:
             show_help()
@@ -438,7 +441,6 @@ if __name__ == "__main__":
             console.print(f"Incode CLI v{VERSION}")
             sys.exit(0)
 
-        debug_mode = "--debug" in sys.argv
         force_select = "--select" in sys.argv
         
         specific_user = None

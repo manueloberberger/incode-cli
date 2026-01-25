@@ -1,6 +1,8 @@
 from collections import defaultdict
 from datetime import datetime
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Union
+
+from src.models import Duty
 
 from rich.table import Table
 from rich.align import Align
@@ -46,7 +48,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
     
     monthly_stats: Dict[str, float] = defaultdict(float)
     found_any = False
-    export_duties: List[Dict[str, Any]] = []
+    export_duties: List[Union[Dict[str, Any], Duty]] = []
     month_names = {1: "Januar", 2: "Februar", 3: "März", 4: "April", 5: "Mai", 6: "Juni", 7: "Juli", 8: "August", 9: "September", 10: "Oktober", 11: "November", 12: "Dezember"}
     
     for d in duties:
@@ -58,18 +60,9 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             if search_colleague and search_colleague.lower() not in crew_str.lower(): continue
             found_any = True
             
-            # For export, we might need a dict representation if export tools expect it
-            # The export tools in pdf.py/ical.py currently handle dicts primarily but check type.
-            # We should probably pass a dict or update those tools. 
-            # Given constraints, let's create a dict for export to be safe for now.
-            export_duties.append({
-                'begin': b.strftime('%Y-%m-%dT%H:%M:%S'),
-                'end': e.strftime('%Y-%m-%dT%H:%M:%S'),
-                'vehicle': d.vehicle,
-                'location': d.location,
-                'duty_type': d.duty_type,
-                'crew': d.crew
-            })
+            # Use Duty object directly
+            export_duties.append(d)
+
             
             month_key = f"{b.year}-{b.month:02d} ({month_names[b.month]})"
             monthly_stats[month_key] += h

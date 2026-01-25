@@ -1,0 +1,121 @@
+# Changelog
+
+All notable changes to incode-cli will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.16.2] - 2026-01-25
+
+### Added
+- Comprehensive docstrings across all modules (83 → 169)
+- New test files: `test_db.py` (18 tests), `test_holidays.py` (22 tests)
+- Centralized logging setup in `src/config.py` (logs to `incode.log`)
+- Dataclass support (`Duty`) for PDF and iCal exports
+- Total test count increased from 10 to 50
+
+### Changed
+- Split `utils.py` into modular components:
+  - `input.py` - Keyboard/terminal I/O handling
+  - `updates.py` - Update checking and app update logic
+  - `holidays.py` - Austrian holiday calculations
+- Enhanced GitHub Actions CI with Python 3.9/3.11/3.12 matrix
+- Improved `mypy --strict` compliance
+
+### Fixed
+- Removed duplicate imports in `incode.py`
+
+## [2.16.1] - 2026-01-24
+
+### Changed
+- Improved List View UI
+- Fixed type errors
+
+## [2.16.0] - 2026-01-23
+
+### Added
+- Scrollable daily plan list view
+- Shared cache cleanup functionality
+
+### Fixed
+- Various bug fixes
+
+## [2.15.0] - 2026-01-22
+
+### Added
+- Automatic service restart on update
+
+## [2.14.0] - 2026-01-20
+
+### Changed
+- Optimized Git-based installation with cross-platform support
+- Added testing section to README
+
+## [2.13.1] - 2026-01-19
+
+### Fixed
+- Added missing Optional import in settings.py
+
+## [2.13.0] - 2026-01-18
+
+### Added
+- Enhanced local settings
+- State fixes
+
+## [2.12.1] - 2026-01-17
+
+### Added
+- Uninstall script
+- Auto-cleanup temp files
+
+## [2.12.0] - 2026-01-16
+
+### Added
+- Auto-generate installation script for non-root users
+
+## [2.11.6] - 2026-01-15
+
+### Changed
+- Cleaner service status messages (remove systemctl noise)
+
+## [2.11.5] - 2026-01-14
+
+### Fixed
+- Center service status output for better UX
+
+## [2.11.4] - 2026-01-13
+
+### Added
+- Smart uninstall - auto-select if only 1 service installed
+
+## [2.11.3] - 2026-01-12
+
+### Fixed
+- Mypy type errors in service.py
+
+## [2.11.2] - 2026-01-11
+
+### Changed
+- Unified bot menu (interactive + service management)
+
+## [2.11.1] - 2026-01-10
+
+### Changed
+- Hide uninstall option when no services exist
+- Dynamic service menu with disabled uninstall state
+
+## [2.11.0] - 2026-01-09
+
+### Added
+- Cross-platform service installer (Linux/macOS + menu integration)
+
+## [2.0.0] - 2025-12-XX
+
+### Added
+- Multi-user support (manage multiple accounts)
+- Login selection menu
+- User switching and logout functionality
+
+### Changed
+- Migrated `.credentials.json` to support list of users
+- Improved startup flow (Banner → Updates → Login)

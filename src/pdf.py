@@ -9,12 +9,14 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table as PDFTable, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime, timedelta
+from dataclasses import asdict, is_dataclass
 from src.config import console
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union, Sequence
+from src.models import Duty
 
 
-def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf", title_text: str = "Dienstplan Übersicht") -> bool:
+def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str = "dienstplan.pdf", title_text: str = "Dienstplan Übersicht") -> bool:
     """
     Export duties to a formatted PDF document.
     
@@ -23,7 +25,7 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
     and crew information.
     
     Args:
-        duties: List of duty dictionaries with 'begin', 'end', 'vehicle', and 'crew' keys.
+        duties: List of duties (as Dicts or Duty objects).
         filename: Output filename (default: 'dienstplan.pdf').
         title_text: Title to display at the top of the PDF.
         
@@ -57,8 +59,10 @@ def export_to_pdf(duties: List[Dict[str, Any]], filename: str = "dienstplan.pdf"
         except Exception:
             return False
 
-    for d in duties:
+    for item in duties:
         try:
+            # Support both Dicts and Dataclasses
+            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
             # Parse Dates - handle both string and datetime inputs
             b, e = d.get('begin'), d.get('end')
             

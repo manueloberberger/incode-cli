@@ -5,13 +5,15 @@ This module provides functions to export duty schedules to iCalendar (.ics) form
 which can be imported into calendar applications like Google Calendar, Outlook, etc.
 """
 from datetime import datetime
+from dataclasses import asdict, is_dataclass
 from icalendar import Calendar, Event, vText
 from src.config import console
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union, Sequence
+from src.models import Duty
 
 
-def export_to_ics(duties: List[Dict[str, Any]], filename: str = "dienstplan.ics") -> bool:
+def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str = "dienstplan.ics") -> bool:
     """
     Export duties to iCalendar (.ics) file format.
     
@@ -20,16 +22,14 @@ def export_to_ics(duties: List[Dict[str, Any]], filename: str = "dienstplan.ics"
     and crew information.
     
     Args:
-        duties: List of duty dictionaries with 'begin', 'end', 'vehicle', 
-                'duty_type', 'location', and 'crew' keys.
+        duties: List of duties (as Dicts or Duty objects).
         filename: Output filename (default: 'dienstplan.ics').
         
     Returns:
         True if export was successful, False otherwise.
         
     Example:
-        >>> duties = [{'begin': '2024-01-15T08:00:00', 'end': '2024-01-15T20:00:00',
-        ...            'vehicle': 'RTW 1', 'location': 'Station A'}]
+        >>> duties = [{'begin': ...}]
         >>> export_to_ics(duties, 'my_duties.ics')
         True
     """
@@ -40,8 +40,11 @@ def export_to_ics(duties: List[Dict[str, Any]], filename: str = "dienstplan.ics"
     created_at = datetime.now()
     count = 0
 
-    for d in duties:
+    for item in duties:
         try:
+            # Support both Dicts and Dataclasses (Duty objects)
+            # Explicitly type d as Dict for mypy
+            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
             # Parse timestamps (Assuming they come as ISO strings from API)
             start_str = d.get('begin')
             end_str = d.get('end')
