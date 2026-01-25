@@ -18,7 +18,7 @@ from yarl import URL
 from bs4 import BeautifulSoup
 from typing import Optional, List, Dict, Any, Tuple, Union, cast
 from rich.align import Align
-from src.config import DEFAULT_GUID, console
+from src.config import console
 from src.db import db
 from src.exceptions import LoginError, ApiError
 from src.utils import get_holidays
@@ -144,7 +144,7 @@ class AsyncIncodeRequests:
             all_raw = set(re.findall(guid_pattern, txt))
             if self.org_unit_data_guid: all_raw.add(self.org_unit_data_guid)
             if self.extra_guids: all_raw.update(self.extra_guids)
-            if DEFAULT_GUID: all_raw.add(DEFAULT_GUID)
+            # Removed unused DEFAULT_GUID
             guids_to_try = list(all_raw)
             
             if not guids_to_try: return {}
@@ -195,7 +195,7 @@ class AsyncIncodeRequests:
 
         start, end = min(e['begin'] for e in events), max(e['end'] for e in events)
         guids = list(set([e['guid'] for e in events]))
-        main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else DEFAULT_GUID) or ""
+        main_org = self.org_unit_data_guid or (self.extra_guids[0] if self.extra_guids else "") or ""
 
         async def fetch_chunk(chunk_guids: List[str]) -> Optional[Dict[str, Any]]:
              try:
@@ -430,7 +430,7 @@ class AsyncIncodeRequests:
         guids = set()
         if self.org_unit_data_guid: guids.add(self.org_unit_data_guid)
         if self.extra_guids: guids.update(self.extra_guids)
-        if DEFAULT_GUID: guids.add(DEFAULT_GUID)
+        # Removed unused DEFAULT_GUID
         sorted_guids = sorted([g for g in guids if g])
         
         async def fetch_one(g: str) -> List[Dict[str, Any]]:
@@ -468,7 +468,7 @@ class AsyncIncodeRequests:
         df = datetime.now().strftime('%Y-%m-%dT00:00:00.000Z')
         dt = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59.000Z')
         try:
-            guid = self.org_unit_data_guid or DEFAULT_GUID
+            guid = self.org_unit_data_guid
             if not guid: return []
             if not self.session: await self.ensure_session()
             assert self.session is not None
@@ -510,7 +510,7 @@ class AsyncIncodeRequests:
         
         guids_set = {self.org_unit_data_guid} if self.org_unit_data_guid else set()
         guids_set.update(self.extra_guids)
-        if DEFAULT_GUID: guids_set.add(DEFAULT_GUID)
+        # Removed unused DEFAULT_GUID
         guids_list = list(guids_set)
         
         # Phase 1: Discover extra GUIDs from duties

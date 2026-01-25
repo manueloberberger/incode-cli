@@ -25,7 +25,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.13.1"
+VERSION = "2.14.0"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -36,9 +36,16 @@ BANNER = rf"""
 [bold white]                >> version {VERSION} <<                 [/bold white]
 """
 
-DEFAULT_TIMEOUT = 10 # seconds
+# Timeout Constants (seconds)
+DEFAULT_TIMEOUT = 10
+GIT_FETCH_TIMEOUT = 10
+GIT_REVLIST_TIMEOUT = 5
+GIT_SHOW_TIMEOUT = 5
+
+# Terminal I/O
+KEY_POLL_INTERVAL = 0.01
+
 BASE_URL_DEFAULT = "https://dienstplan.k.roteskreuz.at"
-DEFAULT_GUID = None
 
 def load_credentials(hydrate: bool = True) -> Dict[str, Any]:
     """

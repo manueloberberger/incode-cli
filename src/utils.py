@@ -6,7 +6,7 @@ from typing import Optional, Any
 from requests.adapters import HTTPAdapter
 import shutil
 import re
-from src.config import DEFAULT_TIMEOUT, console, get_last_update_check, set_last_update_check, get_update_interval
+from src.config import DEFAULT_TIMEOUT, console, get_last_update_check, set_last_update_check, get_update_interval, GIT_FETCH_TIMEOUT, GIT_REVLIST_TIMEOUT, GIT_SHOW_TIMEOUT, KEY_POLL_INTERVAL
 
 # Platform specific imports
 if os.name == 'nt':
@@ -78,7 +78,7 @@ def _get_key_windows(timeout: Optional[float]) -> Optional[str]:
             return _read_windows_key_blocking()
         if time.time() - start > timeout:
             return None
-        time.sleep(0.01)
+        time.sleep(KEY_POLL_INTERVAL)
 
 def _read_windows_key_blocking() -> Optional[str]:
     ch = msvcrt.getch() # type: ignore
@@ -133,7 +133,7 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
             seq = ch
             try:
                 # Give a tiny window for the sequence to arrive
-                time.sleep(0.01) 
+                time.sleep(KEY_POLL_INTERVAL) 
                 while len(seq) < 5:
                     try:
                         next_char = os.read(fd, 1)
@@ -174,7 +174,7 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
     try:
         # Fetch latest changes silently (timeout to prevent hanging)
         if debug: console.print("[dim]Debug: Running git fetch...[/dim]")
-        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL if not debug else None, stderr=subprocess.DEVNULL if not debug else None, timeout=10)
+        subprocess.run(["git", "fetch"], check=True, stdout=subprocess.DEVNULL if not debug else None, stderr=subprocess.DEVNULL if not debug else None, timeout=GIT_FETCH_TIMEOUT)
         
         # Check if behind upstream
         # HEAD..@{u} calculates commits reachable from upstream but not from HEAD
@@ -183,7 +183,7 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
             ["git", "rev-list", "--count", "HEAD..@{u}"], 
             capture_output=True, 
             text=True, 
-            timeout=5
+            timeout=GIT_REVLIST_TIMEOUT
         )
         
         if res.returncode == 0 and res.stdout.strip().isdigit():
@@ -197,7 +197,7 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
                         ["git", "show", "@{u}:src/config.py"], 
                         capture_output=True, 
                         text=True, 
-                        timeout=5
+                        timeout=GIT_SHOW_TIMEOUT
                     )
                     if ver_res.returncode == 0:
                         match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', ver_res.stdout)
