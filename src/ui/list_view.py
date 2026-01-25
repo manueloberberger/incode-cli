@@ -37,7 +37,7 @@ def show_plan_list(incode: Any) -> None:
     end_date = start_date + timedelta(days=days-1)
     
     console.print()
-    results = []
+    results: List[Any] = []
     
     # We use a custom fetch loop or if we exposed the range fetch in sync API we use that
     # Since api_async.py's load_daily_plan is single day, but _fetch_daily_plan_items handles ranges...
@@ -78,16 +78,16 @@ def show_plan_list(incode: Any) -> None:
             for item in raw_items:
                 if not item.get('begin'): continue
                 if isinstance(item['begin'], str):
-                    b = datetime.strptime(item['begin'], '%Y-%m-%dT%H:%M:%S')
+                    duty_begin = datetime.strptime(item['begin'], '%Y-%m-%dT%H:%M:%S')
                 else:
-                    b = item['begin']
+                    duty_begin = item['begin']
                 
-                d = b.date()
+                d = duty_begin.date()
                 if d not in all_data: all_data[d] = []
                 all_data[d].append(item)
                 
-        except Exception as e:
-            console.print(f"[red]Fehler beim Laden: {e}[/red]")
+        except Exception as ex:
+            console.print(f"[red]Fehler beim Laden: {ex}[/red]")
             wait_for_return()
             return
 
@@ -121,10 +121,10 @@ def show_plan_list(incode: Any) -> None:
             t.add_column("Crew")
             
             for p in items:
-                b = p.get('begin')
-                if isinstance(b, str): b = datetime.strptime(b, '%Y-%m-%dT%H:%M:%S')
-                e = p.get('end')
-                if isinstance(e, str): e = datetime.strptime(e, '%Y-%m-%dT%H:%M:%S')
+                duty_begin = p.get('begin')
+                if isinstance(duty_begin, str): duty_begin = datetime.strptime(duty_begin, '%Y-%m-%dT%H:%M:%S')
+                duty_end = p.get('end')
+                if isinstance(duty_end, str): duty_end = datetime.strptime(duty_end, '%Y-%m-%dT%H:%M:%S')
                 
                 crew_list = []
                 # Basic crew parsing if simple dict
@@ -133,7 +133,7 @@ def show_plan_list(incode: Any) -> None:
                         if r in p["crew"]: crew_list.append(p['crew'][r])
                 
                 t.add_row(
-                    f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')}",
+                    f"{duty_begin.strftime('%H:%M')}-{duty_end.strftime('%H:%M')}",
                     p.get('vehicle', '??'),
                     ", ".join(crew_list)
                 )
@@ -141,3 +141,54 @@ def show_plan_list(incode: Any) -> None:
             pager_console.print(t)
             pager_console.print("[dim]" + ("- " * 20) + "[/dim]")
             
+    # Flatten data for export
+    flat_export_data = []
+    for d in sorted_days:
+        items = all_data[d]
+        # Sort assumed done in display loop, but good to be sure
+        items.sort(key=lambda x: (x.get('vehicle', ''), x.get('begin')))
+        for p in items:
+            flat_export_data.append(p)
+
+    from src.pdf import export_to_pdf
+    from src.ui.components import send_pdf_via_bot
+    
+    # Clear screen after pager to show clean menu
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print()
+    console.print(Align.center(Panel(f"[bold]Liste mit {len(flat_export_data)} Diensten in {days} Tagen geladen.[/bold]", title="Status", border_style="green")))
+    console.print()
+    
+    console.print(Align.center("[bold cyan]Möchtest du diese Liste exportieren?[/bold cyan]"))
+    console.print()
+    console.print(Align.center("[dim]Drücke 'p' für PDF-Export[/dim]"))
+    console.print(Align.center("[dim]Drücke 't' für Export & Senden an Telegram[/dim]"))
+    console.print()
+    console.print(Align.center("[dim]Drücke Enter um ohne Export zurückzukehren[/dim]"))
+    console.print()
+            
+    while True:
+        k = get_key()
+        if not k or k == '\n' or k == '\r': break
+        k = k.lower()
+        
+        if k == 'p' or k == 't':
+            ts = datetime.now().strftime('%Y-%m-%d_%H-%M')
+            fn = f"Tagesplaene_Liste_{ts}.pdf"
+            title = f"Tagespläne ({days} Tage)"
+            
+            with Live(Align.center(Spinner("dots", text=" Erstelle PDF ...")), console=console, transient=True):
+                success = export_to_pdf(flat_export_data, fn, title_text=title)
+            
+            if success:
+                console.print(Align.center(f"[success]PDF erstellt: {fn}[/success]"))
+                if k == 't':
+                    if send_pdf_via_bot(incode, fn, f"Export Tagespläne ({days} Tage)"):
+                         console.print(Align.center("[success]Erfolgreich an Telegram gesendet![/success]"))
+                
+                # Wait before returning so user sees success message
+                wait_for_return()
+            break
+        elif k == 'q':
+            break
