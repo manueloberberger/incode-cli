@@ -15,3 +15,4 @@ js_urls.txt
 venv_ci/
 env/
 incode.db
+*.log
