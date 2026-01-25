@@ -451,8 +451,7 @@ class AsyncIncodeRequests:
                 curr = b.date()
                 while curr <= e.date():
                     lbl = reason
-                    if is_h(curr) and "urlaub" not in lbl.lower(): 
-                        lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
+                    if is_h(curr): lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
                     if curr not in daily_map or is_h(curr) or any(w in lbl.lower() for w in ["urlaub", "abwesend", "krank"]):
                         daily_map[curr] = {'label': lbl, 'fixed': True}
                     curr += timedelta(days=1)
@@ -474,8 +473,7 @@ class AsyncIncodeRequests:
                 while curr <= end_dt.date():
                     if curr not in daily_map or not daily_map[curr].get('fixed'):
                         lbl = reason_str
-                        if is_h(curr) and "urlaub" not in lbl.lower(): 
-                            lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
+                        if is_h(curr): lbl = "Abwesend" if curr.weekday() == 6 else "Geplante Sonderabwesenheit"
                         if curr not in daily_map or is_h(curr) or "urlaub" in lbl.lower():
                             daily_map[curr] = {'label': lbl + status_text, 'fixed': False}
                     curr += timedelta(days=1)

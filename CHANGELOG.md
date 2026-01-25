@@ -5,6 +5,12 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.5] - 2026-01-25
+
+### Fixed
+- Fixed vacation calculation: Holidays (24.12, 31.12, etc.) override vacation (count as 'Sonderabwesenheit')
+- Removed 'Karfreitag' from holidays list so it correctly counts as 'Urlaub'
+
 ## [2.16.4] - 2026-01-25
 
 ### Fixed

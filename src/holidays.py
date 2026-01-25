@@ -45,7 +45,7 @@ def get_holidays(year: int) -> List[date]:
     # Pfingstsonntag (+49), Pfingstmontag (+50), Fronleichnam (+60)
     holidays.append(easter)                       # Easter Sunday
     holidays.append(easter + timedelta(days=1))   # Easter Monday
-    holidays.append(easter - timedelta(days=2))   # Karfreitag (Good Friday)
+
     holidays.append(easter + timedelta(days=39))  # Ascension
     holidays.append(easter + timedelta(days=49))  # Whit Sunday
     holidays.append(easter + timedelta(days=50))  # Whit Monday
