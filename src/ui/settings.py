@@ -7,7 +7,7 @@ import time
 import sys
 import os
 from rich.align import Align
-from typing import List, Tuple, Any, Dict
+from typing import List, Tuple, Any, Dict, Optional
 
 def show_settings_menu(current_user: Optional[str] = None) -> None:
     while True:
