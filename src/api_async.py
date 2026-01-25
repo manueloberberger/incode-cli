@@ -484,8 +484,7 @@ class AsyncIncodeRequests:
         if use_cache:
             cached = self._get_cached_data(cache_key)
             if cached: 
-                 # Hydrate simple dicts (actually they are just dicts in cache for daily plan)
-                 # But we might need to parse datetime strings back
+                 # Hydrate simple dicts
                  hydrated = []
                  for item in cached:
                      ni = item.copy()

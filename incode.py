@@ -178,6 +178,7 @@ def run_cli(debug: bool = False) -> None:
     
     from src.api import IncodeRequests
     from src.ui import show_future_duties, show_daily_plan, show_live_monitor, interactive_menu, select_date_interactive, show_staff_search, show_absences, show_events_menu, show_colleague_search, show_settings_menu
+    from src.ui.list_view import show_plan_list
     from src.utils import prompt_yes_no
     from rich.live import Live
     from rich.spinner import Spinner
@@ -244,6 +245,7 @@ def run_cli(debug: bool = False) -> None:
             ("🚑  Events / Ambulanzdienste", "events"),
             ("🚑  Tagesplan (Heute)", "today"),
             ("📆  Tagesplan (Datum wählen)", "date"),
+            ("📋  Tagespläne (Liste)", "list_view"),
             ("📒  Mitarbeiter-Verzeichnis", "staff"),
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
             ("📺  Live-Monitor", "live"),
@@ -270,6 +272,8 @@ def run_cli(debug: bool = False) -> None:
                 target_date = select_date_interactive()
                 if target_date:
                     show_daily_plan(incode, target_date)
+            elif selection == "list_view":
+                show_plan_list(incode)
             elif selection == "staff":
                 show_staff_search(incode)
             elif selection == "colleague":
