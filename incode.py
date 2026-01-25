@@ -19,6 +19,7 @@ from rich.text import Text
 
 try:
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, get_storage_status, VERSION
+    from src.db import db
     # Import lightweight utils needed for basic UI/params
     from src.utils import clear_screen, centered_input, wait_for_return, get_key, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_LEFT_ALT, KEY_RIGHT_ALT
 except ImportError as e:
@@ -232,6 +233,7 @@ def run_cli(debug: bool = False) -> None:
             except: pass
 
         update_credentials({}, username=u)
+        db.set_active_user(u)
         
         # Pre-fetch next duty for dashboard
         next_duty = incode.get_next_duty()
@@ -277,7 +279,7 @@ def run_cli(debug: bool = False) -> None:
             elif selection == "bot":
                 show_bot_menu(incode)
             elif selection == "settings":
-                show_settings_menu()
+                show_settings_menu(u)
             elif selection == "logout":
                 should_logout = True
                 force_menu = True

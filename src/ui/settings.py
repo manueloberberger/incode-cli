@@ -1,13 +1,15 @@
-from src.config import console, BANNER, get_update_interval, set_update_interval, VERSION
+from src.config import console, BANNER, get_update_interval, set_update_interval, VERSION, update_credentials
+from src.db import db
+from rich.prompt import Prompt
 from src.ui.components import interactive_menu
-from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, prompt_yes_no
+from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, prompt_yes_no, centered_input
 import time
 import sys
 import os
 from rich.align import Align
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 
-def show_settings_menu() -> None:
+def show_settings_menu(current_user: Optional[str] = None) -> None:
     while True:
         clear_screen()
         console.print(Align.center(BANNER))
@@ -31,6 +33,8 @@ def show_settings_menu() -> None:
         options: List[Tuple[str, Any]] = [
             ("🔄  Jetzt nach Updates suchen", "check_now"),
             ("⏱️   Häufigkeit der Update-Prüfung ändern", "interval"),
+            ("🔐  Passwort ändern", "password"),
+            ("🤖  Telegram Konfiguration ändern", "telegram"),
             ("🔙  Zurück", "back")
         ]
         
@@ -42,6 +46,10 @@ def show_settings_menu() -> None:
             _change_update_interval()
         elif selected == "check_now":
             _manual_update_check()
+        elif selected == "password":
+            _change_password(current_user)
+        elif selected == "telegram":
+            _change_telegram_config(current_user)
 
 def _manual_update_check() -> None:
     from rich.live import Live
@@ -90,3 +98,109 @@ def _change_update_interval() -> None:
         set_update_interval(selection)
         console.print(Align.center(f"[green]Einstellung gespeichert![/green]"))
         time.sleep(1.2)
+
+def _change_password(current_user: Optional[str] = None) -> None:
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print(Align.center("[bold]PASSWORT ÄNDERN[/bold]\n"))
+    
+    active_user = current_user or db.get_active_user()
+    if not active_user:
+        console.print(Align.center("[red]Kein aktiver Benutzer![/red]"))
+        wait_for_return()
+        return
+
+    user_data = db.get_user(active_user)
+    current_pw = user_data.get('password', 'Unbekannt') if user_data else 'Unbekannt'
+    
+    console.print(Align.center(f"Aktuelles Passwort: [bold cyan]{current_pw}[/bold cyan]"))
+    console.print(Align.center("[dim]Drücke ESC zum Abbrechen.[/dim]\n"))
+
+    new_pw = centered_input("[bold green]Neues Passwort >[/bold green] ", password=True)
+    if new_pw is None: # ESC pressed
+        console.print(Align.center("\n[yellow]Abgebrochen.[/yellow]"))
+        time.sleep(1)
+        return
+
+    if not new_pw:
+        console.print(Align.center("\n[yellow]Abgebrochen (leeres Passwort).[/yellow]"))
+        time.sleep(1)
+        return
+        
+    confirm_pw = centered_input("[bold green]Wiederholen >[/bold green] ", password=True)
+    if confirm_pw is None: # ESC pressed
+        console.print(Align.center("\n[yellow]Abgebrochen.[/yellow]"))
+        time.sleep(1)
+        return
+
+    if new_pw != confirm_pw:
+        console.print(Align.center("\n[bold red]Passwörter stimmen nicht überein![/bold red]"))
+        wait_for_return()
+        return
+        
+        return
+        
+    update_credentials({'password': new_pw}, username=active_user)
+    console.print(Align.center("\n[green]Passwort erfolgreich geändert![/green]"))
+    time.sleep(1.5)
+
+def _change_telegram_config(current_user: Optional[str] = None) -> None:
+    clear_screen()
+    console.print(Align.center(BANNER))
+    console.print(Align.center("[bold]TELEGRAM KONFIGURATION[/bold]\n"))
+    
+    active_user = current_user or db.get_active_user()
+    if not active_user:
+        console.print(Align.center("[red]Kein aktiver Benutzer![/red]"))
+        wait_for_return()
+        return
+
+    user_data = db.get_user(active_user)
+    if not user_data:
+        console.print(Align.center("[red]Benutzerdaten nicht gefunden![/red]"))
+        wait_for_return()
+        return
+
+    current_token = user_data.get('telegram_token') or "Nicht gesetzt"
+    current_chat_id = user_data.get('allowed_user_id') or "Nicht gesetzt"
+    
+    # Display direct token (no masking as requested)
+    masked_token = str(current_token)
+        
+    console.print(Align.center(f"Aktueller Token: [cyan]{masked_token}[/cyan]"))
+    console.print(Align.center(f"Aktuelle Chat ID: [cyan]{current_chat_id}[/cyan]\n"))
+    
+    console.print(Align.center("[dim]Drücke Enter um den aktuellen Wert beizubehalten.[/dim]"))
+    console.print(Align.center("[dim]Drücke ESC zum Abbrechen.[/dim]\n"))
+
+    new_token = centered_input("[bold green]Neuer Bot Token >[/bold green] ")
+    if new_token is None:
+        return
+
+    new_chat_id_str = centered_input("[bold green]Neue Chat ID >[/bold green] ")
+    if new_chat_id_str is None:
+        return
+    
+    updates: Dict[str, Any] = {}
+    if new_token and new_token.strip():
+        updates['telegram_token'] = new_token.strip()
+    
+    if new_chat_id_str and new_chat_id_str.strip():
+        try:
+            updates['allowed_user_id'] = int(new_chat_id_str.strip())
+        except ValueError:
+            console.print(Align.center("\n[red]Ungültige Chat ID! Muss eine Zahl sein.[/red]"))
+            wait_for_return()
+            return
+        except ValueError:
+            console.print(Align.center("\n[red]Ungültige Chat ID! Muss eine Zahl sein.[/red]"))
+            wait_for_return()
+            return
+            
+    if updates:
+        update_credentials(updates, username=active_user)
+        console.print(Align.center("\n[green]Telegram Konfiguration gespeichert![/green]"))
+    else:
+        console.print(Align.center("\n[yellow]Keine Änderungen vorgenommen.[/yellow]"))
+        
+    time.sleep(1.5)
