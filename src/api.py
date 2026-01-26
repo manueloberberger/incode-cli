@@ -56,8 +56,9 @@ class IncodeRequests:
             if not self.loop.is_closed():
                 self.loop.run_until_complete(self.client.close())
                 self.loop.close()
-        except Exception:
-            pass  # Silently ignore cleanup errors during garbage collection
+        except (RuntimeError, AttributeError) as e:
+            # Silently ignore cleanup errors during garbage collection
+            logger.debug(f"Cleanup error (expected during shutdown): {e}")
 
     @property
     def discovered_name(self) -> Optional[str]:

@@ -68,7 +68,8 @@ This removes the symlink, virtual environment, and optionally your credentials.
 
 ---
 
-## 💡 Usage
+
+### Usage
 
 Run from anywhere:
 
@@ -83,6 +84,55 @@ Or use the local wrapper:
 ```
 
 *On the first run, you will be prompted for your Incode credentials. They are stored securely and locally on your machine.*
+
+### 👥 Multi-User Support
+
+Incode CLI supports multiple user accounts (personas) simultaneously. This is useful for:
+- Managing different credentials for different organizations
+- Switching between user and bot accounts
+
+**Commands:**
+- **Switch User**: Select "Benutzer wechseln" in the main menu.
+- **Add User**: Select "Neuen Benutzer hinzufügen" in the login screen.
+- **CLI Login**: Start directly as a specific user:
+  ```bash
+  ./incode --user "Max Mustermann"
+  ```
+- **Interactive Selection**: Force the selection menu on startup:
+  ```bash
+  ./incode --select
+  ```
+
+### 🤖 Telegram Bot
+
+The built-in Telegram Bot allows you to query your duty roster from your smartphone.
+
+**Setup:**
+1. Run `./incode bot` interactively.
+2. Enter your Bot Token (from @BotFather).
+3. Enter your Telegram User ID (from @userinfobot).
+4. The bot is now configured!
+
+**Running the Bot:**
+
+- **Interactive Mode**:
+  ```bash
+  ./incode bot
+  ```
+  *Auto-logs in with the last active user.*
+
+- **Specific User**:
+  ```bash
+  ./incode bot --user "Max Mustermann"
+  ```
+  *Starts the bot for a specific user profile.*
+
+- **Background Service**:
+  To keep the bot running 24/7, install it as a system service:
+  ```bash
+  ./incode install-service --user "Max Mustermann"
+  ```
+  *Supports systemd (Linux) and launchd (macOS).*
 
 ---
 

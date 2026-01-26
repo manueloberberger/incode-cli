@@ -1,3 +1,12 @@
+"""
+Live monitoring view for incode-cli.
+
+This module provides real-time duty plan monitoring with auto-refresh
+and optional Telegram notifications for changes.
+
+Functions:
+    show_live_monitor: Start the live monitoring mode
+"""
 from datetime import datetime
 import time
 import os
@@ -14,6 +23,21 @@ from src.ui.daily_plan import show_daily_plan
 from src.pdf import export_to_pdf
 
 def show_live_monitor(incode: Any) -> None:
+    """
+    Start the live duty plan monitoring mode.
+
+    Continuously refreshes and displays the duty plan for a selected date.
+    Optionally sends Telegram notifications when changes are detected.
+
+    Args:
+        incode: The IncodeRequests API instance.
+
+    Features:
+        - Auto-refresh every 60 seconds
+        - Change detection with Telegram alerts
+        - PDF export on changes (optional)
+        - ESC to exit monitoring
+    """
     # 1. Date Selection
     options = [("🕒  Heute überwachen", "today"), ("🗓️  Anderes Datum wählen", "date")]
     sel = interactive_menu(options, title="📺  LIVE MONITOR SETUP")

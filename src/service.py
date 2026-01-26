@@ -1,3 +1,13 @@
+"""
+System service management for incode-cli.
+
+This module provides functionality to install, manage, and uninstall the incode-cli
+Telegram bot as a background system service. It supports:
+- generic systemd (Linux)
+- launchd (macOS)
+
+It handles user selection, service file generation, and service control commands.
+"""
 import os
 import sys
 import platform
@@ -10,7 +20,18 @@ from src.config import console, load_credentials
 from src.ui import interactive_menu
 
 def select_user_for_service(specific_user: Optional[str] = None) -> Dict[str, Any]:
-    """Select which user account to run the service as."""
+    """
+    Select which user account to run the service as.
+
+    If a specific user is provided, verifies existence and returns it.
+    Otherwise, prompts interactively or auto-selects if only one user exists.
+
+    Args:
+        specific_user: Optional username or name part to pre-select.
+
+    Returns:
+        Dictionary containing user credentials and config.
+    """
     creds = load_credentials()
     users = creds.get('users', [])
     
@@ -51,6 +72,15 @@ def select_user_for_service(specific_user: Optional[str] = None) -> Dict[str, An
     return selected  # type: ignore[no-any-return]
 
 def install_systemd_service(bot_user: Dict[str, Any]) -> None:
+    """
+    Install systemd service for Linux.
+
+    Generates a systemd unit file, installs it (using sudo if necessary),
+    enables the service on boot, and starts it immediately.
+
+    Args:
+        bot_user: The user configuration dict to use for the bot service.
+    """
     """Install systemd service for Linux."""
     cwd = os.getcwd()
     script_path = os.path.join(cwd, "incode.py")
@@ -171,7 +201,15 @@ rm -f {temp_file} {script_file}
         console.print(Align.center(f"[dim]Installation wird automatisch durchgeführt.[/dim]"))
 
 def install_launchd_service(bot_user: Dict[str, Any]) -> None:
-    """Install launchd service for macOS."""
+    """
+    Install launchd service for macOS.
+
+    Generates a .plist file in ~/Library/LaunchAgents and loads it.
+    Also creates a local logs/ directory for stdout/stderr.
+    
+    Args:
+        bot_user: The user configuration dict to use for the bot service.
+    """
     cwd = os.getcwd()
     script_path = os.path.join(cwd, "incode.py")
     venv_python = os.path.join(cwd, ".venv/bin/python")
@@ -252,7 +290,14 @@ def install_launchd_service(bot_user: Dict[str, Any]) -> None:
         sys.exit(1)
 
 def install_service(specific_user: Optional[str] = None) -> None:
-    """Main entry point for service installation."""
+    """
+    Main entry point for service installation.
+
+    Detects the OS and delegates to the appropriate installer (systemd/launchd).
+    
+    Args:
+        specific_user: Optional username passed via CLI to skip selection.
+    """
     os_type = platform.system()
     
     if os_type not in ["Linux", "Darwin"]:
@@ -270,7 +315,14 @@ def install_service(specific_user: Optional[str] = None) -> None:
         install_launchd_service(bot_user)
 
 def uninstall_service(specific_user: Optional[str] = None) -> None:
-    """Uninstall the service."""
+    """
+    Uninstall the service.
+
+    Removes service files and unloads/disables the service from the system.
+    
+    Args:
+        specific_user: Optional username to uninstall specific service for.
+    """
     os_type = platform.system()
     
     if os_type not in ["Linux", "Darwin"]:

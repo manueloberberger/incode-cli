@@ -2,6 +2,7 @@
 Input handling module for incode-cli.
 Contains keyboard input, terminal I/O, and user prompts.
 """
+import logging
 import os
 import sys
 import time
@@ -9,6 +10,8 @@ import select
 import shutil
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from rich.align import Align
 from rich.table import Table
@@ -148,7 +151,8 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
             
         return ch.decode('utf-8', errors='ignore')
 
-    except Exception:
+    except (OSError, termios.error) as e:
+        logger.debug(f"Terminal input error: {e}")
         return None
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

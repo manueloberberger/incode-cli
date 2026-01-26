@@ -1,3 +1,12 @@
+"""
+List view for incode-cli.
+
+This module provides a multi-day duty plan overview showing
+all shifts across a configurable date range.
+
+Functions:
+    show_plan_list: Display duty plans for multiple days
+"""
 from datetime import datetime, timedelta, date
 from typing import List, Any, Dict
 from rich.table import Table
@@ -11,6 +20,17 @@ from src.utils import clear_screen, wait_for_return, get_key
 from src.ui import interactive_menu
 
 def show_plan_list(incode: Any) -> None:
+    """
+    Display duty plans for multiple days in a list format.
+
+    Shows a summary view of all shifts across a user-selected date range
+    (7, 14, 21, or 30 days). Each day shows shift count and time range.
+
+    Args:
+        incode: The IncodeRequests API instance.
+
+    User can select a day to view detailed plan.
+    """
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()

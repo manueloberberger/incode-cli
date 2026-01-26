@@ -1,8 +1,20 @@
+"""
+Dashboard view for incode-cli.
+
+This module provides the main duty schedule view showing future duties
+with statistics (hours per month, duty types, locations).
+
+Functions:
+    show_future_duties: Display user's future duties with export options
+"""
+import logging
 from collections import defaultdict
 from datetime import datetime
 from typing import Optional, Any, Dict, List, Union
 
 from src.models import Duty
+
+logger = logging.getLogger(__name__)
 
 from rich.table import Table
 from rich.align import Align
@@ -18,6 +30,23 @@ from src.ical import export_to_ics
 from src.ui.components import send_pdf_via_bot
 
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
+    """
+    Display future duties for the current user.
+
+    Shows a table of upcoming duties with date, time, location, vehicle,
+    and crew information. Includes monthly hour statistics and duty type
+    breakdowns. Supports filtering by colleague name for finding shared shifts.
+
+    Args:
+        incode: The IncodeRequests API instance.
+        search_colleague: Optional name to filter for shared duties.
+
+    User can press:
+        - 'p': Export to PDF
+        - 'c': Export to iCal (.ics)
+        - 't': Export to PDF and send via Telegram
+        - Any other key: Return to menu
+    """
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()
@@ -70,7 +99,8 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             if not loc and d.duty_type == 'Vergangen':
                 loc = "[dim]-[/dim]"
             table.add_row(b.strftime('%d.%m.%Y'), f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')} ({h:g}h) ", loc, d.vehicle or "-", crew_str)
-        except Exception: pass
+        except (AttributeError, KeyError, ValueError) as e:
+            logger.debug(f"Error processing duty entry: {e}")
 
     if not found_any: 
         if search_colleague:

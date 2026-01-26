@@ -1,7 +1,19 @@
+"""
+Events view for incode-cli.
+
+This module provides views for event/ambulance duties including
+personal event assignments and organization-wide event overview.
+
+Functions:
+    show_events_menu: Display the events submenu with navigation
+"""
+import logging
 from datetime import datetime
 from typing import Any
 
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.live import Live
 from rich.spinner import Spinner
@@ -11,6 +23,16 @@ from src.utils import clear_screen, wait_for_return
 from src.ui.components import interactive_menu
 
 def show_events_menu(incode: Any) -> None:
+    """
+    Display the events/ambulance duties menu.
+
+    Provides navigation to:
+    - Personal ambulance/event duties
+    - Organization-wide event overview
+
+    Args:
+        incode: The IncodeRequests API instance.
+    """
     while True:
         clear_screen()
         console.print(Align.center(BANNER))
@@ -69,9 +91,8 @@ def show_events_menu(incode: Any) -> None:
                         loc or info,
                         vehicle or info
                     )
-                except Exception: 
-                    # console.print(exc)
-                    pass
+                except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                    logger.debug(f"Error processing event entry: {exc}")
             console.print(Align.center(table))
             wait_for_return()
 

@@ -1,7 +1,19 @@
+"""
+Absences view for incode-cli.
+
+This module provides the absence management view showing vacation days,
+sick leave, and other time-off entries with balance information.
+
+Functions:
+    show_absences: Display user's planned absences with balance summary
+"""
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.live import Live
 from rich.spinner import Spinner
@@ -10,6 +22,20 @@ from src.config import console, BANNER
 from src.utils import clear_screen, wait_for_return, get_holidays, get_key, KEY_ENTER, KEY_ESC
 
 def show_absences(incode: Any) -> None:
+    """
+    Display the user's planned absences (vacation, sick leave, etc.).
+
+    Shows a table of absences with date, type, and duration. Also displays
+    the current vacation balance and time compensation (Zeitausgleich) if available.
+
+    Args:
+        incode: The IncodeRequests API instance.
+
+    User can press:
+        - 'p': Export to PDF
+        - 't': Export to PDF and send via Telegram
+        - Enter/ESC/q: Return to menu
+    """
     clear_screen()
     console.print(Align.center(BANNER))
     with Live(Align.center(Spinner("dots", text=" Lade Abwesenheiten ...")), console=console, transient=True):
@@ -58,8 +84,8 @@ def show_absences(incode: Any) -> None:
                      if incode.discovered_name and incode.discovered_name.lower() in name.lower():
                          user_balance = c
                          # Don't break yet, look for better PNR match potentially? no, name is good enough usually.
-        except Exception:
-            pass  # Skip balance fetch errors
+        except (AttributeError, KeyError, TypeError) as exc:
+            logger.debug(f"Error fetching user balance: {exc}")
 
     if not absences and not user_balance: 
         console.print(Align.center(f"\n[info]Keine geplanten Abwesenheiten gefunden.[/info]"))

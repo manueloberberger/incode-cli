@@ -1,9 +1,11 @@
 import sqlite3
 import json
-
+import logging
 import time
 from typing import Any, Dict, List, Optional
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 DB_FILE = "incode.db"
 
@@ -56,7 +58,7 @@ class DatabaseManager:
                 cursor.execute("ALTER TABLE users ADD COLUMN allowed_user_id INTEGER")
                 conn.commit()
             except Exception as e:
-                print(f"Migration error: {e}")
+                logger.warning(f"Database migration error: {e}")
 
         
         # Key-Value Store (Settings)

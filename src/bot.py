@@ -28,6 +28,12 @@ from src.pdf import export_to_pdf
 logger = logging.getLogger(__name__)
 
 class ConflictFilter(logging.Filter):
+    """
+    Logging filter to catch and handle Telegram conflict errors.
+    
+    Detects 'Conflict' errors (when another bot instance logs in) and 
+    triggers a callback to shut down gracefully.
+    """
     def __init__(self, on_conflict_callback: Optional[Callable[[], None]] = None):
         super().__init__()
         self.on_conflict = on_conflict_callback
@@ -48,8 +54,8 @@ class ConflictFilter(logging.Filter):
             if self.on_conflict:
                 try:
                     self.on_conflict()
-                except Exception:
-                    pass  # Silently ignore callback errors
+                except (RuntimeError, AttributeError) as e:
+                    logger.debug(f"Conflict callback error: {e}")
             return False
             
         return True
@@ -58,6 +64,12 @@ class ConflictFilter(logging.Filter):
 WAITING_FOR_DATE = 1
 
 class IncodeBot:
+    """
+    Telegram Bot implementation for Incode CLI.
+    
+    Handles the interactive chat flow, command processing, and PDF delivery.
+    Uses 'python-telegram-bot' library.
+    """
     def __init__(self, api: IncodeRequests):
         self.api = api
         self.config = load_credentials()
@@ -98,7 +110,12 @@ class IncodeBot:
             console.print(Align.center("[green]Telegram Konfiguration gespeichert.[/green]"))
 
     def send_document(self, chat_id: int, file_path: str, caption: Optional[str] = None) -> bool:
-        """Synchronous wrapper to send a document (for CLI usage)."""
+        """
+        Synchronous wrapper to send a document (for CLI usage).
+        
+        Used by the main application to send PDFs via the bot instance
+        without needing to manage the async loop manually.
+        """
         try:
             return asyncio.run(self._send_document_async(chat_id, file_path, caption))
         except Exception as e:
@@ -122,6 +139,7 @@ class IncodeBot:
 
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Handle the /start command."""
         if not update.effective_user or not update.message: return ConversationHandler.END
         logger.info(f"Start command received from {update.effective_user.id}")
         keyboard = [

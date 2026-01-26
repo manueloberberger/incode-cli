@@ -191,9 +191,10 @@ class AsyncIncodeRequests:
             
             return True
 
+        except LoginError:
+            raise
         except Exception as e:
-            if isinstance(e, LoginError): raise e
-            raise LoginError(f"Systemfehler beim Login: {e}")
+            raise LoginError(f"Systemfehler beim Login: {e}") from e
 
     async def get_project_guids(self) -> Dict[str, Any]:
         """
@@ -238,7 +239,10 @@ class AsyncIncodeRequests:
                             project_map[val] = name
                     for g in re.findall(guid_pattern, text_resp):
                         if g not in project_map and g not in guids_to_try: project_map[g] = "Event"
-        except Exception: pass
+        except aiohttp.ClientError as e:
+            logger.debug(f"Network error fetching project GUIDs: {e}")
+        except Exception as e:
+            logger.debug(f"Error fetching project GUIDs: {e}")
         return project_map
 
     async def load_events_plan(self) -> List[Dict[str, Any]]:
@@ -276,8 +280,10 @@ class AsyncIncodeRequests:
                  async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadProjectsPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': main_org, 'withSubOrgUnits': '1', 'sortPlan': 'false', 'dateFrom': start.strftime('%Y-%m-%dT00:00:00.000Z'), 'dateTo': end.strftime('%Y-%m-%dT23:59:59.000Z'), 'projectDataGuids[]': chunk_guids}) as r:
                      if r.status == 200:
                          return cast(Dict[str, Any], await r.json(content_type=None))
-             except Exception:
-                pass  # Skip failed fetches
+             except aiohttp.ClientError as e:
+                logger.debug(f"Network error fetching event chunk: {e}")
+             except Exception as e:
+                logger.debug(f"Error fetching event chunk: {e}")
              return None
 
         # PARALLEL FETCHING
@@ -323,8 +329,10 @@ class AsyncIncodeRequests:
             async with self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode)
-        except Exception:
-            pass  # Skip failed archive fetches
+        except aiohttp.ClientError as e:
+            logger.debug(f"Network error loading archive duties: {e}")
+        except Exception as e:
+            logger.debug(f"Error loading archive duties: {e}")
         return []
 
     async def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
@@ -427,7 +435,11 @@ class AsyncIncodeRequests:
                 if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/load.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
-            except Exception:
+            except aiohttp.ClientError as e:
+                logger.debug(f"Network error fetching absences: {e}")
+                return None
+            except Exception as e:
+                logger.debug(f"Error fetching absences: {e}")
                 return None
             
         async def fetch_wishes() -> Optional[Dict[str, Any]]:
@@ -435,7 +447,11 @@ class AsyncIncodeRequests:
                 if not self.session: return None
                 async with self.session.post(f"{self.base_url}/StaffPortal/absence/data/loadWishes.json", headers=self._get_api_headers(), data=body) as r:
                    return await r.json(content_type=None) if r.status == 200 else None
-            except Exception:
+            except aiohttp.ClientError as e:
+                logger.debug(f"Network error fetching wishes: {e}")
+                return None
+            except Exception as e:
+                logger.debug(f"Error fetching wishes: {e}")
                 return None
 
         res_abs, res_wishes = await asyncio.gather(fetch_abs(), fetch_wishes())
@@ -538,8 +554,10 @@ class AsyncIncodeRequests:
                     if resp.status == 200:
                         j = await resp.json(content_type=None)
                         return parse_staff_contact(j, query)
-            except Exception:
-                pass  # Skip failed staff fetches
+            except aiohttp.ClientError as e:
+                logger.debug(f"Network error fetching staff: {e}")
+            except Exception as e:
+                logger.debug(f"Error fetching staff: {e}")
             return []
 
         results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids])
@@ -595,7 +613,11 @@ class AsyncIncodeRequests:
             serializable = [{'begin': i['begin'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('begin'), datetime) else i.get('begin'), 'end': i['end'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('end'), datetime) else i.get('end'), 'vehicle': i['vehicle'], 'crew': i['crew']} for i in results]
             self._set_cached_data(cache_key, serializable)
             return results
-        except Exception:
+        except aiohttp.ClientError as e:
+            logger.debug(f"Network error loading daily plan: {e}")
+            return []
+        except Exception as e:
+            logger.debug(f"Error loading daily plan: {e}")
             return []
 
     async def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -627,8 +649,10 @@ class AsyncIncodeRequests:
                 async with self.session.post(f"{self.base_url}/StaffPortal/plan/data/loadPlan.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': g, 'withSubOrgUnits': '1', 'dateFrom': df, 'dateTo': dt, 'sortPlan': 'false'}) as r:
                     if r.status == 200:
                         return cast(Dict[str, Any], await r.json(content_type=None))
-            except Exception:
-                pass  # Skip failed plan fetches
+            except aiohttp.ClientError as e:
+                logger.debug(f"Network error fetching plan: {e}")
+            except Exception as e:
+                logger.debug(f"Error fetching plan: {e}")
             return None
 
         plan_results = await asyncio.gather(*[fetch_plan(g) for g in guids_list if g])

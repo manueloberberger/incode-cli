@@ -3,9 +3,11 @@ import os
 import sys
 import time
 import shutil
-import shutil
+import logging
 
 from typing import Any, Tuple, Optional, List, Dict
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from rich.align import Align
@@ -277,7 +279,8 @@ def run_cli(debug: bool = False) -> None:
                     real_name = fetched_name
                     # Update immediately in config
                     update_credentials({'real_name': real_name}, username=u)
-            except: pass
+            except (ValueError, KeyError) as e:
+                logger.debug(f"Could not fetch user name: {e}")
 
         update_credentials({}, username=u)
         db.set_active_user(u)
@@ -501,7 +504,8 @@ if __name__ == "__main__":
                 idx = sys.argv.index("--user")
                 if idx + 1 < len(sys.argv):
                     specific_user = sys.argv[idx + 1]
-            except: pass
+            except (ValueError, IndexError) as e:
+                logger.debug(f"Error parsing --user argument: {e}")
 
         if len(sys.argv) > 1 and "install-service" in sys.argv:
             from src.service import install_service
@@ -513,7 +517,8 @@ if __name__ == "__main__":
                     idx = sys.argv.index("--user")
                     if idx + 1 < len(sys.argv):
                         service_user = sys.argv[idx + 1]
-                except: pass
+                except (ValueError, IndexError) as e:
+                    logger.debug(f"Error parsing service --user argument: {e}")
             
             install_service(specific_user=service_user)
             install_service(specific_user=service_user)

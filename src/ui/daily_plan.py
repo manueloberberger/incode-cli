@@ -1,7 +1,19 @@
+"""
+Daily plan view for incode-cli.
+
+This module provides the daily duty plan view showing all shifts
+for a specific date across the organization.
+
+Functions:
+    show_daily_plan: Display the duty plan for a specific date
+"""
+import logging
 from datetime import datetime
 from typing import Optional, List, Any
 
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.live import Live
 from rich.spinner import Spinner
@@ -13,6 +25,27 @@ from src.ical import export_to_ics
 from src.ui.components import send_pdf_via_bot
 
 def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool = False, override_plan: Optional[List[Any]] = None) -> Optional[List[Any]]:
+    """
+    Display the duty plan for a specific date.
+
+    Shows all shifts for the given date with time, vehicle, and crew.
+    Can operate in normal mode (interactive) or live mode (for monitoring).
+
+    Args:
+        incode: The IncodeRequests API instance.
+        date: The date to show (defaults to today).
+        is_live: If True, operates in live monitoring mode (no user interaction).
+        override_plan: Optional pre-fetched plan data (used in live mode).
+
+    Returns:
+        The plan data list if successful, None if no plan found.
+
+    User can press (in normal mode):
+        - 'p': Export to PDF
+        - 'c': Export to iCal (.ics)
+        - 't': Export to PDF and send via Telegram
+        - Any other key: Return to menu
+    """
     if not is_live:
         clear_screen()
         console.print(Align.center(BANNER))
@@ -68,8 +101,9 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
                     'duty_type': "", 
                     'crew': cl
                 })
-        except Exception: pass
-        
+        except (KeyError, TypeError, ValueError) as e:
+            logger.debug(f"Error processing plan entry: {e}")
+
     if is_live:
         clear_screen()
         console.print(Align.center(BANNER))

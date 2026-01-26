@@ -1,8 +1,11 @@
+import logging
 import calendar
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional, Any
 
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.panel import Panel
 from rich.prompt import Prompt
@@ -111,9 +114,9 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
                     if u['username'] == current_user:
                         real_name = u.get('real_name')
                         break
-            except Exception:
-                pass  # Skip if credential loading fails
-            
+            except (KeyError, TypeError) as e:
+                logger.debug(f"Error loading credentials for user display: {e}")
+
             display_user = current_user
             if real_name:
                 display_user += f" ({real_name})"
