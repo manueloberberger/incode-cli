@@ -66,13 +66,13 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
             console.print(Align.center("[bold green]Willkommen bei Incode CLI![/bold green]"))
             console.print(Align.center("Es wurden noch keine Benutzer eingerichtet.\n"))
             
-            options = [
+            start_options = [
                 ("🚀  Neuen Benutzer anlegen", "new"),
                 ("📥  Backup importieren (Wiederherstellen)", "import"),
                 ("🚪  Beenden", "exit")
             ]
             
-            selected = interactive_menu(options, title="START")
+            selected = interactive_menu(start_options, title="START")
             
             if selected == "new":
                 return _prompt_new_user()
