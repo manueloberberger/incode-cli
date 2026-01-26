@@ -16,3 +16,6 @@ venv_ci/
 env/
 incode.db
 *.log
+
+# Backups
+incode_backup_*.json

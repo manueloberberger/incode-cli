@@ -52,7 +52,7 @@ def show_settings_menu(current_user: Optional[str] = None) -> None:
         elif selected == "telegram":
             _change_telegram_config(current_user)
         elif selected == "backup":
-            _backup_menu()
+            _backup_menu(current_user)
 
 def _manual_update_check() -> None:
     from rich.live import Live
@@ -210,7 +210,7 @@ def _change_telegram_config(current_user: Optional[str] = None) -> None:
         
     time.sleep(1.5)
 
-def _backup_menu() -> None:
+def _backup_menu(current_user: Optional[str] = None) -> None:
     from src.backup import export_data, import_data
     
     while True:
@@ -249,6 +249,10 @@ def _backup_menu() -> None:
                 
             if success:
                 console.print(Align.center(f"\n[bold green]✅ Backup erfolgreich erstellt: {final_name}[/bold green]"))
+                
+                # Offer to send via Telegram
+                if prompt_yes_no("\nMöchtest du das Backup an deinen Telegram-Bot senden?"):
+                    _send_backup_telegram(final_name, current_user)
             else:
                 console.print(Align.center("\n[bold red]❌ Fehler beim Erstellen des Backups![/bold red]"))
             wait_for_return()
@@ -269,3 +273,47 @@ def _backup_menu() -> None:
                 else:
                     console.print(Align.center("\n[bold red]❌ Fehler beim Import![/bold red]"))
                 wait_for_return()
+
+def _send_backup_telegram(filename: str, current_user: Optional[str]) -> None:
+    try:
+        from src.api import IncodeRequests
+        from src.bot import IncodeBot
+        
+        # Resolve username
+        active_user = current_user or db.get_active_user()
+        if not active_user:
+            console.print(Align.center("[red]Kein aktiver Benutzer für Telegram-Versand gefunden.[/red]"))
+            return
+
+        user_data = db.get_user(active_user)
+        base_url = (user_data.get('base_url') if user_data else None) or "https://dienstplan.k.roteskreuz.at"
+        
+        # Init API (minimal)
+        api = IncodeRequests(base_url, username=active_user)
+        
+        # Init Bot (this handles config check/prompt)
+        console.print()
+        with console.status("[bold blue]Initialisiere Telegram-Verbindung...[/bold blue]"):
+            bot = IncodeBot(api)
+        
+        # Check if we have a valid chat_id now (in case user cancelled config)
+        if not bot.user_config.get("allowed_user_id"):
+             return
+             
+        chat_id = bot.user_config["allowed_user_id"]
+        
+        with console.status(f"[bold blue]Sende {filename} an Telegram...[/bold blue]"):
+            sent = bot.send_document(
+                chat_id=chat_id, 
+                file_path=filename, 
+                caption=f"💾 Backup: {filename}\n📅 {time.strftime('%d.%m.%Y %H:%M')}"
+            )
+            
+        if sent:
+            console.print(Align.center("\n[bold green]✅ Datei erfolgreich gesendet![/bold green]"))
+        else:
+            console.print(Align.center("\n[bold red]❌ Fehler beim Senden.[/bold red]"))
+            
+    except Exception as e:
+        console.print(Align.center(f"\n[bold red]Fehler: {e}[/bold red]"))
+
