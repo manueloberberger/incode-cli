@@ -5,6 +5,21 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-01-26
+
+### Added
+- Complete internal documentation:
+  - Docstrings for `incode.py` (Entry Point)
+  - Docstrings for `src/db.py` (Database Layer)
+  - Docstrings for `src/ui/settings.py` & `src/ui/staff.py`
+  - Docstrings for `src/service.py` & `src/bot.py`
+- New `README.md` sections for Multi-User & Telegram Bot usage
+- Explicit version sync rule in `CLAUDE.md`
+
+## [2.18.0] - 2026-01-26
+
+(Skipped version, see 2.19.0)
+
 ## [2.16.5] - 2026-01-25
 
 ### Fixed

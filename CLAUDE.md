@@ -79,3 +79,13 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Commits**: Use semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`)
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
+
+## Recent Context (2026-01-26)
+*State at v2.19.0*
+
+- **Documentation Overhaul Completed**: 
+    - All core modules (`service`, `bot`, `db`, `incode`) and key UI views are now fully documented with docstrings.
+    - `README.md` now covers Multi-User Support and Telegram Bot setup in detail.
+- **Rule Added**: Always sync `VERSION` in `src/config.py` with the badge in `README.md`.
+- **Tests**: Full suite (131 tests) passing.
+- **Next Steps**: Project is stable. Future work can focus on new features as the technical debt (docs/tests) is resolved.
