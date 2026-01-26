@@ -81,11 +81,11 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
 ## Recent Context (2026-01-26)
-*State at v2.19.0*
+*State at v2.19.1*
 
-- **Documentation Overhaul Completed**: 
-    - All core modules (`service`, `bot`, `db`, `incode`) and key UI views are now fully documented with docstrings.
-    - `README.md` now covers Multi-User Support and Telegram Bot setup in detail.
-- **Rule Added**: Always sync `VERSION` in `src/config.py` with the badge in `README.md`.
-- **Tests**: Full suite (131 tests) passing.
-- **Next Steps**: Project is stable. Future work can focus on new features as the technical debt (docs/tests) is resolved.
+- **Hotfix Release**: 
+    - Fixed `SyntaxError` in `incode.py` due to missing `except` block.
+    - Improved robustness: App now gracefully warns instead of crashing if `rich` dependency is missing (important for system python environments).
+- **Versioning**: Updated to v2.19.1 in `config.py` and `README.md`.
+- **Verification**: Passed `compileall` checks.
+- **Next Steps**: Monitor for any user reports regarding dependency installation issues.
