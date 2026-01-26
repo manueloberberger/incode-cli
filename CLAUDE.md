@@ -77,5 +77,5 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 ## Git & Versioning
 
 - **Commits**: Use semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`)
-- **Version**: Bump `VERSION` in `src/config.py` for releases
+- **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
