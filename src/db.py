@@ -163,6 +163,23 @@ class DatabaseManager:
                 return row['value']
         return default
 
+    def get_all_values(self) -> Dict[str, Any]:
+        """Returns all key-value pairs from the valuestore."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM valuestore")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        result = {}
+        for row in rows:
+            key = row['key']
+            try:
+                result[key] = json.loads(row['value'])
+            except (json.JSONDecodeError, TypeError):
+                result[key] = row['value']
+        return result
+
     def set_value(self, key: str, value: Any) -> None:
         conn = self._get_connection()
         cursor = conn.cursor()

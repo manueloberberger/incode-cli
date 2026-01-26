@@ -35,6 +35,7 @@ def show_settings_menu(current_user: Optional[str] = None) -> None:
             ("⏱️   Häufigkeit der Update-Prüfung ändern", "interval"),
             ("🔐  Passwort ändern", "password"),
             ("🤖  Telegram Konfiguration ändern", "telegram"),
+            ("💾  Backup / Restore", "backup"),
             ("🔙  Zurück", "back")
         ]
         
@@ -50,6 +51,8 @@ def show_settings_menu(current_user: Optional[str] = None) -> None:
             _change_password(current_user)
         elif selected == "telegram":
             _change_telegram_config(current_user)
+        elif selected == "backup":
+            _backup_menu()
 
 def _manual_update_check() -> None:
     from rich.live import Live
@@ -203,4 +206,66 @@ def _change_telegram_config(current_user: Optional[str] = None) -> None:
     else:
         console.print(Align.center("\n[yellow]Keine Änderungen vorgenommen.[/yellow]"))
         
+        console.print(Align.center("\n[yellow]Keine Änderungen vorgenommen.[/yellow]"))
+        
     time.sleep(1.5)
+
+def _backup_menu() -> None:
+    from src.backup import export_data, import_data
+    
+    while True:
+        clear_screen()
+        console.print(Align.center(BANNER))
+        console.print(Align.center("[bold]BACKUP / RESTORE[/bold]\n"))
+        
+        options = [
+            ("💾  Backup erstellen (Export)", "export"),
+            ("📥  Backup wiederherstellen (Import)", "import"),
+            ("🔙  Zurück", "back")
+        ]
+        
+        selection = interactive_menu(options, title="DATENSICHERUNG")
+        
+        if selection == "back" or selection is None:
+            break
+            
+        elif selection == "export":
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            default_name = f"incode_backup_{timestamp}.json"
+            
+            console.print(Align.center(f"[dim]Standard-Dateiname: {default_name}[/dim]"))
+            console.print(Align.center("[dim]Drücke Enter für Standard oder gib einen eigenen Namen ein.[/dim]\n"))
+            
+            filename = centered_input("[bold green]Dateiname >[/bold green] ")
+            if filename is None: continue # Cancel
+            
+            final_name = filename.strip() if filename.strip() else default_name
+            if not final_name.endswith(".json"):
+                final_name += ".json"
+                
+            console.print()
+            with console.status(f"[bold blue]Exportiere nach {final_name}...[/bold blue]"):
+                success = export_data(final_name)
+                
+            if success:
+                console.print(Align.center(f"\n[bold green]✅ Backup erfolgreich erstellt: {final_name}[/bold green]"))
+            else:
+                console.print(Align.center("\n[bold red]❌ Fehler beim Erstellen des Backups![/bold red]"))
+            wait_for_return()
+            
+        elif selection == "import":
+            console.print(Align.center("[dim]Gib den Dateinamen der Sicherung ein (z.B. incode_backup_2024....json)[/dim]\n"))
+            
+            filename = centered_input("[bold green]Dateiname >[/bold green] ")
+            if not filename: continue
+            
+            console.print()
+            if prompt_yes_no("Bist du sicher? Vorhandene Benutzer/Einstellungen werden überschrieben!"):
+                with console.status(f"[bold blue]Importiere {filename}...[/bold blue]"):
+                    success = import_data(filename)
+                
+                if success:
+                    console.print(Align.center("\n[bold green]✅ Daten erfolgreich wiederhergestellt![/bold green]"))
+                else:
+                    console.print(Align.center("\n[bold red]❌ Fehler beim Import![/bold red]"))
+                wait_for_return()

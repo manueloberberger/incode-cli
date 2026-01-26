@@ -51,8 +51,61 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
     users = creds_data.get('users', [])
     
     # 1. No users -> Create first one
+    # 1. No users -> Fresh Install Menu
     if not users:
-        return _prompt_new_user()
+        # Check if we should show the welcome menu or just prompt (default behavior was just prompt)
+        # We now offer Import
+        
+        # Simple interactive menu for fresh start
+        from src.ui import interactive_menu
+        from src.backup import import_data
+        
+        while True:
+            clear_screen()
+            console.print(Align.center(BANNER))
+            console.print(Align.center("[bold green]Willkommen bei Incode CLI![/bold green]"))
+            console.print(Align.center("Es wurden noch keine Benutzer eingerichtet.\n"))
+            
+            options = [
+                ("🚀  Neuen Benutzer anlegen", "new"),
+                ("📥  Backup importieren (Wiederherstellen)", "import"),
+                ("🚪  Beenden", "exit")
+            ]
+            
+            selected = interactive_menu(options, title="START")
+            
+            if selected == "new":
+                return _prompt_new_user()
+                
+            elif selected == "import":
+                console.print()
+                console.print(Align.center("[dim]Bitte gib den Pfad zur Backup-Datei (.json) an.[/dim]"))
+                fpath = centered_input("[bold green]Dateipfad >[/bold green] ")
+                
+                if fpath and fpath.strip():
+                    # Try import
+                    console.print()
+                    with console.status("[bold blue]Importiere Daten...[/bold blue]"):
+                        success = import_data(fpath.strip())
+                    
+                    if success:
+                        wait_for_return()
+                        # Reload credentials and see if we have users now
+                        creds_data = load_credentials()
+                        users = creds_data.get('users', [])
+                        
+                        if users:
+                            # If single user, auto-login (recursion)
+                            # Or if multiple, show menu (recursion)
+                            return setup_auth(force_interactive=force_interactive)
+                        else:
+                             console.print(Align.center("[yellow]Import erfolgreich, aber keine Benutzer gefunden?[/yellow]"))
+                             wait_for_return()
+                    else:
+                        wait_for_return()
+            
+            elif selected == "exit":
+                sys.exit(0)
     
     # 2. Single user and not forced -> Auto Login
     if len(users) == 1 and not force_interactive:
@@ -407,6 +460,8 @@ def show_help() -> None:
         ("./incode bot --select", "Startet den Bot mit Benutzer-Auswahlmenü."),
         ("./incode bot --user <NAME>", "Startet den Bot für einen spezifischen Benutzer (User/Name)."),
         ("./incode install-service", "Installiert den Bot als Systemdienst (Linux/systemd)."),
+        ("./incode --export [FILE]", "Exportiert alle Daten (Backup). Optional Dateiname."),
+        ("./incode --import <FILE>", "Importiert Daten aus einer Sicherungsdatei."),
         ("./incode --no-keyring", "Zwingt die Nutzung der Datei anstatt des System-Keyrings (für Linux/Kali)."),
         ("./incode --help", "Zeigt diese Hilfeübersicht an."),
         ("./incode --version", "Zeigt die aktuelle Programmversion.")
@@ -461,8 +516,44 @@ if __name__ == "__main__":
                 except: pass
             
             install_service(specific_user=service_user)
+            install_service(specific_user=service_user)
         elif len(sys.argv) > 1 and "bot" in sys.argv:
             start_bot_mode(debug=debug_mode, specific_user=specific_user, force_menu=force_select)
+        elif "--export" in sys.argv or "--import" in sys.argv:
+            from src.backup import export_data, import_data
+            
+            if "--export" in sys.argv:
+                try:
+                    idx = sys.argv.index("--export")
+                    if idx + 1 < len(sys.argv) and not sys.argv[idx+1].startswith("-"):
+                        filepath = sys.argv[idx + 1]
+                    else:
+                        timestamp = time.strftime("%Y%m%d_%H%M%S")
+                        filepath = f"incode_backup_{timestamp}.json"
+                    
+                    console.print(Align.center(f"[bold blue]Exportiere Daten nach {filepath}...[/bold blue]"))
+                    if export_data(filepath):
+                        console.print(Align.center("[bold green]Export erfolgreich abgeschlossen![/bold green]"))
+                    sys.exit(0)
+                except Exception as e:
+                    console.print(f"[red]Fehler bei Export: {e}[/red]")
+                    sys.exit(1)
+
+            if "--import" in sys.argv:
+                try:
+                    idx = sys.argv.index("--import")
+                    if idx + 1 < len(sys.argv):
+                        filepath = sys.argv[idx + 1]
+                        console.print(Align.center(f"[bold blue]Importiere Daten aus {filepath}...[/bold blue]"))
+                        if import_data(filepath):
+                             console.print(Align.center("[bold green]Import erfolgreich![/bold green]"))
+                        sys.exit(0)
+                    else:
+                        console.print("[red]Fehler: Bitte Dateipfad für Import angeben.[/red]")
+                        sys.exit(1)
+                except Exception as e:
+                    console.print(f"[red]Fehler bei Import: {e}[/red]")
+                    sys.exit(1)
         else:
             run_cli(debug=debug_mode)
     except KeyboardInterrupt:
