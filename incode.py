@@ -21,11 +21,9 @@ from typing import Any, Tuple, Optional, List, Dict
 logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from rich.align import Align
-from rich.table import Table
-
-
 try:
+    from rich.align import Align
+    from rich.table import Table
     from src.config import console, BANNER, load_credentials, save_credentials, update_credentials, remove_user, VERSION
     from src.db import db
     # Import lightweight utils needed for basic UI/params
@@ -254,6 +252,7 @@ def startup_checks(debug: bool = False) -> None:
         elif debug:
              console.print("[dim]Debug: Keine Updates gefunden oder Check fertig.[/dim]")
              wait_for_return()
+    except Exception as e:
         if debug:
             console.print(f"[red]Fehler bei startup_checks: {e}[/red]")
         pass # Ignore errors during update check to not block startup
