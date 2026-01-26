@@ -1,3 +1,12 @@
+"""
+Settings menu implementation for incode-cli.
+
+Provides the interactive menu for managing application settings like:
+- Update intervals
+- Password changes
+- Telegram Bot configuration
+- Backups
+"""
 from src.config import console, BANNER, get_update_interval, set_update_interval, VERSION, update_credentials
 from src.db import db
 
@@ -10,6 +19,13 @@ from rich.align import Align
 from typing import List, Tuple, Any, Dict, Optional
 
 def show_settings_menu(current_user: Optional[str] = None) -> None:
+    """
+    Display the main settings menu.
+    
+    Args:
+        current_user: Optional username of the currently logged-in user.
+                     Used for context-aware settings (like password change).
+    """
     while True:
         clear_screen()
         console.print(Align.center(BANNER))

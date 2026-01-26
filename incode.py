@@ -1,3 +1,14 @@
+"""
+Main entry point for the Incode CLI application.
+
+This script manages startup checks, command-line arguments, and the main application loop.
+It handles:
+- Authentication setup (Interactive login, user switching)
+- Auto-updates
+- Launching the interactive TUI
+- Launching the Telegram bot mode
+- Installing system services
+"""
 #!/usr/bin/env python3
 import os
 import sys
@@ -25,6 +36,12 @@ except ImportError as e:
     sys.exit(1)
 
 def _prompt_new_user() -> Tuple[str, str, str, Optional[List[str]]]:
+    """
+    Prompt user for new login credentials.
+    
+    Returns:
+        Tuple of (username, password, base_url, extra_guids)
+    """
 
     
     console.print()
@@ -49,6 +66,20 @@ def _prompt_new_user() -> Tuple[str, str, str, Optional[List[str]]]:
     return u, p, base_url, extra_guids
 
 def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str], Optional[List[str]]]:
+    """
+    Handle authentication flow.
+
+    Manages the login process, including:
+    - Fresh install setup (if no users exist)
+    - Auto-login (if only one user exists)
+    - Multi-user selection menu
+    
+    Args:
+        force_interactive: If True, forces the user selection menu even with a single user.
+        
+    Returns:
+        Tuple containing (username, password, base_url, extra_guids)
+    """
     creds_data = load_credentials()
     users = creds_data.get('users', [])
     
@@ -182,6 +213,15 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
             return u['username'], u['password'], u.get('base_url'), u.get('extra_guids')
 
 def startup_checks(debug: bool = False) -> None:
+    """
+    Run initial application checks.
+    
+    Performs auto-update check against the GitHub repository.
+    If an update is found, prompts the user to install it.
+    
+    Args:
+        debug: If True, prints verbose debug information.
+    """
     # Check for updates
     try:
         from rich.spinner import Spinner
@@ -214,12 +254,20 @@ def startup_checks(debug: bool = False) -> None:
         elif debug:
              console.print("[dim]Debug: Keine Updates gefunden oder Check fertig.[/dim]")
              wait_for_return()
-    except Exception as e:
         if debug:
             console.print(f"[red]Fehler bei startup_checks: {e}[/red]")
         pass # Ignore errors during update check to not block startup
 
 def run_cli(debug: bool = False) -> None:
+    """
+    Start the interactive CLI main loop.
+    
+    Initializes the UI, handles user login, and presents the main menu dashboard.
+    Manages the continuous loop until the user exits.
+    
+    Args:
+        debug: Enable debug logging and skipped UI clearing.
+    """
     if not debug:
         clear_screen()
     console.print(Align.center(BANNER))
@@ -345,8 +393,19 @@ def run_cli(debug: bool = False) -> None:
         if should_logout:
             continue
 
+        if should_logout:
+            continue
+
 def show_bot_menu(incode_instance: Any) -> None:
-    """Show unified bot menu with interactive start and service management."""
+    """
+    Show the Telegram Bot management menu.
+    
+    Allows starting the bot interactively, or installing/uninstalling
+    it as a system background service.
+    
+    Args:
+        incode_instance: Authenticated API client instance.
+    """
     from src.ui import interactive_menu
     from src.service import install_service, uninstall_service, check_service_status, has_installed_services
     from src.utils import wait_for_return
@@ -389,6 +448,15 @@ def show_bot_menu(incode_instance: Any) -> None:
             break
 
 def start_bot_mode(incode_instance: Any = None, debug: bool = False, specific_user: Optional[str] = None, force_menu: bool = False) -> None:
+    """
+    Start the Telegram Bot in interactive mode.
+    
+    Args:
+        incode_instance: Optional pre-authenticated API client. If None, performs login.
+        debug: Enable verbose logging.
+        specific_user: Username to auto-login with (skip interactive selection).
+        force_menu: Force user selection menu on startup.
+    """
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()

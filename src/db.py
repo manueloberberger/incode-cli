@@ -1,3 +1,11 @@
+"""
+Database abstraction layer for incode-cli.
+
+Manages the local SQLite database (`incode.db`) which stores:
+- User credentials and configuration
+- Application settings (Key-Value store)
+- API response cache
+"""
 import sqlite3
 import json
 import logging
@@ -10,6 +18,12 @@ logger = logging.getLogger(__name__)
 DB_FILE = "incode.db"
 
 class DatabaseManager:
+    """
+    Singleton class managing SQLite database connections and operations.
+    
+    Thread-safe implementation using a lock for instance creation.
+    Provides methods for user management, key-value storage, and caching.
+    """
     _instance: Optional['DatabaseManager'] = None
     _lock = Lock()
     _initialized: bool = False
@@ -84,6 +98,12 @@ class DatabaseManager:
     # --- User Management ---
 
     def get_users(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all configured users.
+        
+        Returns:
+            List of dictionaries containing user data (username, password, settings).
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users")
@@ -101,6 +121,15 @@ class DatabaseManager:
         return users
 
     def get_user(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a specific user by username.
+        
+        Args:
+            username: The username to search for.
+            
+        Returns:
+            User dictionary if found, None otherwise.
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
@@ -117,6 +146,18 @@ class DatabaseManager:
         return None
 
     def upsert_user(self, username: str, password: str, base_url: str, extra_guids: List[str], real_name: Optional[str] = None, telegram_token: Optional[str] = None, allowed_user_id: Optional[int] = None) -> None:
+        """
+        Insert or Update a user record.
+        
+        Args:
+            username: The user's login name (Primary Key).
+            password: Login password.
+            base_url: API base URL.
+            extra_guids: List of additional unit GUIDs.
+            real_name: Display name/alias for the user.
+            telegram_token: Token for Telegram bot integration.
+            allowed_user_id: Telegram user ID allowed to access bot.
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -134,6 +175,12 @@ class DatabaseManager:
         conn.close()
 
     def remove_user(self, username: str) -> None:
+        """
+        Delete a user record.
+        
+        Args:
+            username: The username to delete.
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE username = ?", (username,))

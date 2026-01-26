@@ -1,3 +1,8 @@
+"""
+Staff directory search view for incode-cli.
+
+Provides the interface for searching for colleagues and viewing their details.
+"""
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +20,15 @@ from src.ui.components import interactive_menu
 from src.ui.dashboard import show_future_duties
 
 def show_staff_search(incode: Any) -> None:
+    """
+    Display the staff search interface.
+    
+    Allows user to input a search query (name, PNR) and browse results.
+    Delegates to `_display_staff_details_loop` for showing contact info.
+    
+    Args:
+        incode: Authenticated API client instance.
+    """
     clear_screen()
     console.print(Align.center(BANNER))
     console.print()
