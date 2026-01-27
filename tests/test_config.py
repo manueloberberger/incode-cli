@@ -188,7 +188,7 @@ class TestStorageStatus:
         """Test getting storage status."""
         from src.config import get_storage_status
 
-        status = get_storage_status("anyuser")
+        status = get_storage_status()
 
         # Should always return SQLite for this implementation
         assert status == "SQLite"
