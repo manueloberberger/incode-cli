@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List, Any
 import logging
+import re
 from logging.handlers import RotatingFileHandler
 from rich.console import Console
 from rich.theme import Theme
@@ -60,6 +61,8 @@ CACHE_TTL = 900
 
 # Vehicle type indicators for duty parsing
 VEHICLE_INDICATORS = ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"]
+# Pre-compiled pattern for O(1) vehicle detection
+VEHICLE_PATTERN = re.compile(r'(?:' + '|'.join(VEHICLE_INDICATORS) + r')', re.IGNORECASE)
 
 # Terminal I/O
 KEY_POLL_INTERVAL = 0.01

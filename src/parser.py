@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 from src.models import Duty
-from src.config import VEHICLE_INDICATORS
+from src.config import VEHICLE_PATTERN
 
 
 def fix_datetime(s: Optional[str]) -> Optional[datetime]:
@@ -165,7 +165,7 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
         veh, crew = "", []
         if len(al) > 1:
             last = str(al[-1])
-            if last and (last[0].isdigit() or any(vt in last.upper() for vt in VEHICLE_INDICATORS)):
+            if last and (last[0].isdigit() or VEHICLE_PATTERN.search(last)):
                 veh, crew = last, [str(x) for x in al[1:-1]]
             else:
                 veh, crew = "", [str(x) for x in al[1:]]
