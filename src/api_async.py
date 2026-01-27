@@ -308,16 +308,16 @@ class AsyncIncodeRequests:
                 if not pg or not cb: continue
                 
                 # O(1) lookup instead of O(n) loop
-                e = event_map.get((pg, cb.date()))
-                if e:
+                evt = event_map.get((pg, cb.date()))
+                if evt:
                     infos = item.get('additionalInfos', {})
                     rn, pn, loc = str(infos.get('ressource_name', '')).strip(), str(infos.get('project_name', '')).strip(), str(item.get('orgUnitName', '')).strip()
-                    if pn and (e['vehicle'] == "Event" or len(pn) > len(e['vehicle'])): e['vehicle'] = pn
-                    if loc: e['location'] = loc
+                    if pn and (evt['vehicle'] == "Event" or len(pn) > len(evt['vehicle'])): evt['vehicle'] = pn
+                    if loc: evt['location'] = loc
                     eid = str(item.get('externalId', '')).upper()
                     if not rn or rn == '*':
-                        if eid != "KFZ": e['open_slots'] += 1
-                    elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
+                        if eid != "KFZ": evt['open_slots'] += 1
+                    elif eid != "KFZ": evt['crew'][f"{eid or 'Staff'}_{len(evt['crew'])}"] = rn
         return events
 
     async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
@@ -572,9 +572,9 @@ class AsyncIncodeRequests:
             # Check cache first
             if use_cache:
                 cached = self._get_cached_data(cache_key)
-                if cached is not None:
+                if cached is not None and isinstance(cached, dict):
                     logger.debug(f"Staff cache hit for GUID {g[:8]}...")
-                    return cached
+                    return cast(Dict[str, Any], cached)
             
             # Fetch from API
             try:
@@ -585,7 +585,7 @@ class AsyncIncodeRequests:
                         j = await resp.json(content_type=None)
                         # Cache raw data
                         self._set_cached_data(cache_key, j)
-                        return j
+                        return cast(Dict[str, Any], j)
             except aiohttp.ClientError as e:
                 logger.debug(f"Network error fetching staff: {e}")
             except Exception as e:
