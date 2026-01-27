@@ -89,7 +89,7 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
     - **DB Connection Pooling**: `db.py` now caches SQLite connections instead of creating new ones per query. Added `close()`, `reset_instance()`, and `clear_expired_cache()` methods.
     - **Parser Optimization**: Crew sorting uses `max()` for cleaner code. `VEHICLE_INDICATORS` moved to `config.py`.
     - **New Constants**: `CACHE_TTL = 900` and `VEHICLE_INDICATORS` in `config.py`.
-    - **Dependency Updates**: Updated all packages to latest versions (requests 2.32.3, rich 13.9.4, pytest 8.3.4, aiohttp 3.11.11, etc.).
+    - **Dependencies**: Kept stable versions for Python 3.9+ compatibility.
     - **Test Infrastructure**: Fixed all test fixtures to properly use `reset_instance()` for DB isolation.
 - **Verification**: All 131 tests pass, mypy --strict clean.
 - **Pending for later**: Password hashing (security), more test coverage for `ical.py`, `pdf.py`, `ui/`.
