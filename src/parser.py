@@ -179,17 +179,16 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
                 return sum(1 for part in my_parts if part in n_lower)
 
             # Find best match using max() - O(n) instead of manual loop
-            best_match = max(
-                enumerate(crew),
-                key=lambda x: match_score(x[1]),
-                default=(-1, "")
-            )
-            best_idx = best_match[0]
-            best_score = match_score(best_match[1]) if best_idx >= 0 else 0
-
-            if best_idx >= 0 and best_score > 0:
-                me = crew.pop(best_idx)
-                crew.insert(0, me)
+            if crew:
+                best_idx, best_member = max(
+                    enumerate(crew),
+                    key=lambda x: match_score(x[1])
+                )
+                best_score = match_score(best_member)
+                
+                if best_score > 0:
+                    me = crew.pop(best_idx)
+                    crew.insert(0, me)
 
         results.append(Duty(
             begin=b,
