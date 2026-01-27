@@ -6,6 +6,7 @@ Manages the local SQLite database (`incode.db`) which stores:
 - Application settings (Key-Value store)
 - API response cache
 """
+import atexit
 import sqlite3
 import json
 import logging
@@ -14,6 +15,15 @@ from typing import Any, Dict, List, Optional
 from threading import Lock
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_db_connection() -> None:
+    """Cleanup function to close database connection on exit."""
+    if DatabaseManager._instance is not None:
+        DatabaseManager._instance.close()
+
+
+atexit.register(_cleanup_db_connection)
 
 DB_FILE = "incode.db"
 

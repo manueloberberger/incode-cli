@@ -81,15 +81,15 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
 ## Recent Context (2026-01-27)
-*State at v2.20.0*
+*State at v2.21.0*
 
-- **Performance & Code Quality Release**:
-    - **Bug Fixes**: Removed duplicate `install_service()` call and duplicate `if should_logout` block in `incode.py`.
-    - **Cleanup**: Removed unused `import shutil` in `incode.py`.
-    - **DB Connection Pooling**: `db.py` now caches SQLite connections instead of creating new ones per query. Added `close()`, `reset_instance()`, and `clear_expired_cache()` methods.
-    - **Parser Optimization**: Crew sorting uses `max()` for cleaner code. `VEHICLE_INDICATORS` moved to `config.py`.
-    - **New Constants**: `CACHE_TTL = 900` and `VEHICLE_INDICATORS` in `config.py`.
-    - **Dependencies**: Kept stable versions for Python 3.9+ compatibility.
-    - **Test Infrastructure**: Fixed all test fixtures to properly use `reset_instance()` for DB isolation.
-- **Verification**: All 131 tests pass, mypy --strict clean.
-- **Pending for later**: Password hashing (security), more test coverage for `ical.py`, `pdf.py`, `ui/`.
+- **Test Coverage & Quality Release**:
+    - **DB Connection Pooling**: SQLite connections cached with `atexit` cleanup to prevent ResourceWarnings.
+    - **Menu Formatting**: Fixed duplicate emojis, spacing issues in menus.
+    - **Exception Handlers**: Replaced bare `pass` with proper logging.
+    - **Test Coverage**: 164 tests total (+33 from v2.19.1):
+        - `test_ical.py`: 6 tests for iCal export
+        - `test_pdf.py`: 11 tests for PDF export
+        - `test_ui.py`: 16 tests for UI module imports and components
+- **Verification**: All 164 tests pass, mypy --strict clean, no warnings.
+- **Pending for later**: Password hashing (security enhancement).
