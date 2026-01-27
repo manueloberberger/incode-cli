@@ -25,6 +25,12 @@ def export_data(filepath: str) -> bool:
             json.dump(data, f, indent=4, ensure_ascii=False)
             
         return True
+    except PermissionError:
+        console.print(f"[bold red]Keine Schreibberechtigung für: {filepath}[/bold red]")
+        return False
+    except OSError as e:
+        console.print(f"[bold red]Dateisystem-Fehler: {e}[/bold red]")
+        return False
     except Exception as e:
         console.print(f"[bold red]Fehler beim Exportieren: {e}[/bold red]")
         return False

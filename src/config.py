@@ -150,8 +150,6 @@ def set_last_update_check(timestamp: float) -> None:
     """Saves the timestamp of the last update check."""
     db.set_value('last_update_check', timestamp)
 
-def get_storage_status(username: str) -> str:
-    """
-    Returns a string indicating where the password is stored.
-    """
+def get_storage_status() -> str:
+    """Returns a string indicating where the password is stored."""
     return "SQLite"

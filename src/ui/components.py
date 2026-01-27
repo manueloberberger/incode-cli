@@ -121,7 +121,7 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
             if real_name:
                 display_user += f" ({real_name})"
 
-            s_status = get_storage_status(current_user)
+            s_status = get_storage_status()
             s_short = s_status 
             s_color = "green"
             # Clean Modern Design
