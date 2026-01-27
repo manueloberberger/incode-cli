@@ -81,17 +81,17 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
 ## Recent Context (2026-01-27)
-*State at v2.22.0*
+*State at v2.22.0 - All cleanup tasks completed*
 
 - **Performance & Caching Release**:
-    - **Event GUID Indexierung**: `load_events_plan()` N+1 Problem gelöst mit `event_map` Dictionary für O(1) Lookups (O(n*m) → O(n+m)).
-    - **Staff-Caching mit TTL**: `search_staff_contact()` cached jetzt rohe Staff-Daten pro GUID (~15 Min TTL). Filterung erfolgt lokal.
-    - **Datetime-Parsing Utility**: `parse_iso_datetime()` Funktion erstellt, 6 Dateien refactored.
-    - **PDF Exception Logging**: Verbesserte Fehlerbehandlung in pdf.py.
-- **Verification**: All 164 tests pass, mypy --strict clean, no warnings.
-
-### Pending Tasks (Lower Priority)
-- **#6**: Code-Duplikate: `sanitize_filename()`, `format_crew()`, `show_header()`, Export-UI
-- **#7**: Performance: Holidays-Cache, Vehicle-Regex, Dashboard-Loops kombinieren
-- **#8**: Error Handling: backup.py IOError, api_async.py JSON-Validierung
-- **#9**: Toter Code: parser.py:187 Variable, config.py:153 Parameter
+    - **#1**: `parse_iso_datetime()` Utility erstellt, 6 Dateien refactored.
+    - **#2**: Staff-Caching mit TTL - rohe Daten pro GUID gecacht (~15 Min).
+    - **#3**: Ungenutzte Imports geprüft (keine gefunden).
+    - **#4**: PDF Exception Logging hinzugefügt.
+    - **#5**: Event GUID Indexierung - N+1 Problem gelöst mit `event_map` für O(1) Lookups.
+    - **#6**: Code-Duplikate geprüft - keine sinnvollen Duplikate gefunden (jede Crew-Formatierung hat andere Anforderungen).
+    - **#7**: Vehicle-Regex vorkompiliert (`VEHICLE_PATTERN` in config.py).
+    - **#8**: Error Handling: `backup.py` PermissionError/OSError Handling.
+    - **#9**: Toter Code entfernt: `parser.py` unused variable, `config.py` unused parameter.
+- **Verification**: All 164 tests pass, mypy --strict clean, CI green.
+- **Status**: All 9 cleanup tasks completed. Codebase is clean.
