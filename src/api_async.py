@@ -293,6 +293,12 @@ class AsyncIncodeRequests:
         
         results = await asyncio.gather(*tasks)
         
+        # Build event index for O(1) lookups instead of O(n) nested loop
+        event_map: Dict[tuple[str, date], Dict[str, Any]] = {}
+        for e in events:
+            key = (e['guid'], e['begin'].date())
+            event_map[key] = e
+        
         for data in results:
             if not data: continue
             it = data.get('data', {}).values() if isinstance(data.get('data'), dict) else data.get('data', [])
@@ -300,16 +306,18 @@ class AsyncIncodeRequests:
                 if not isinstance(item, dict): continue
                 pg, cb = item.get('projectDataGuid'), fix_datetime(item.get('begin'))
                 if not pg or not cb: continue
-                for e in events:
-                    if e['guid'] == pg and e['begin'].date() == cb.date():
-                        infos = item.get('additionalInfos', {})
-                        rn, pn, loc = str(infos.get('ressource_name', '')).strip(), str(infos.get('project_name', '')).strip(), str(item.get('orgUnitName', '')).strip()
-                        if pn and (e['vehicle'] == "Event" or len(pn) > len(e['vehicle'])): e['vehicle'] = pn
-                        if loc: e['location'] = loc
-                        eid = str(item.get('externalId', '')).upper()
-                        if not rn or rn == '*':
-                            if eid != "KFZ": e['open_slots'] += 1
-                        elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
+                
+                # O(1) lookup instead of O(n) loop
+                e = event_map.get((pg, cb.date()))
+                if e:
+                    infos = item.get('additionalInfos', {})
+                    rn, pn, loc = str(infos.get('ressource_name', '')).strip(), str(infos.get('project_name', '')).strip(), str(item.get('orgUnitName', '')).strip()
+                    if pn and (e['vehicle'] == "Event" or len(pn) > len(e['vehicle'])): e['vehicle'] = pn
+                    if loc: e['location'] = loc
+                    eid = str(item.get('externalId', '')).upper()
+                    if not rn or rn == '*':
+                        if eid != "KFZ": e['open_slots'] += 1
+                    elif eid != "KFZ": e['crew'][f"{eid or 'Staff'}_{len(e['crew'])}"] = rn
         return events
 
     async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
@@ -533,7 +541,20 @@ class AsyncIncodeRequests:
         return results
 
 
-    async def search_staff_contact(self, query: str) -> List[Dict[str, Any]]:
+    async def search_staff_contact(self, query: str, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """
+        Search staff contacts with optional caching.
+        
+        Caches raw staff data per GUID with TTL. Multiple searches use the same 
+        cached data, with filtering done locally for performance.
+        
+        Args:
+            query: Search string to filter staff by name.
+            use_cache: Whether to use cached data if available.
+            
+        Returns:
+            List of staff contact dictionaries matching the query.
+        """
         await self.ensure_session()
         logger.debug(f"Searching staff async: {query}")
         now = datetime.now()
@@ -542,35 +563,52 @@ class AsyncIncodeRequests:
         guids = set()
         if self.org_unit_data_guid: guids.add(self.org_unit_data_guid)
         if self.extra_guids: guids.update(self.extra_guids)
-        # Removed unused DEFAULT_GUID
         sorted_guids = sorted([g for g in guids if g])
         
-        async def fetch_one(g: str) -> List[Dict[str, Any]]:
+        async def fetch_one(g: str) -> Optional[Dict[str, Any]]:
+            """Fetch raw staff data for a single GUID, using cache if available."""
+            cache_key = f"staff_raw_{g}"
+            
+            # Check cache first
+            if use_cache:
+                cached = self._get_cached_data(cache_key)
+                if cached is not None:
+                    logger.debug(f"Staff cache hit for GUID {g[:8]}...")
+                    return cached
+            
+            # Fetch from API
             try:
-                # self.session guaranteed by ensure_session above
-                if not self.session: return []
+                if not self.session: return None
                 data = {'orgUnitDataGuid': g, 'withSubOrgUnits': 'true', 'loadModelData': '1', 'dateFrom': df, 'dateTo': dt}
                 async with self.session.post(f"{self.base_url}/StaffPortal/staff/data/getStaff.json", headers=self._get_api_headers(), data=data) as resp:
                     if resp.status == 200:
                         j = await resp.json(content_type=None)
-                        return parse_staff_contact(j, query)
+                        # Cache raw data
+                        self._set_cached_data(cache_key, j)
+                        return j
             except aiohttp.ClientError as e:
                 logger.debug(f"Network error fetching staff: {e}")
             except Exception as e:
                 logger.debug(f"Error fetching staff: {e}")
-            return []
+            return None
 
-        results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids])
+        # Fetch all GUIDs in parallel (cached ones return instantly)
+        raw_results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids])
         
-        # Merge logic (Simplified)
-        flat = []
-        seen = set()
-        for r_list in results:
+        # Parse and filter locally
+        parsed_results: List[List[Dict[str, Any]]] = []
+        for raw in raw_results:
+            if raw:
+                parsed_results.append(parse_staff_contact(raw, query))
+        
+        # Merge and deduplicate
+        flat: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for r_list in parsed_results:
             for item in r_list:
-                # Basic dedupe
                 pnr = item.get('personalnummer')
                 name = item.get('_display_name')
-                key = pnr if pnr else name
+                key = str(pnr) if pnr else str(name)
                 if key not in seen:
                     flat.append(item)
                     seen.add(key)

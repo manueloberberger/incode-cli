@@ -16,7 +16,7 @@ from rich.spinner import Spinner
 from rich.panel import Panel
 
 from src.config import console, BANNER
-from src.utils import clear_screen, wait_for_return, get_key
+from src.utils import clear_screen, wait_for_return, get_key, parse_iso_datetime
 from src.ui import interactive_menu
 
 def show_plan_list(incode: Any) -> None:
@@ -97,10 +97,8 @@ def show_plan_list(incode: Any) -> None:
             # Sort items into days
             for item in raw_items:
                 if not item.get('begin'): continue
-                if isinstance(item['begin'], str):
-                    duty_begin = datetime.strptime(item['begin'], '%Y-%m-%dT%H:%M:%S')
-                else:
-                    duty_begin = item['begin']
+                duty_begin = parse_iso_datetime(item.get('begin'))
+                if not duty_begin: continue
                 
                 d = duty_begin.date()
                 if d not in all_data: all_data[d] = []
@@ -141,11 +139,11 @@ def show_plan_list(incode: Any) -> None:
             t.add_column("Crew")
             
             for p in items:
-                duty_begin = p.get('begin')
-                if isinstance(duty_begin, str): duty_begin = datetime.strptime(duty_begin, '%Y-%m-%dT%H:%M:%S')
-                duty_end = p.get('end')
-                if isinstance(duty_end, str): duty_end = datetime.strptime(duty_end, '%Y-%m-%dT%H:%M:%S')
-                
+                duty_begin = parse_iso_datetime(p.get('begin'))
+                duty_end = parse_iso_datetime(p.get('end'))
+                if not duty_begin or not duty_end:
+                    continue
+
                 crew_list = []
                 # Basic crew parsing if simple dict
                 if isinstance(p.get('crew'), dict):

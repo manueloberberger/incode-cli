@@ -4,13 +4,17 @@ PDF export functionality for incode-cli.
 This module provides functions to generate professional PDF reports
 for duty schedules and absences using ReportLab.
 """
+import logging
 from reportlab.lib import colors
+
+logger = logging.getLogger(__name__)
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table as PDFTable, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime, timedelta
 from dataclasses import asdict, is_dataclass
 from src.config import console
+from src.utils import parse_iso_datetime
 
 from typing import List, Dict, Any, Union, Sequence
 from src.models import Duty
@@ -56,7 +60,9 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
         try:
             doc.build(elements)
             return True
-        except Exception:
+        except Exception as exc:
+            logger.error(f"PDF export failed (no duties): {exc}")
+            console.print(f"[error]Fehler beim Erstellen des PDF: {exc}[/error]")
             return False
 
     for item in duties:
@@ -64,21 +70,10 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
             # Support both Dicts and Dataclasses
             d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
             # Parse Dates - handle both string and datetime inputs
-            b, e = d.get('begin'), d.get('end')
-            
-            if isinstance(b, str):
-                if 'T' in b: 
-                    b = datetime.strptime(b[:19], '%Y-%m-%dT%H:%M:%S')
-                else: 
-                    b = datetime.strptime(b, '%Y-%m-%d %H:%M:%S')
-            
-            if isinstance(e, str):
-                if 'T' in e: 
-                    e = datetime.strptime(e[:19], '%Y-%m-%dT%H:%M:%S')
-                else: 
-                    e = datetime.strptime(e, '%Y-%m-%d %H:%M:%S')
-            
-            if not isinstance(b, datetime) or not isinstance(e, datetime):
+            b = parse_iso_datetime(d.get('begin'))
+            e = parse_iso_datetime(d.get('end'))
+
+            if not b or not e:
                 continue
                 
             h = (e - b).total_seconds() / 3600
@@ -159,8 +154,9 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     try:
         doc.build(elements)
         return True
-    except Exception as e:
-        console.print(f"[error]Fehler beim Erstellen des PDF: {e}[/error]")
+    except Exception as exc:
+        logger.error(f"PDF export failed (duties): {exc}")
+        console.print(f"[error]Fehler beim Erstellen des PDF: {exc}[/error]")
         return False
 
 
@@ -203,15 +199,19 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
         try:
             doc.build(elements)
             return True
-        except Exception:
+        except Exception as exc:
+            logger.error(f"PDF export failed (no absences): {exc}")
+            console.print(f"[error]Fehler beim Erstellen des PDF: {exc}[/error]")
             return False
 
     weekday_map = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
     for a in absences:
         try:
-            b_raw = datetime.strptime(a['begin'], '%Y-%m-%dT%H:%M:%S')
-            e_raw = datetime.strptime(a['end'], '%Y-%m-%dT%H:%M:%S')
+            b_raw = parse_iso_datetime(a.get('begin'))
+            e_raw = parse_iso_datetime(a.get('end'))
+            if not b_raw or not e_raw:
+                continue
             reason = a.get('duty_type', '')
             
             # Adjust times for display (handle overnight shifts)
@@ -285,11 +285,12 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
     ])
     
     table.setStyle(table_style)
-    
+
     elements.append(table)
     try:
         doc.build(elements)
         return True
-    except Exception as e:
-        console.print(f"[error]Fehler beim Erstellen des PDF: {e}[/error]")
+    except Exception as exc:
+        logger.error(f"PDF export failed (absences): {exc}")
+        console.print(f"[error]Fehler beim Erstellen des PDF: {exc}[/error]")
         return False

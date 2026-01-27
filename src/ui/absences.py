@@ -13,6 +13,8 @@ from typing import Any
 
 from rich.table import Table
 
+from src.utils import parse_iso_datetime
+
 logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.live import Live
@@ -134,8 +136,10 @@ def show_absences(incode: Any) -> None:
 
     for a in absences:
         try:
-            b_raw = datetime.strptime(a['begin'], '%Y-%m-%dT%H:%M:%S')
-            e_raw = datetime.strptime(a['end'], '%Y-%m-%dT%H:%M:%S')
+            b_raw = parse_iso_datetime(a.get('begin'))
+            e_raw = parse_iso_datetime(a.get('end'))
+            if not b_raw or not e_raw:
+                continue
             reason = a.get('duty_type', '')
             
             # 1. Adjust Start Date (Heuristic: Starts after 20:00 are logically the next day due to TZ/System quirks)

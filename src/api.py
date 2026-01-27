@@ -156,17 +156,18 @@ class IncodeRequests:
         """
         return self.loop.run_until_complete(self.client.load_absences())
     
-    def search_staff_contact(self, query: str) -> List[Dict[str, Any]]:
+    def search_staff_contact(self, query: str, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
         Search for staff members by name, email, or phone.
         
         Args:
             query: Search query string.
+            use_cache: Whether to use cached data if available.
             
         Returns:
             List of matching staff dictionaries.
         """
-        return self.loop.run_until_complete(self.client.search_staff_contact(query))
+        return self.loop.run_until_complete(self.client.search_staff_contact(query, use_cache))
 
     def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
         """

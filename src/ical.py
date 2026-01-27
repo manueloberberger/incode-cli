@@ -8,6 +8,7 @@ from datetime import datetime
 from dataclasses import asdict, is_dataclass
 from icalendar import Calendar, Event, vText
 from src.config import console
+from src.utils import parse_iso_datetime
 
 from typing import Dict, Any, Union, Sequence
 from src.models import Duty
@@ -45,23 +46,12 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
             # Support both Dicts and Dataclasses (Duty objects)
             # Explicitly type d as Dict for mypy
             d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
-            # Parse timestamps (Assuming they come as ISO strings from API)
-            start_str = d.get('begin')
-            end_str = d.get('end')
-            
-            if not start_str or not end_str:
+            # Parse timestamps (handles strings, datetime objects, and None)
+            dt_start = parse_iso_datetime(d.get('begin'))
+            dt_end = parse_iso_datetime(d.get('end'))
+
+            if not dt_start or not dt_end:
                 continue
-
-            # Convert ISO strings to datetime objects if they aren't already
-            if isinstance(start_str, str):
-                dt_start = datetime.strptime(start_str[:19], '%Y-%m-%dT%H:%M:%S')
-            else:
-                dt_start = start_str
-
-            if isinstance(end_str, str):
-                dt_end = datetime.strptime(end_str[:19], '%Y-%m-%dT%H:%M:%S')
-            else:
-                dt_end = end_str
 
             event = Event()
             

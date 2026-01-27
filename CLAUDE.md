@@ -81,15 +81,17 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
 ## Recent Context (2026-01-27)
-*State at v2.21.0*
+*State at v2.22.0*
 
-- **Test Coverage & Quality Release**:
-    - **DB Connection Pooling**: SQLite connections cached with `atexit` cleanup to prevent ResourceWarnings.
-    - **Menu Formatting**: Fixed duplicate emojis, spacing issues in menus.
-    - **Exception Handlers**: Replaced bare `pass` with proper logging.
-    - **Test Coverage**: 164 tests total (+33 from v2.19.1):
-        - `test_ical.py`: 6 tests for iCal export
-        - `test_pdf.py`: 11 tests for PDF export
-        - `test_ui.py`: 16 tests for UI module imports and components
+- **Performance & Caching Release**:
+    - **Event GUID Indexierung**: `load_events_plan()` N+1 Problem gelöst mit `event_map` Dictionary für O(1) Lookups (O(n*m) → O(n+m)).
+    - **Staff-Caching mit TTL**: `search_staff_contact()` cached jetzt rohe Staff-Daten pro GUID (~15 Min TTL). Filterung erfolgt lokal.
+    - **Datetime-Parsing Utility**: `parse_iso_datetime()` Funktion erstellt, 6 Dateien refactored.
+    - **PDF Exception Logging**: Verbesserte Fehlerbehandlung in pdf.py.
 - **Verification**: All 164 tests pass, mypy --strict clean, no warnings.
-- **Pending for later**: Password hashing (security enhancement).
+
+### Pending Tasks (Lower Priority)
+- **#6**: Code-Duplikate: `sanitize_filename()`, `format_crew()`, `show_header()`, Export-UI
+- **#7**: Performance: Holidays-Cache, Vehicle-Regex, Dashboard-Loops kombinieren
+- **#8**: Error Handling: backup.py IOError, api_async.py JSON-Validierung
+- **#9**: Toter Code: parser.py:187 Variable, config.py:153 Parameter

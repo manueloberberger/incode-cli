@@ -2,7 +2,8 @@
 Utility functions for incode-cli.
 This module provides common utilities and re-exports from submodules for backwards compatibility.
 """
-from typing import Any, Callable, TypeVar
+from datetime import datetime
+from typing import Any, Callable, Optional, TypeVar, Union
 from functools import wraps
 import logging
 
@@ -35,6 +36,8 @@ __all__ = [
     "check_for_updates", "update_app",
     # Holiday functions
     "get_holidays",
+    # Datetime functions
+    "parse_iso_datetime",
     # Classes
     "TimeoutHTTPAdapter",
     # Decorators
@@ -43,6 +46,43 @@ __all__ = [
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
+
+
+def parse_iso_datetime(value: Optional[Union[str, datetime]]) -> Optional[datetime]:
+    """
+    Parse an ISO datetime string without timezone adjustment.
+
+    Handles both full ISO format (with 'T') and space-separated format.
+    Safely handles None, empty strings, and already-parsed datetime objects.
+
+    Args:
+        value: ISO format datetime string, datetime object, or None.
+
+    Returns:
+        Datetime object, or None if parsing fails or input is empty.
+
+    Examples:
+        >>> parse_iso_datetime('2024-01-15T08:00:00')
+        datetime(2024, 1, 15, 8, 0, 0)
+        >>> parse_iso_datetime('2024-01-15 08:00:00')
+        datetime(2024, 1, 15, 8, 0, 0)
+        >>> parse_iso_datetime(None)
+        None
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        s = value[:19]
+        if 'T' in s:
+            return datetime.strptime(s, '%Y-%m-%dT%H:%M:%S')
+        else:
+            return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError, IndexError):
+        return None
 
 
 class TimeoutHTTPAdapter(HTTPAdapter):

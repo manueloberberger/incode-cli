@@ -13,6 +13,8 @@ from typing import Any
 
 from rich.table import Table
 
+from src.utils import parse_iso_datetime
+
 logger = logging.getLogger(__name__)
 from rich.align import Align
 from rich.live import Live
@@ -75,12 +77,14 @@ def show_events_menu(incode: Any) -> None:
                     # Or maybe previous implementation returned dicts.
                     # API Async implementation returns Duty objects.
                     # I should fix access to be attribute based if it is an object, or ensure subscription works.
-                    # Let's check if Duty is subscriptable. Usually not unless defined.
-                    # Safest is to try attribute access first, then dict.
-                    pass
-                    b = d.begin if hasattr(d, 'begin') else datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S')
-                    e = d.end if hasattr(d, 'end') else datetime.strptime(d['end'], '%Y-%m-%dT%H:%M:%S')
-                    
+                    # Handle both Duty objects and dicts
+                    b_val = d.begin if hasattr(d, 'begin') else d.get('begin') if isinstance(d, dict) else None
+                    e_val = d.end if hasattr(d, 'end') else d.get('end') if isinstance(d, dict) else None
+                    b = parse_iso_datetime(b_val)
+                    e = parse_iso_datetime(e_val)
+                    if not b or not e:
+                        continue
+
                     loc = getattr(d, 'location', None) or d.get('location', '') if isinstance(d, dict) else d.location
                     info = getattr(d, 'duty_type', None) or d.get('duty_type', '') if isinstance(d, dict) else d.duty_type
                     vehicle = getattr(d, 'vehicle', None) or d.get('vehicle', '') if isinstance(d, dict) else d.vehicle
