@@ -161,7 +161,7 @@ def setup_auth(force_interactive: bool = False) -> Tuple[str, str, Optional[str]
             
         options.append(("➕  Neuen Benutzer hinzufügen", "new"))
         options.append(("✏️  Anzeigenamen ändern", "edit_alias"))
-        options.append(("🗑️   Benutzer entfernen", "delete"))
+        options.append(("🗑️  Benutzer entfernen", "delete"))
         options.append(("🚪  Beenden", "exit"))
         
         selected = interactive_menu(options, title="LOGIN")
