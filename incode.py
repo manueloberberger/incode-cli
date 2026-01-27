@@ -345,7 +345,7 @@ def run_cli(debug: bool = False) -> None:
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
             ("📺  Live-Monitor", "live"),
             ("🤖  Telegram Bot", "bot"),
-            ("⚙️   Einstellungen", "settings"),
+            ("⚙️  Einstellungen", "settings"),
             ("👤  Benutzer wechseln / Logout", "logout"),
             ("🚪  Beenden", "exit")
         ]
