@@ -252,9 +252,10 @@ def startup_checks(debug: bool = False) -> None:
              console.print("[dim]Debug: Keine Updates gefunden oder Check fertig.[/dim]")
              wait_for_return()
     except Exception as e:
+        # Network/git errors during update check should not block startup
         if debug:
             console.print(f"[red]Fehler bei startup_checks: {e}[/red]")
-        pass # Ignore errors during update check to not block startup
+        logger.debug(f"Update check failed: {type(e).__name__}: {e}")
 
 def run_cli(debug: bool = False) -> None:
     """
@@ -338,8 +339,8 @@ def run_cli(debug: bool = False) -> None:
             ("📅  Mein Dienstplan", "future"),
             ("🌴  Meine Abwesenheiten", "absences"),
             ("🚑  Events / Ambulanzdienste", "events"),
-            ("🚑  Tagesplan (Heute)", "today"),
-            ("📆  Tagesplan (Datum wählen)", "date"),
+            ("📆  Tagesplan (Heute)", "today"),
+            ("🗓️  Tagesplan (Datum wählen)", "date"),
             ("📋  Tagespläne (Liste)", "list_view"),
             ("📒  Mitarbeiter-Verzeichnis", "staff"),
             ("🔍  Gemeinsame Dienste suchen", "colleague"),
@@ -508,7 +509,6 @@ def start_bot_mode(incode_instance: Any = None, debug: bool = False, specific_us
     except KeyboardInterrupt:
         console.print()
         console.print(Align.center("[bold yellow]Beende Telegram Bot... Bitte warten (nicht mehrmals klicken) ...[/bold yellow]"))
-        pass
 
 def show_help() -> None:
     clear_screen()

@@ -48,7 +48,7 @@ def show_settings_menu(current_user: Optional[str] = None) -> None:
 
         options: List[Tuple[str, Any]] = [
             ("🔄  Jetzt nach Updates suchen", "check_now"),
-            ("⏱️   Häufigkeit der Update-Prüfung ändern", "interval"),
+            ("⏱️  Häufigkeit der Update-Prüfung ändern", "interval"),
             ("🔐  Passwort ändern", "password"),
             ("🤖  Telegram Konfiguration ändern", "telegram"),
             ("💾  Backup / Restore", "backup"),

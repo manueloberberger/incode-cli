@@ -39,10 +39,10 @@ def show_plan_list(incode: Any) -> None:
     
     # 1. Ask for Range
     options = [
-        ("Nächste 7 Tage", 7),
-        ("Nächste 14 Tage", 14),
-        ("Nächste 21 Tage", 21),
-        ("Kommender Monat (30 Tage)", 30),
+        ("📅  Nächste 7 Tage", 7),
+        ("📅  Nächste 14 Tage", 14),
+        ("📅  Nächste 21 Tage", 21),
+        ("📅  Kommender Monat (30 Tage)", 30),
         ("🔙  Zurück", "back")
     ]
     
