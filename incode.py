@@ -13,7 +13,6 @@ It handles:
 import os
 import sys
 import time
-import shutil
 import logging
 
 from typing import Any, Tuple, Optional, List, Dict
@@ -392,9 +391,6 @@ def run_cli(debug: bool = False) -> None:
         if should_logout:
             continue
 
-        if should_logout:
-            continue
-
 def show_bot_menu(incode_instance: Any) -> None:
     """
     Show the Telegram Bot management menu.
@@ -587,7 +583,6 @@ if __name__ == "__main__":
                 except (ValueError, IndexError) as e:
                     logger.debug(f"Error parsing service --user argument: {e}")
             
-            install_service(specific_user=service_user)
             install_service(specific_user=service_user)
         elif len(sys.argv) > 1 and "bot" in sys.argv:
             start_bot_mode(debug=debug_mode, specific_user=specific_user, force_menu=force_select)

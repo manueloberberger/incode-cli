@@ -12,6 +12,8 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import src.db as db_module
+import src.backup as backup_module
+import src.config as config_module
 
 
 @pytest.fixture
@@ -23,20 +25,26 @@ def temp_db():
     original_db_file = db_module.DB_FILE
     db_module.DB_FILE = temp_db_path
 
-    db_module.DatabaseManager._instance = None
-    db_module.DatabaseManager._initialized = False
+    # Use reset_instance to properly close connections
+    db_module.DatabaseManager.reset_instance()
 
     db = db_module.DatabaseManager()
 
+    # Patch the global db instance in all modules that import it
     original_db = db_module.db
+    original_backup_db = backup_module.db
+    original_config_db = config_module.db
     db_module.db = db
+    backup_module.db = db
+    config_module.db = db
 
     yield {'db': db, 'temp_dir': temp_dir}
 
     db_module.DB_FILE = original_db_file
     db_module.db = original_db
-    db_module.DatabaseManager._instance = None
-    db_module.DatabaseManager._initialized = False
+    backup_module.db = original_backup_db
+    config_module.db = original_config_db
+    db_module.DatabaseManager.reset_instance()
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 

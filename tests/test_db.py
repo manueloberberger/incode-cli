@@ -20,24 +20,22 @@ def temp_db():
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
     temp_db_path = os.path.join(temp_dir, "test_incode.db")
-    
+
     # Backup original and set new path
     original_db_file = db_module.DB_FILE
     db_module.DB_FILE = temp_db_path
-    
-    # Reset singleton to force re-initialization
-    db_module.DatabaseManager._instance = None
-    db_module.DatabaseManager._initialized = False
-    
+
+    # Use reset_instance to properly close connections
+    db_module.DatabaseManager.reset_instance()
+
     # Create fresh instance
     db = db_module.DatabaseManager()
-    
+
     yield db
-    
+
     # Cleanup
     db_module.DB_FILE = original_db_file
-    db_module.DatabaseManager._instance = None
-    db_module.DatabaseManager._initialized = False
+    db_module.DatabaseManager.reset_instance()
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 

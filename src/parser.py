@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 from src.models import Duty
+from src.config import VEHICLE_INDICATORS
 
 
 def fix_datetime(s: Optional[str]) -> Optional[datetime]:
@@ -164,35 +165,29 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
         veh, crew = "", []
         if len(al) > 1:
             last = str(al[-1])
-            vehicle_indicators = ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"]
-            if last and (last[0].isdigit() or any(vt in last.upper() for vt in vehicle_indicators)): 
+            if last and (last[0].isdigit() or any(vt in last.upper() for vt in VEHICLE_INDICATORS)):
                 veh, crew = last, [str(x) for x in al[1:-1]]
-            else: 
+            else:
                 veh, crew = "", [str(x) for x in al[1:]]
-        
-        # Reorder crew to show current user first
+
+        # Reorder crew to show current user first (optimized with max())
         if my_name and crew:
             my_parts = [p for p in my_name.lower().replace(',', '').split() if len(p) > 2]
-            
-            def match_score(name: str) -> int:
-                n_lower = name.lower()
-                score = 0
-                for part in my_parts:
-                    if part in n_lower: 
-                        score += 1
-                return score
-                
-            best_match_idx = -1
-            best_score = 0
-            
-            for i, member in enumerate(crew):
-                s = match_score(member)
-                if s > best_score:
-                    best_score = s
-                    best_match_idx = i
-            
-            if best_match_idx >= 0 and best_score > 0:
-                me = crew.pop(best_match_idx)
+
+            def match_score(member: str) -> int:
+                n_lower = member.lower()
+                return sum(1 for part in my_parts if part in n_lower)
+
+            # Find best match using max() - O(n) instead of manual loop
+            best_idx, best_score = max(
+                enumerate(crew),
+                key=lambda x: match_score(x[1]),
+                default=(-1, 0)
+            )
+            best_score = match_score(crew[best_idx]) if best_idx >= 0 else 0
+
+            if best_idx >= 0 and best_score > 0:
+                me = crew.pop(best_idx)
                 crew.insert(0, me)
 
         results.append(Duty(

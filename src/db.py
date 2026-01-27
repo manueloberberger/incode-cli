@@ -20,19 +20,23 @@ DB_FILE = "incode.db"
 class DatabaseManager:
     """
     Singleton class managing SQLite database connections and operations.
-    
+
     Thread-safe implementation using a lock for instance creation.
     Provides methods for user management, key-value storage, and caching.
+    Uses connection pooling for improved performance.
     """
     _instance: Optional['DatabaseManager'] = None
     _lock = Lock()
     _initialized: bool = False
+    _connection: Optional[sqlite3.Connection] = None
+    _conn_lock: Lock
 
     def __new__(cls) -> 'DatabaseManager':
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super(DatabaseManager, cls).__new__(cls)
                 cls._instance._initialized = False
+                cls._instance._conn_lock = Lock()
             return cls._instance
 
     def __init__(self) -> None:
@@ -41,9 +45,27 @@ class DatabaseManager:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+        """Returns a cached connection or creates a new one (connection pooling)."""
+        with self._conn_lock:
+            if self._connection is None:
+                self._connection = sqlite3.connect(DB_FILE, check_same_thread=False)
+                self._connection.row_factory = sqlite3.Row
+            return self._connection
+
+    def close(self) -> None:
+        """Close the cached database connection."""
+        with self._conn_lock:
+            if self._connection is not None:
+                self._connection.close()
+                self._connection = None
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the singleton instance (for testing purposes)."""
+        with cls._lock:
+            if cls._instance is not None:
+                cls._instance.close()
+                cls._instance = None
 
     def _init_db(self) -> None:
         conn = self._get_connection()
@@ -93,7 +115,6 @@ class DatabaseManager:
         """)
         
         conn.commit()
-        conn.close()
 
     # --- User Management ---
 
@@ -117,7 +138,6 @@ class DatabaseManager:
                 except (json.JSONDecodeError, TypeError):
                     u['extra_guids'] = []
             users.append(u)
-        conn.close()
         return users
 
     def get_user(self, username: str) -> Optional[Dict[str, Any]]:
@@ -134,7 +154,6 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         row = cursor.fetchone()
-        conn.close()
         if row:
             u = dict(row)
             if u['extra_guids']:
@@ -172,7 +191,6 @@ class DatabaseManager:
                 allowed_user_id=excluded.allowed_user_id
         """, (username, password, base_url, json.dumps(extra_guids), real_name, telegram_token, allowed_user_id))
         conn.commit()
-        conn.close()
 
     def remove_user(self, username: str) -> None:
         """
@@ -185,7 +203,6 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE username = ?", (username,))
         conn.commit()
-        conn.close()
 
     def set_active_user(self, username: str) -> None:
         # We store 'last_active' in valuestore instead of a flag in users table 
@@ -204,7 +221,6 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM valuestore WHERE key = ?", (key,))
         row = cursor.fetchone()
-        conn.close()
         if row:
             try:
                 return json.loads(row['value'])
@@ -218,8 +234,6 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute("SELECT key, value FROM valuestore")
         rows = cursor.fetchall()
-        conn.close()
-        
         result = {}
         for row in rows:
             key = row['key']
@@ -239,7 +253,6 @@ class DatabaseManager:
             ON CONFLICT(key) DO UPDATE SET value=excluded.value
         """, (key, val_str))
         conn.commit()
-        conn.close()
 
     # --- Cache ---
 
@@ -248,8 +261,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute("SELECT value, timestamp FROM cache WHERE key = ?", (key,))
         row = cursor.fetchone()
-        conn.close()
-        
+
         if row:
             ts = row['timestamp']
             if time.time() - ts < ttl:
@@ -258,9 +270,9 @@ class DatabaseManager:
                 except (json.JSONDecodeError, TypeError):
                     return None
             else:
-                # Cleanup old cache immediately? Or lazy?
-                # For now, just return None
-                pass
+                # Remove expired entry immediately
+                cursor.execute("DELETE FROM cache WHERE key = ?", (key,))
+                conn.commit()
         return None
 
     def set_cache(self, key: str, value: Any) -> None:
@@ -273,7 +285,24 @@ class DatabaseManager:
             ON CONFLICT(key) DO UPDATE SET value=excluded.value, timestamp=excluded.timestamp
         """, (key, val_str, time.time()))
         conn.commit()
-        conn.close()
+
+    def clear_expired_cache(self, ttl: int = 900) -> int:
+        """
+        Remove all expired cache entries.
+
+        Args:
+            ttl: Time-to-live in seconds (default: 900 = 15 minutes).
+
+        Returns:
+            Number of deleted entries.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cutoff = time.time() - ttl
+        cursor.execute("DELETE FROM cache WHERE timestamp < ?", (cutoff,))
+        deleted = cursor.rowcount
+        conn.commit()
+        return deleted
 
 
 

@@ -38,7 +38,7 @@ theme = Theme({
 
 console = Console(theme=theme)
 
-VERSION = "2.19.1"
+VERSION = "2.20.0"
 
 BANNER = rf"""
 [bold red]  ___ _  _  ___  ___  ___  ___       ___ _    ___   [/bold red]
@@ -54,6 +54,12 @@ DEFAULT_TIMEOUT = 10
 GIT_FETCH_TIMEOUT = 10
 GIT_REVLIST_TIMEOUT = 5
 GIT_SHOW_TIMEOUT = 5
+
+# Cache TTL (seconds) - 15 minutes
+CACHE_TTL = 900
+
+# Vehicle type indicators for duty parsing
+VEHICLE_INDICATORS = ["RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"]
 
 # Terminal I/O
 KEY_POLL_INTERVAL = 0.01

@@ -80,12 +80,16 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
-## Recent Context (2026-01-26)
-*State at v2.19.1*
+## Recent Context (2026-01-27)
+*State at v2.20.0*
 
-- **Hotfix Release**: 
-    - Fixed `SyntaxError` in `incode.py` due to missing `except` block.
-    - Improved robustness: App now gracefully warns instead of crashing if `rich` dependency is missing (important for system python environments).
-- **Versioning**: Updated to v2.19.1 in `config.py` and `README.md`.
-- **Verification**: Passed `compileall` checks.
-- **Next Steps**: Monitor for any user reports regarding dependency installation issues.
+- **Performance & Code Quality Release**:
+    - **Bug Fixes**: Removed duplicate `install_service()` call and duplicate `if should_logout` block in `incode.py`.
+    - **Cleanup**: Removed unused `import shutil` in `incode.py`.
+    - **DB Connection Pooling**: `db.py` now caches SQLite connections instead of creating new ones per query. Added `close()`, `reset_instance()`, and `clear_expired_cache()` methods.
+    - **Parser Optimization**: Crew sorting uses `max()` for cleaner code. `VEHICLE_INDICATORS` moved to `config.py`.
+    - **New Constants**: `CACHE_TTL = 900` and `VEHICLE_INDICATORS` in `config.py`.
+    - **Dependency Updates**: Updated all packages to latest versions (requests 2.32.3, rich 13.9.4, pytest 8.3.4, aiohttp 3.11.11, etc.).
+    - **Test Infrastructure**: Fixed all test fixtures to properly use `reset_instance()` for DB isolation.
+- **Verification**: All 131 tests pass, mypy --strict clean.
+- **Pending for later**: Password hashing (security), more test coverage for `ical.py`, `pdf.py`, `ui/`.
