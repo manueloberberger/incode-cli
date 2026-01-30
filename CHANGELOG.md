@@ -5,6 +5,23 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.0] - 2026-01-27
+
+### Added
+- `parse_iso_datetime()` utility function for consistent datetime parsing
+- Staff caching with TTL (~15 min) for improved performance
+- PDF exception logging for better error diagnostics
+- Pre-compiled vehicle regex pattern (`VEHICLE_PATTERN`)
+- Specific error handling for backup operations (PermissionError, OSError)
+
+### Changed
+- Event loading now uses O(1) dictionary lookup instead of O(n) nested loops
+- Refactored datetime parsing across 6 files to use central utility
+
+### Fixed
+- Removed unused variables and parameters (dead code cleanup)
+- mypy --strict compatibility improvements
+
 ## [2.19.0] - 2026-01-26
 
 ### Added
