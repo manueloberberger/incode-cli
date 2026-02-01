@@ -45,8 +45,7 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
         try:
             # Support both Dicts and Dataclasses (Duty objects)
             # Explicitly type d as Dict for mypy
-            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
-            # Parse timestamps (handles strings, datetime objects, and None)
+            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item            # Parse timestamps (handles strings, datetime objects, and None)
             dt_start = parse_iso_datetime(d.get('begin'))
             dt_end = parse_iso_datetime(d.get('end'))
 

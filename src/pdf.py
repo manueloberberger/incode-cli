@@ -68,8 +68,7 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     for item in duties:
         try:
             # Support both Dicts and Dataclasses
-            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item # type: ignore
-            # Parse Dates - handle both string and datetime inputs
+            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item            # Parse Dates - handle both string and datetime inputs
             b = parse_iso_datetime(d.get('begin'))
             e = parse_iso_datetime(d.get('end'))
 
