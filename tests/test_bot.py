@@ -272,3 +272,70 @@ class TestIncodeBotFetchDuties:
         result = bot._fetch_duties_sync(filter_today=False, custom_date=custom_date)
 
         mock_api.load_daily_plan.assert_called_once_with(custom_date)
+
+
+class TestIncodeBotHelpCommand:
+    """Tests for the help command."""
+
+    @pytest.mark.asyncio
+    @patch('src.bot.console')
+    async def test_help_command_sends_help_text(self, mock_console, temp_db, mock_api):
+        """Test that help command sends help message."""
+        from src.bot import IncodeBot
+
+        temp_db['db'].upsert_user(
+            username="testuser",
+            password="pass",
+            base_url="https://x.com",
+            extra_guids=[],
+            telegram_token="token",
+            allowed_user_id=123
+        )
+
+        bot = IncodeBot(mock_api)
+
+        # Create mock update and context
+        mock_update = MagicMock()
+        mock_update.message = AsyncMock()
+        mock_update.message.reply_text = AsyncMock()
+
+        mock_context = MagicMock()
+
+        from src.bot import ConversationHandler
+        result = await bot.help_command(mock_update, mock_context)
+
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        help_text = call_args[0][0]
+
+        # Verify help content
+        assert "/start" in help_text
+        assert "/dienste" in help_text
+        assert "/tagesplan" in help_text
+        assert "/help" in help_text
+        assert result == ConversationHandler.END
+
+    @pytest.mark.asyncio
+    @patch('src.bot.console')
+    async def test_help_command_no_message(self, mock_console, temp_db, mock_api):
+        """Test help command with no message returns END."""
+        from src.bot import IncodeBot, ConversationHandler
+
+        temp_db['db'].upsert_user(
+            username="testuser",
+            password="pass",
+            base_url="https://x.com",
+            extra_guids=[],
+            telegram_token="token",
+            allowed_user_id=123
+        )
+
+        bot = IncodeBot(mock_api)
+
+        mock_update = MagicMock()
+        mock_update.message = None
+        mock_context = MagicMock()
+
+        result = await bot.help_command(mock_update, mock_context)
+
+        assert result == ConversationHandler.END

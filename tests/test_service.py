@@ -272,3 +272,73 @@ class TestCheckServiceStatus:
         check_service_status()
 
         mock_console.print.assert_called()
+
+
+class TestRestartServices:
+    """Tests for restart_services function."""
+
+    @patch('src.service.console')
+    @patch('src.service.get_installed_services', return_value=[])
+    def test_restart_no_services(self, mock_get, mock_console):
+        """Test restart when no services installed."""
+        from src.service import restart_services
+
+        restart_services()
+
+        # Should not print anything (early return)
+
+    @patch('src.service.console')
+    @patch('src.service.platform.system', return_value='Linux')
+    @patch('src.service.get_installed_services', return_value=['user1'])
+    @patch('os.geteuid', return_value=0)
+    @patch('subprocess.run')
+    def test_restart_linux_as_root(self, mock_run, mock_euid, mock_get, mock_system, mock_console):
+        """Test restart on Linux as root."""
+        from src.service import restart_services
+
+        mock_run.return_value = MagicMock(returncode=0)
+
+        restart_services()
+
+        mock_run.assert_called()
+        # Verify systemctl restart was called
+        call_args = mock_run.call_args_list[0][0][0]
+        assert 'systemctl' in call_args
+        assert 'restart' in call_args
+
+    @patch('src.service.console')
+    @patch('src.service.platform.system', return_value='Darwin')
+    @patch('src.service.get_installed_services', return_value=['user1'])
+    @patch('os.path.exists', return_value=True)
+    @patch('subprocess.run')
+    def test_restart_macos(self, mock_run, mock_exists, mock_get, mock_system, mock_console):
+        """Test restart on macOS."""
+        from src.service import restart_services
+
+        mock_run.return_value = MagicMock(returncode=0)
+
+        restart_services()
+
+        # Verify launchctl unload/load were called
+        calls = mock_run.call_args_list
+        assert len(calls) >= 2  # unload + load
+        unload_call = str(calls[0])
+        load_call = str(calls[1])
+        assert 'unload' in unload_call
+        assert 'load' in load_call
+
+    @patch('src.service.console')
+    @patch('src.service.platform.system', return_value='Linux')
+    @patch('src.service.get_installed_services', return_value=['user1'])
+    @patch('os.geteuid', return_value=1000)
+    @patch('subprocess.run')
+    def test_restart_linux_non_root_uses_sudo(self, mock_run, mock_euid, mock_get, mock_system, mock_console):
+        """Test restart on Linux as non-root uses sudo."""
+        from src.service import restart_services
+
+        mock_run.return_value = MagicMock(returncode=0)
+
+        restart_services()
+
+        call_args = mock_run.call_args_list[0][0][0]
+        assert 'sudo' in call_args

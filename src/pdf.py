@@ -111,8 +111,8 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
                 d.get('vehicle') or "-",
                 crew_str
             ])
-        except (ValueError, AttributeError, KeyError, TypeError):
-            pass  # Skip malformed duty entries
+        except (ValueError, AttributeError, KeyError, TypeError) as e:
+            logger.debug(f"Skipping malformed duty entry: {e}")
 
     # Column Widths optimized for A4
     col_widths = [70, 90, 40, 90, 160]
@@ -247,8 +247,8 @@ def export_absences_to_pdf(absences: List[Dict[str, Any]], filename: str = "abwe
                 reason,
                 dur_str
             ])
-        except (ValueError, KeyError, TypeError):
-            pass  # Skip malformed absence entries
+        except (ValueError, KeyError, TypeError) as e:
+            logger.debug(f"Skipping malformed absence entry: {e}")
 
     # Column Widths (A4 Width ~ 450-500 printable)
     col_widths = [180, 180, 90]

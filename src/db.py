@@ -123,8 +123,15 @@ class DatabaseManager:
                 timestamp REAL
             )
         """)
-        
+
+        # Performance indexes
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cache_timestamp ON cache(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+
         conn.commit()
+
+        # Clean up expired cache entries on startup
+        self.clear_expired_cache()
 
     # --- User Management ---
 

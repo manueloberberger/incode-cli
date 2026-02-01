@@ -5,6 +5,29 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.23.0] - 2026-02-01
+
+### Added
+- `/help` command in Telegram bot with full command reference
+- Database indexes on `cache.timestamp` and `users.username` for faster queries
+- Automatic cache cleanup on application startup
+- Comprehensive documentation for exception classes
+- Detailed Computus algorithm documentation in `holidays.py`
+- Regex pattern documentation in `api_async.py`
+- 11 new tests for bot help, corrupted backups, and service restart
+
+### Changed
+- Replaced runtime `assert` statements with proper `RuntimeError` exceptions in `api_async.py`
+- Improved exception handling: specific exceptions instead of broad `except Exception`
+- Dependencies now use version ranges for better security update support
+- Upgraded `python-telegram-bot` to >=21.7
+- Added `types-aiohttp` for complete type checking
+- Optimized string concatenation in `parser.py` using `join()`
+
+### Fixed
+- Silent error handling in `pdf.py` now logs skipped entries
+- Login error message now includes troubleshooting suggestions
+
 ## [2.22.0] - 2026-01-27
 
 ### Added

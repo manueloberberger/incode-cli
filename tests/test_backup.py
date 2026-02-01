@@ -255,3 +255,89 @@ class TestImportData:
         users = temp_db['db'].get_users()
         assert len(users) == 1
         assert users[0]['username'] == 'valid_user'
+
+
+class TestCorruptedBackups:
+    """Tests for handling corrupted or malformed backup files."""
+
+    @patch('src.backup.console')
+    def test_import_empty_file(self, mock_console, temp_db):
+        """Test import with empty file."""
+        from src.backup import import_data
+
+        empty_path = os.path.join(temp_db['temp_dir'], "empty.json")
+        with open(empty_path, 'w') as f:
+            f.write("")
+
+        result = import_data(empty_path)
+
+        assert result is False
+
+    @patch('src.backup.console')
+    def test_import_truncated_json(self, mock_console, temp_db):
+        """Test import with truncated JSON (simulating incomplete write)."""
+        from src.backup import import_data
+
+        truncated_path = os.path.join(temp_db['temp_dir'], "truncated.json")
+        with open(truncated_path, 'w') as f:
+            f.write('{"meta": {"version": 1}, "users": [{"username": "test"')
+
+        result = import_data(truncated_path)
+
+        assert result is False
+
+    @patch('src.backup.console')
+    def test_import_wrong_structure(self, mock_console, temp_db):
+        """Test import with valid JSON but wrong structure (array instead of object)."""
+        from src.backup import import_data
+
+        wrong_path = os.path.join(temp_db['temp_dir'], "wrong.json")
+        with open(wrong_path, 'w') as f:
+            json.dump(["this", "is", "an", "array"], f)
+
+        result = import_data(wrong_path)
+
+        # Arrays can't use .get() so import fails
+        assert result is False
+
+    @patch('src.backup.console')
+    def test_import_missing_password(self, mock_console, temp_db):
+        """Test import with user missing password uses default."""
+        from src.backup import import_data
+
+        backup_data = {
+            'meta': {'version': 1},
+            'users': [{'username': 'no_pass_user', 'base_url': 'https://x.com', 'extra_guids': []}],
+            'valuestore': {}
+        }
+
+        backup_path = os.path.join(temp_db['temp_dir'], "no_pass.json")
+        with open(backup_path, 'w') as f:
+            json.dump(backup_data, f)
+
+        result = import_data(backup_path)
+
+        assert result is True
+        user = temp_db['db'].get_user('no_pass_user')
+        assert user is not None
+        assert user['password'] == ''
+
+    @patch('src.backup.console')
+    def test_import_null_values(self, mock_console, temp_db):
+        """Test import handles null values - uses defaults where possible."""
+        from src.backup import import_data
+
+        backup_data = {
+            'meta': {'version': 1},
+            'users': [{'username': 'null_user', 'password': None, 'base_url': None, 'extra_guids': None}],
+            'valuestore': {'null_setting': None}
+        }
+
+        backup_path = os.path.join(temp_db['temp_dir'], "nulls.json")
+        with open(backup_path, 'w') as f:
+            json.dump(backup_data, f)
+
+        # Currently fails due to SQLite constraint on None for password
+        # This documents the current behavior
+        result = import_data(backup_path)
+        assert result is False

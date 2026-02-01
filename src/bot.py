@@ -148,13 +148,36 @@ class IncodeBot:
             [InlineKeyboardButton("📆 Anderes Datum", callback_data='custom_date')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await update.message.reply_text(
             f"✨ *Incode CLI Bot v{VERSION}* ✨\n\n"
             f"Hallo! Was möchtest du tun?",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+        return ConversationHandler.END
+
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Handle the /help command - show available commands and usage."""
+        if not update.message: return ConversationHandler.END
+        help_text = (
+            "📖 *Incode CLI Bot - Hilfe*\n\n"
+            "*Verfügbare Befehle:*\n"
+            "/start - Hauptmenü anzeigen\n"
+            "/dienste - Deine Dienste als PDF\n"
+            "/tagesplan - Heutigen Tagesplan als PDF\n"
+            "/heute - Alias für /tagesplan\n"
+            "/help - Diese Hilfe anzeigen\n"
+            "/cancel - Aktuelle Aktion abbrechen\n\n"
+            "*Buttons:*\n"
+            "• 📅 Meine Dienste - Alle zukünftigen Dienste\n"
+            "• 🚑 Tagesplan - Plan für heute\n"
+            "• 📆 Anderes Datum - Datum eingeben\n\n"
+            "*Datumseingabe:*\n"
+            "Format: TT.MM. oder TT.MM.JJJJ\n"
+            "Beispiele: 15.01. oder 15.01.2026"
+        )
+        await update.message.reply_text(help_text, parse_mode='Markdown')
         return ConversationHandler.END
 
     async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -397,6 +420,7 @@ class IncodeBot:
         conv_handler = ConversationHandler(
             entry_points=[
                 CommandHandler('start', self.start),
+                CommandHandler('help', self.help_command),
                 CommandHandler(['dienste', 'plan', 'dienst'], self.send_duties),
                 CommandHandler(['tagesplan', 'heute'], self.send_duties),
                 CallbackQueryHandler(self.button_handler, pattern='^(my_duties|today_plan|custom_date)$')
@@ -454,7 +478,7 @@ class IncodeBot:
         try:
             asyncio.run(main_loop())
         except KeyboardInterrupt:
-            pass
+            logger.debug("Bot stopped by keyboard interrupt")
         except Conflict:
             console.print(Align.center("\n[bold red]⚠️  Verbindung durch neue Session beendet.[/bold red]"))
             console.print(Align.center("[yellow]Der Bot wurde auf einem anderen Gerät gestartet.[/yellow]"))

@@ -75,9 +75,8 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
         elif debug:
             console.print(f"[yellow]Debug: git rev-list failed: {res.stderr}[/yellow]")
             
-    except Exception as e:
+    except (subprocess.SubprocessError, subprocess.TimeoutExpired, OSError) as e:
         if debug: console.print(f"[red]Debug: Update check error: {e}[/red]")
-        pass
     
     # Update timestamp if we actually checked (successfully or not, to avoid spamming on error)
     if not debug:

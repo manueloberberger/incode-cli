@@ -80,18 +80,24 @@ def parse_staff_contact(data: Dict[str, Any], query_name: str) -> List[Dict[str,
         full_name = f"{str(p.get('vorname', '')).strip()} {str(p.get('nachname', '')).strip()}".strip() or str(p.get('name', '')).strip()
         pnr = str(p.get('personalnummer', ''))
         
-        # Build comprehensive search text
-        search_text = (full_name + pnr + str(p.get('email', ''))).lower()
-        
+        # Build comprehensive search text using list join for performance
+        search_parts = [full_name, pnr, str(p.get('email', ''))]
+
         # Add extra contact fields to search
         for k in ['telefon', 'telefon_privat', 'handy', 'mobile', 'email_privat']:
             val = p.get(k)
-            if val: 
-                search_text += str(val).lower()
-        
+            if val:
+                search_parts.append(str(val))
+
         # Add occupation/role info to search
-        for occ in p.get('ressourceToOccupations', []): 
-            search_text += (str(occ.get('name', '')) + str(occ.get('externalId', '')) + str(occ.get('ressourceIndicator', ''))).lower()
+        for occ in p.get('ressourceToOccupations', []):
+            search_parts.extend([
+                str(occ.get('name', '')),
+                str(occ.get('externalId', '')),
+                str(occ.get('ressourceIndicator', ''))
+            ])
+
+        search_text = ''.join(search_parts).lower()
         
         if q in search_text: 
             p['_display_name'] = full_name

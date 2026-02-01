@@ -161,11 +161,15 @@ class AsyncIncodeRequests:
             async with self.session.get(f"{self.base_url}/") as resp:
                 content = await resp.text()
 
-            # Parse headers logic
+            # Parse API authentication headers from JavaScript config
+            # Pattern matches: 'x-incode-xxx': 'token_value' or "x-incode-xxx": "token_value"
+            # This extracts the custom auth header name and token from embedded JS
             inc_m = re.search(r'''['"](x-incode-[^'" ]+)['"]\s*:\s*['"]([^'" ]+)['"]''', content)
             if inc_m: self.header_key, self.header_value = inc_m.group(1), inc_m.group(2)
 
-            # Try to get GUIDs from the main page first
+            # Extract organization unit GUIDs from JavaScript config
+            # Pattern matches: "orgUnitDataGuid": "hash_value" or 'orgUnitDataGuid': 'hash_value'
+            # GUIDs identify which organizational units the user has access to
             guids = re.findall(r'''["']orgUnitDataGuid["']\s*:\s*["']([^"]+)["']''', content)
             
             if not guids:
@@ -184,7 +188,10 @@ class AsyncIncodeRequests:
                 self.extra_guids = discovered_guids
 
             if not self.header_key or not self.header_value:
-                 raise LoginError("Login fehlgeschlagen (Tokens nicht gefunden).")
+                raise LoginError(
+                    "Login fehlgeschlagen (Tokens nicht gefunden). "
+                    "Bitte Zugangsdaten prüfen oder im Browser einloggen um den Account-Status zu verifizieren."
+                )
             
             nm = re.search(r'''["']user_name["']\s*:\s*["']([^"']+)["']''', content)
             if nm: self.discovered_name = nm.group(1)
@@ -199,20 +206,23 @@ class AsyncIncodeRequests:
     async def get_project_guids(self) -> Dict[str, Any]:
         """
         Retrieve available project/event GUIDs.
-        
+
         Discovers project GUIDs from the projects page and maps them
         to their display names.
-        
+
         Returns:
             Dictionary mapping project GUIDs to project names.
         """
         await self.ensure_session()
-        assert self.session is not None
+        if self.session is None:
+            raise RuntimeError("Session initialization failed")
         project_map = {}
         try:
             async with self.session.get(f"{self.base_url}/StaffPortal/projects.php", headers=self._get_api_headers()) as r_proj:
                 txt = await r_proj.text()
                 
+            # Pattern matches GUIDs: 40 hex chars followed by underscore-separated numbers
+            # Example: "abc123...def456_1_2_3" - identifies projects/events
             guid_pattern = r'([a-f0-9]{40}(?:_\d+)+)'
             all_raw = set(re.findall(guid_pattern, txt))
             if self.org_unit_data_guid: all_raw.add(self.org_unit_data_guid)
@@ -252,7 +262,8 @@ class AsyncIncodeRequests:
         
         try:
             if not self.session: await self.ensure_session()
-            assert self.session is not None
+            if self.session is None:
+                raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     soup = BeautifulSoup(await resp.text(), 'html.parser')
@@ -333,7 +344,8 @@ class AsyncIncodeRequests:
         """
         try:
             if not self.session: await self.ensure_session()
-            assert self.session is not None
+            if self.session is None:
+                raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode)
@@ -385,7 +397,8 @@ class AsyncIncodeRequests:
             data['orgUnitDataGuid'] = self.org_unit_data_guid
         
         try:
-            assert self.session is not None
+            if self.session is None:
+                raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/duties/data/load.json", headers=self._get_api_headers(), data=data) as resp:
                 if resp.status != 200: 
                     logger.error(f"Async Load Error: Status {resp.status}")
@@ -623,7 +636,8 @@ class AsyncIncodeRequests:
             guid = self.org_unit_data_guid
             if not guid: return []
             if not self.session: await self.ensure_session()
-            assert self.session is not None
+            if self.session is None:
+                raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/duties/data/loadInRange.json", headers=self._get_api_headers(), data={'orgUnitDataGuid': guid, 'withSubOrgUnits': '0', 'dateFrom': df, 'dateTo': dt, 'forEvents': 'true', 'loadDutiesForAllRessources': '0'}) as resp:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode='include_all')
@@ -660,7 +674,8 @@ class AsyncIncodeRequests:
 
     async def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         if not self.session: await self.ensure_session()
-        assert self.session is not None
+        if self.session is None:
+            raise RuntimeError("Session initialization failed")
         df, dt = (date_from - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z'), (date_to + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00.000Z')
         
         guids_set = {self.org_unit_data_guid} if self.org_unit_data_guid else set()
