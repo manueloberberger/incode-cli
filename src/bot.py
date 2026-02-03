@@ -5,7 +5,7 @@ import asyncio
 import re
 import warnings
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, cast
 from dataclasses import asdict
 
 
@@ -81,7 +81,6 @@ class IncodeBot:
         target = self.api.username or self.config.get('last_active')
         for u in self.config.get('users', []):
             if u['username'] == target:
-                from typing import cast
                 return cast(Dict[str, Any], u)
         return {}
 

@@ -101,8 +101,9 @@ def _display_staff_details_loop(p: Any) -> None:
             if parts and parts[0].isdigit():
                 service_number = parts[0]
                 break
-            if name.split(' ')[0].isdigit():
-                 service_number = name.split(' ')[0]
+            space_parts = name.split(' ')
+            if space_parts[0].isdigit():
+                service_number = space_parts[0]
 
         # --- BASIC INFO ---
         grid_basic = Table.grid(expand=False, padding=(0, 2))

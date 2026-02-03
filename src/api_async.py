@@ -257,7 +257,10 @@ class AsyncIncodeRequests:
 
     async def load_events_plan(self) -> List[Dict[str, Any]]:
         # pm = await self.get_project_guids() # Unused
-        guids_to_try = [self.org_unit_data_guid] + self.extra_guids
+        # Filter out None values to prevent API errors
+        guids_to_try = [g for g in [self.org_unit_data_guid] + self.extra_guids if g]
+        if not guids_to_try:
+            return []
         events = []
         
         try:

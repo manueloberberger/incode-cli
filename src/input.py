@@ -233,7 +233,7 @@ def centered_input(label: str, password: bool = False, default: Optional[str] = 
             console.print()  # Newline
             return None
             
-        elif k == KEY_BACKSPACE or k == '\x7f' or k == '\b':
+        elif k in (KEY_BACKSPACE, '\b'):  # KEY_BACKSPACE is '\x7f', '\b' is '\x08'
             if len(input_str) > 0:
                 input_str = input_str[:-1]
                 # Erase last char: Backspace, Space, Backspace
