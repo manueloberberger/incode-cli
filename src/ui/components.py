@@ -1,7 +1,7 @@
 import logging
 import calendar
 from datetime import datetime, timedelta
-from typing import List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 
 from rich.table import Table
 
@@ -23,7 +23,7 @@ def send_pdf_via_bot(incode_instance: Any, file_path: str, caption: str) -> bool
         # Check if configured - must check user-specific config, not root level
         creds = load_credentials()
         active_user = incode_instance.username
-        user_conf = next((u for u in creds.get('users', []) if u['username'] == active_user), {})
+        user_conf: Dict[str, Any] = next((u for u in creds.get('users', []) if u['username'] == active_user), {})
         if not user_conf.get("telegram_token") or not user_conf.get("allowed_user_id"):
             console.print("[yellow]Telegram Bot ist noch nicht konfiguriert.[/yellow]")
             console.print("Bitte starte einmal 'Telegram Bot starten' im Hauptmenü oder 'incode bot'.")
