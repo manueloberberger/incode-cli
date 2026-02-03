@@ -157,16 +157,24 @@ class TestSendPdfViaBot:
         """Test sending PDF with configured bot."""
         from src.ui.components import send_pdf_via_bot
 
+        # Mock incode instance with username
+        mock_incode = MagicMock()
+        mock_incode.username = 'testuser'
+
+        # Config must be in user-specific format (users array)
         mock_load_creds.return_value = {
-            'telegram_token': 'test_token',
-            'allowed_user_id': 12345
+            'users': [{
+                'username': 'testuser',
+                'telegram_token': 'test_token',
+                'allowed_user_id': 12345
+            }]
         }
 
         mock_bot = MagicMock()
         mock_bot.send_document.return_value = True
         mock_bot_class.return_value = mock_bot
 
-        result = send_pdf_via_bot(MagicMock(), "/path/to/file.pdf", "Test Caption")
+        result = send_pdf_via_bot(mock_incode, "/path/to/file.pdf", "Test Caption")
 
         assert result is True
         mock_bot.send_document.assert_called_once_with(12345, "/path/to/file.pdf", "Test Caption")
