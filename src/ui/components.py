@@ -20,14 +20,16 @@ def send_pdf_via_bot(incode_instance: Any, file_path: str, caption: str) -> bool
     try:
         # We need a bot instance. It needs an API instance (which we have).
         bot = IncodeBot(incode_instance)
-        # Check if configured
+        # Check if configured - must check user-specific config, not root level
         creds = load_credentials()
-        if not creds.get("telegram_token") or not creds.get("allowed_user_id"):
+        active_user = incode_instance.username
+        user_conf = next((u for u in creds.get('users', []) if u['username'] == active_user), {})
+        if not user_conf.get("telegram_token") or not user_conf.get("allowed_user_id"):
             console.print("[yellow]Telegram Bot ist noch nicht konfiguriert.[/yellow]")
             console.print("Bitte starte einmal 'Telegram Bot starten' im Hauptmenü oder 'incode bot'.")
             return False
-            
-        chat_id = creds["allowed_user_id"]
+
+        chat_id = user_conf["allowed_user_id"]
         success = bot.send_document(chat_id, file_path, caption)
         return success
     except Exception as e:
