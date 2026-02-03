@@ -102,9 +102,9 @@ def update_app() -> bool:
         # Capture current HEAD before pulling to check changes later
         current_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         
-        # 2. Git Pull
+        # 2. Git Pull (use --ff-only to avoid merge commits and divergent branch issues)
         with Live(Align.center(Spinner("dots", text="[bold blue]Lade Updates von GitHub (git pull) ...[/bold blue]")), console=console, transient=True):
-            subprocess.run(["git", "pull"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            subprocess.run(["git", "pull", "--ff-only"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         console.print(Align.center("[dim]Updates heruntergeladen.[/dim]"))
         
         # 3. Restore Stash (if any)
