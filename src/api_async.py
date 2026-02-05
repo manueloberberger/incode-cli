@@ -104,7 +104,7 @@ class AsyncIncodeRequests:
     async def ensure_session(self) -> None:
         """Ensure an aiohttp session exists, creating one if necessary."""
         if not self.session:
-             self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent})
+            self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent})
 
     def _get_cache_key(self, key_base: str) -> str:
         """Generate a user-specific cache key."""

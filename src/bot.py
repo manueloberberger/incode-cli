@@ -308,29 +308,33 @@ class IncodeBot:
             logger.info(f"Generating PDF: {filename}")
             success = await asyncio.to_thread(export_to_pdf, duties, filename, title)
 
-            if success:
-                logger.info(f"Uploading PDF {filename}...")
-                with open(filename, 'rb') as f:
-                    await context.bot.send_document(chat_id=chat_id, document=f, caption=f"📄 {title}")
-                
+            try:
+                if success:
+                    logger.info(f"Uploading PDF {filename}...")
+                    with open(filename, 'rb') as f:
+                        await context.bot.send_document(chat_id=chat_id, document=f, caption=f"📄 {title}")
+                    
+                    logger.info("Upload complete.")
+                    
+                    # UX Improvement: Show menu again
+                    keyboard = [
+                        [InlineKeyboardButton("📅 Meine Dienste (PDF)", callback_data='my_duties')],
+                        [InlineKeyboardButton("🚑 Tagesplan (PDF)", callback_data='today_plan')],
+                        [InlineKeyboardButton("📆 Anderes Datum", callback_data='custom_date')]
+                    ]
+                    await context.bot.send_message(
+                        chat_id=chat_id, 
+                        text="Was möchtest du als nächstes tun?", 
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                else:
+                    logger.error("PDF Export returned False.")
+                    await context.bot.send_message(chat_id=chat_id, text="❌ Fehler beim Erstellen der PDF.")
+            finally:
+                # Always clean up the PDF file
                 if os.path.exists(filename):
                     os.remove(filename)
-                logger.info("Upload complete and cleanup done.")
-                
-                # UX Improvement: Show menu again
-                keyboard = [
-                    [InlineKeyboardButton("📅 Meine Dienste (PDF)", callback_data='my_duties')],
-                    [InlineKeyboardButton("🚑 Tagesplan (PDF)", callback_data='today_plan')],
-                    [InlineKeyboardButton("📆 Anderes Datum", callback_data='custom_date')]
-                ]
-                await context.bot.send_message(
-                    chat_id=chat_id, 
-                    text="Was möchtest du als nächstes tun?", 
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-            else:
-                logger.error("PDF Export returned False.")
-                await context.bot.send_message(chat_id=chat_id, text="❌ Fehler beim Erstellen der PDF.")
+                    logger.debug(f"Cleaned up PDF file: {filename}")
 
         except Exception as e:
             logger.exception(f"Exception in _process_duties_request: {e}")
@@ -348,7 +352,10 @@ class IncodeBot:
                  raise LoginError("Keine gültigen Zugangsdaten gefunden.")
 
             try:
-                self.api.login(self.user_config['username'], self.user_config['password'])
+                password = self.user_config.get('password')
+                if not password:
+                    raise LoginError("Kein Passwort in der Konfiguration gefunden.")
+                self.api.login(self.user_config['username'], password)
             except LoginError:
                 raise
             except Exception as e:
