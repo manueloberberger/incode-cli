@@ -190,3 +190,101 @@ class TestCenteredPrompt:
 
         assert issubclass(CenteredPrompt, Prompt)
         assert CenteredPrompt.prompt_suffix == ""
+
+
+class TestSelectDateInteractiveModule:
+    """Tests for select_date_interactive function signature."""
+
+    def test_select_date_function_exists(self):
+        """Test that select_date_interactive function exists."""
+        from src.ui.components import select_date_interactive
+        assert callable(select_date_interactive)
+
+
+class TestInteractiveMenuModule:
+    """Tests for interactive_menu function signature."""
+
+    def test_menu_function_exists(self):
+        """Test that interactive_menu function exists."""
+        from src.ui.components import interactive_menu
+        assert callable(interactive_menu)
+
+
+class TestDashboardModule:
+    """Tests for dashboard module functions."""
+
+    def test_dashboard_exports(self):
+        """Test that dashboard module has expected exports."""
+        from src.ui import dashboard
+        
+        assert hasattr(dashboard, 'show_future_duties')
+        assert callable(dashboard.show_future_duties)
+
+
+class TestAbsencesModule:
+    """Tests for absences module."""
+
+    def test_absences_exports(self):
+        """Test that absences module has expected exports."""
+        from src.ui import absences
+        
+        assert hasattr(absences, 'show_absences')
+        assert callable(absences.show_absences)
+
+
+class TestEventsModule:
+    """Tests for events module."""
+
+    def test_events_module_exports(self):
+        """Test that events module has expected exports."""
+        from src.ui import events
+        
+        assert hasattr(events, 'show_events_menu')
+        assert callable(events.show_events_menu)
+
+
+class TestLiveModule:
+    """Tests for live monitoring module."""
+
+    def test_live_module_exports(self):
+        """Test that live module has expected exports."""
+        from src.ui import live
+        
+        assert hasattr(live, 'show_live_monitor')
+        assert callable(live.show_live_monitor)
+
+
+class TestListViewModule:
+    """Tests for list view module."""
+
+    def test_list_view_exports(self):
+        """Test that list_view module has expected exports."""
+        from src.ui import list_view
+        
+        assert hasattr(list_view, 'show_plan_list')
+        assert callable(list_view.show_plan_list)
+
+
+class TestSettingsModule:
+    """Tests for settings module."""
+
+    def test_settings_exports(self):
+        """Test that settings module has expected exports."""
+        from src.ui import settings
+        
+        assert hasattr(settings, 'show_settings_menu')
+        assert callable(settings.show_settings_menu)
+
+
+class TestStaffModule:
+    """Tests for staff module."""
+
+    def test_staff_exports(self):
+        """Test that staff module has expected exports."""
+        from src.ui import staff
+        
+        assert hasattr(staff, 'show_staff_search')
+        assert hasattr(staff, 'show_colleague_search')
+        assert callable(staff.show_staff_search)
+        assert callable(staff.show_colleague_search)
+

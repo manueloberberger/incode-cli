@@ -5,6 +5,14 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.0] - 2026-02-05
+
+### Added
+- New test file `test_updates.py` with 10 tests for update checking and application
+- New test file `test_api_async.py` with 16 async tests for the API client
+- Extended `test_ui.py` with UI module export validation tests
+- Total test count increased from 186 to 221
+
 ## [2.25.0] - 2026-02-05
 
 ### Changed
