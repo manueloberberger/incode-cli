@@ -227,8 +227,11 @@ class IncodeRequests:
             if self.discovered_name: 
                 return self.discovered_name
             return None
+        except (KeyError, ValueError, TypeError) as e:
+            logger.debug(f"get_user_name data error: {e}")
         except Exception as e:
             logger.debug(f"get_user_name error: {e}")
-            if self.discovered_name: 
-                return self.discovered_name
-            return None
+        
+        if self.discovered_name: 
+            return self.discovered_name
+        return None

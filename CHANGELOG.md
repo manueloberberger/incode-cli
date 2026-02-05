@@ -5,6 +5,13 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.0] - 2026-02-05
+
+### Changed
+- Wrapped blocking `get_key()` call in `asyncio.to_thread()` to prevent async event loop blocking
+- Improved exception handling: use `LoginError` instead of generic `Exception` in bot.py
+- `api.py`: catch specific exceptions (`KeyError`, `ValueError`, `TypeError`) before generic fallback
+
 ## [2.24.0] - 2026-02-05
 
 ### Added

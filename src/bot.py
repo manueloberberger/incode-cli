@@ -25,6 +25,7 @@ from src.api import IncodeRequests
 from src.db import db
 from src.utils import centered_input, get_key, KEY_ESC
 from src.pdf import export_to_pdf
+from src.exceptions import LoginError, ApiError
 
 # Logging Configuration
 logger = logging.getLogger(__name__)
@@ -344,12 +345,14 @@ class IncodeBot:
             self.user_config = self._get_active_user_config()
             
             if not self.user_config.get('username'):
-                 raise Exception("Keine gültigen Zugangsdaten gefunden.")
+                 raise LoginError("Keine gültigen Zugangsdaten gefunden.")
 
             try:
                 self.api.login(self.user_config['username'], self.user_config['password'])
+            except LoginError:
+                raise
             except Exception as e:
-                raise Exception(f"Login fehlgeschlagen: {e}")
+                raise LoginError(f"Login fehlgeschlagen: {e}") from e
 
         if custom_date:
              return self.api.load_daily_plan(custom_date)
@@ -473,7 +476,8 @@ class IncodeBot:
                         last_cache_cleanup = time.time()
                         
                     await asyncio.sleep(0.1)
-                    k = get_key(timeout=0.05)
+                    # Use to_thread to avoid blocking the async event loop
+                    k = await asyncio.to_thread(get_key, timeout=0.05)
                     if k == KEY_ESC:
                         console.print(Align.center("\n[yellow]Beende Bot-Modus ...[/yellow]"))
                         break
