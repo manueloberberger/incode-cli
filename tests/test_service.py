@@ -342,3 +342,112 @@ class TestRestartServices:
 
         call_args = mock_run.call_args_list[0][0][0]
         assert 'sudo' in call_args
+
+
+class TestInstallSystemdServiceAsRoot:
+    """Tests that install_systemd_service uses subprocess.run instead of os.system."""
+
+    @patch('src.service.console')
+    @patch('os.geteuid', return_value=0)
+    @patch('os.path.exists', return_value=True)
+    @patch('subprocess.run')
+    @patch('builtins.open', new_callable=MagicMock)
+    def test_install_systemd_calls_subprocess_run(self, mock_open, mock_run, mock_exists, mock_euid, mock_console):
+        """Test that systemctl commands use subprocess.run with list args."""
+        from src.service import install_systemd_service
+
+        bot_user = {'username': 'testuser', 'password': 'pass', 'base_url': 'https://x.com'}
+        install_systemd_service(bot_user)
+
+        # Verify subprocess.run was called (not os.system)
+        assert mock_run.call_count == 3
+
+        # Verify all calls use list arguments (no shell injection possible)
+        calls = mock_run.call_args_list
+        assert calls[0][0][0] == ["systemctl", "daemon-reload"]
+        assert calls[1][0][0] == ["systemctl", "enable", "incode-bot-testuser.service"]
+        assert calls[2][0][0] == ["systemctl", "start", "incode-bot-testuser.service"]
+
+
+class TestUninstallServiceAsRoot:
+    """Tests that uninstall_service uses subprocess.run on Linux."""
+
+    @patch('src.service.console')
+    @patch('src.service.platform.system', return_value='Linux')
+    @patch('src.service.get_installed_services', return_value=['testuser'])
+    @patch('os.geteuid', return_value=0)
+    @patch('os.path.exists', return_value=True)
+    @patch('os.remove')
+    @patch('subprocess.run')
+    def test_uninstall_linux_root_calls_subprocess_run(self, mock_run, mock_remove, mock_exists, mock_euid, mock_get, mock_system, mock_console):
+        """Test that uninstall uses subprocess.run with list args for systemctl."""
+        from src.service import uninstall_service
+
+        uninstall_service()
+
+        # Verify subprocess.run was called for stop, disable, daemon-reload
+        assert mock_run.call_count == 3
+        calls = mock_run.call_args_list
+        assert calls[0][0][0] == ["systemctl", "stop", "incode-bot-testuser.service"]
+        assert calls[1][0][0] == ["systemctl", "disable", "incode-bot-testuser.service"]
+        assert calls[2][0][0] == ["systemctl", "daemon-reload"]
+
+    @patch('src.service.console')
+    @patch('src.service.platform.system', return_value='Darwin')
+    @patch('src.service.get_installed_services', return_value=['testuser'])
+    @patch('os.path.exists', return_value=True)
+    @patch('os.remove')
+    @patch('subprocess.run')
+    def test_uninstall_macos_calls_subprocess_run(self, mock_run, mock_remove, mock_exists, mock_get, mock_system, mock_console):
+        """Test that uninstall uses subprocess.run for launchctl unload."""
+        from src.service import uninstall_service
+
+        uninstall_service()
+
+        assert mock_run.call_count == 1
+        call_args = mock_run.call_args_list[0][0][0]
+        assert call_args[0] == "launchctl"
+        assert call_args[1] == "unload"
+        assert "com.incode.bot.testuser.plist" in call_args[2]
+
+
+class TestInstallLaunchdService:
+    """Tests that install_launchd_service uses subprocess.run."""
+
+    @patch('src.service.console')
+    @patch('os.path.exists', return_value=True)
+    @patch('os.makedirs')
+    @patch('subprocess.run')
+    @patch('builtins.open', new_callable=MagicMock)
+    def test_install_launchd_calls_subprocess_run(self, mock_open, mock_run, mock_makedirs, mock_exists, mock_console):
+        """Test that launchctl load uses subprocess.run with list args."""
+        from src.service import install_launchd_service
+
+        bot_user = {'username': 'testuser', 'password': 'pass', 'base_url': 'https://x.com'}
+        install_launchd_service(bot_user)
+
+        # Verify subprocess.run was called for launchctl load
+        assert mock_run.call_count == 1
+        call_args = mock_run.call_args_list[0][0][0]
+        assert call_args[0] == "launchctl"
+        assert call_args[1] == "load"
+        assert "com.incode.bot.testuser.plist" in call_args[2]
+
+
+class TestNoOsSystemCalls:
+    """Verify os.system is never called in service module operations."""
+
+    @patch('src.service.console')
+    @patch('os.geteuid', return_value=0)
+    @patch('os.path.exists', return_value=True)
+    @patch('subprocess.run')
+    @patch('builtins.open', new_callable=MagicMock)
+    @patch('os.system')
+    def test_install_systemd_never_calls_os_system(self, mock_os_system, mock_open, mock_run, mock_exists, mock_euid, mock_console):
+        """Ensure os.system is never called during systemd install."""
+        from src.service import install_systemd_service
+
+        bot_user = {'username': 'testuser', 'password': 'pass', 'base_url': 'https://x.com'}
+        install_systemd_service(bot_user)
+
+        mock_os_system.assert_not_called()

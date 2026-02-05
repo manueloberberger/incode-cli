@@ -3,6 +3,7 @@ import sys
 import logging
 import asyncio
 import re
+import time
 import warnings
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Callable, cast
@@ -21,6 +22,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_mess
 
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
+from src.db import db
 from src.utils import centered_input, get_key, KEY_ESC
 from src.pdf import export_to_pdf
 
@@ -447,6 +449,10 @@ class IncodeBot:
             
             console.print(Align.center("[dim]Bot ist aktiv. Drücke ESC um zurückzukehren.[/dim]"))
 
+            # Periodic cache cleanup (every 15 minutes)
+            last_cache_cleanup = time.time()
+            CACHE_CLEANUP_INTERVAL = 900  # 15 minutes in seconds
+
             try:
                 while True:
                     # Check if stopped by error handler (Conflict)
@@ -458,6 +464,13 @@ class IncodeBot:
                         console.print(Align.center("\n[bold red]⚠️  Verbindung durch neue Session beendet.[/bold red]"))
                         console.print(Align.center("[yellow]Der Bot wurde auf einem anderen Gerät gestartet.[/yellow]"))
                         break
+
+                    # Periodic cache cleanup to prevent unbounded growth
+                    if time.time() - last_cache_cleanup > CACHE_CLEANUP_INTERVAL:
+                        deleted = db.clear_expired_cache()
+                        if deleted > 0:
+                            logger.debug(f"Cache cleanup: {deleted} expired entries removed")
+                        last_cache_cleanup = time.time()
                         
                     await asyncio.sleep(0.1)
                     k = get_key(timeout=0.05)

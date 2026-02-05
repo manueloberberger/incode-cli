@@ -305,16 +305,19 @@ class AsyncIncodeRequests:
         for i in range(0, len(guids), 30):
             tasks.append(fetch_chunk(guids[i:i+30]))
         
-        results = await asyncio.gather(*tasks)
-        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         # Build event index for O(1) lookups instead of O(n) nested loop
         event_map: Dict[tuple[str, date], Dict[str, Any]] = {}
         for e in events:
             key = (e['guid'], e['begin'].date())
             event_map[key] = e
-        
+
         for data in results:
-            if not data: continue
+            if not data or isinstance(data, BaseException):
+                if isinstance(data, BaseException):
+                    logger.debug(f"Error in event chunk fetch: {data}")
+                continue
             it = data.get('data', {}).values() if isinstance(data.get('data'), dict) else data.get('data', [])
             for item in it:
                 if not isinstance(item, dict): continue
@@ -478,8 +481,10 @@ class AsyncIncodeRequests:
                 logger.debug(f"Error fetching wishes: {e}")
                 return None
 
-        res_abs, res_wishes = await asyncio.gather(fetch_abs(), fetch_wishes())
-        
+        gather_results = await asyncio.gather(fetch_abs(), fetch_wishes(), return_exceptions=True)
+        res_abs = None if isinstance(gather_results[0], BaseException) else gather_results[0]
+        res_wishes = None if isinstance(gather_results[1], BaseException) else gather_results[1]
+
         # Logic same as Sync
         if res_abs:
             for item in res_abs.get('data', []):
@@ -609,12 +614,12 @@ class AsyncIncodeRequests:
             return None
 
         # Fetch all GUIDs in parallel (cached ones return instantly)
-        raw_results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids])
-        
+        raw_results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids], return_exceptions=True)
+
         # Parse and filter locally
         parsed_results: List[List[Dict[str, Any]]] = []
         for raw in raw_results:
-            if raw:
+            if raw and not isinstance(raw, BaseException):
                 parsed_results.append(parse_staff_contact(raw, query))
         
         # Merge and deduplicate
@@ -711,10 +716,13 @@ class AsyncIncodeRequests:
                 logger.debug(f"Error fetching plan: {e}")
             return None
 
-        plan_results = await asyncio.gather(*[fetch_plan(g) for g in guids_list if g])
-        
+        plan_results = await asyncio.gather(*[fetch_plan(g) for g in guids_list if g], return_exceptions=True)
+
         results, seen = [], set()
         for data in plan_results:
+            if isinstance(data, BaseException):
+                logger.debug(f"Error in plan fetch: {data}")
+                continue
             if data and data.get('data'):
                 for item in parse_daily_plan_raw(data):
                     if item['begin'] and item['end'] and not (item['end'] < date_from or item['begin'] > date_to):

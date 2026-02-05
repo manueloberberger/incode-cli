@@ -1,5 +1,6 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from unittest.mock import patch
 from src.parser import (
     fix_datetime,
     calculate_staff_score,
@@ -15,17 +16,62 @@ def test_fix_datetime():
     dt_str = "2026-05-10T15:30:00"
     dt = fix_datetime(dt_str)
     assert dt is not None
-    # We check if it returns a datetime object.
-    # The timezone offset logic depends on local system time, so checking exact hour might be flaky if we assume specific timezone.
-    # However, we can check basic properties.
     assert dt.minute == 30
     assert dt.second == 0
-    
+
     # Test None
     assert fix_datetime(None) is None
-    
+
     # Test Invalid
     assert fix_datetime("invalid-date-string") is None
+
+
+def test_fix_datetime_utc_conversion():
+    """Test that fix_datetime correctly converts UTC to local time."""
+    # Use a known UTC time and verify the conversion is consistent
+    dt_str = "2026-06-15T12:00:00.000Z"
+    dt = fix_datetime(dt_str)
+    assert dt is not None
+
+    # Verify by doing the same conversion manually
+    expected_utc = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    expected_local = expected_utc.astimezone().replace(tzinfo=None)
+    assert dt == expected_local
+
+
+def test_fix_datetime_preserves_minutes_seconds():
+    """Test that minutes and seconds are preserved through conversion."""
+    dt = fix_datetime("2026-01-15T08:45:30")
+    assert dt is not None
+    assert dt.minute == 45
+    assert dt.second == 30
+
+
+def test_fix_datetime_with_z_suffix():
+    """Test that .000Z suffix is properly handled (stripped to 19 chars)."""
+    dt_with_z = fix_datetime("2026-03-20T10:00:00.000Z")
+    dt_without_z = fix_datetime("2026-03-20T10:00:00")
+    assert dt_with_z is not None
+    assert dt_without_z is not None
+    assert dt_with_z == dt_without_z
+
+
+def test_fix_datetime_empty_string():
+    """Test that empty string returns None."""
+    assert fix_datetime("") is None
+
+
+def test_fix_datetime_short_string():
+    """Test that too-short strings are handled gracefully."""
+    assert fix_datetime("2026") is None
+    assert fix_datetime("2026-01") is None
+
+
+def test_fix_datetime_returns_naive_datetime():
+    """Test that the returned datetime has no tzinfo (naive)."""
+    dt = fix_datetime("2026-01-15T08:00:00")
+    assert dt is not None
+    assert dt.tzinfo is None
 
 def test_calculate_staff_score():
     p1 = {"_display_name": "Short", "telefon": "123"}

@@ -5,7 +5,7 @@ This module provides functions to export duty schedules to iCalendar (.ics) form
 which can be imported into calendar applications like Google Calendar, Outlook, etc.
 """
 from datetime import datetime
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from icalendar import Calendar, Event, vText
 from src.config import console
 from src.utils import parse_iso_datetime
@@ -44,8 +44,7 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     for item in duties:
         try:
             # Support both Dicts and Dataclasses (Duty objects)
-            # Explicitly type d as Dict for mypy
-            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item            # Parse timestamps (handles strings, datetime objects, and None)
+            d: Dict[str, Any] = asdict(item) if isinstance(item, Duty) else item            # Parse timestamps (handles strings, datetime objects, and None)
             dt_start = parse_iso_datetime(d.get('begin'))
             dt_end = parse_iso_datetime(d.get('end'))
 

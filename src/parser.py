@@ -4,8 +4,7 @@ API response parsing utilities for incode-cli.
 This module provides functions to parse and transform raw API responses
 from the Incode duty roster system into structured Python objects.
 """
-import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from src.models import Duty
@@ -14,20 +13,19 @@ from src.config import VEHICLE_PATTERN
 
 def fix_datetime(s: Optional[str]) -> Optional[datetime]:
     """
-    Parse an ISO datetime string and adjust for local timezone.
-    
+    Parse an ISO datetime string (UTC) and convert to local timezone.
+
     Args:
         s: ISO format datetime string (e.g., '2024-01-15T08:00:00.000Z').
-        
+
     Returns:
-        Datetime object adjusted to local timezone, or None if parsing fails.
+        Naive datetime object in local timezone, or None if parsing fails.
     """
-    if not s: 
+    if not s:
         return None
     try:
-        dt = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')
-        offset = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
-        return dt + timedelta(seconds=offset)
+        dt_utc = datetime.strptime(s[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
+        return dt_utc.astimezone().replace(tzinfo=None)
     except (ValueError, IndexError):
         return None
 

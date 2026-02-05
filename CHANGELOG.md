@@ -5,6 +5,16 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.0] - 2026-02-05
+
+### Added
+- Periodic cache cleanup in Bot mode (every 15 minutes) to prevent unbounded growth
+- Path validation in `backup.py` to prevent access to system directories
+
+### Security
+- Replaced predictable `/tmp/` paths with `tempfile.mkstemp()` in `service.py`
+- Secure file permissions: `0o600` for service files, `0o700` for scripts
+
 ## [2.23.0] - 2026-02-01
 
 ### Added

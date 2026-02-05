@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table as PDFTable, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime, timedelta
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from src.config import console
 from src.utils import parse_iso_datetime
 
@@ -68,7 +68,7 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     for item in duties:
         try:
             # Support both Dicts and Dataclasses
-            d: Dict[str, Any] = asdict(item) if is_dataclass(item) else item            # Parse Dates - handle both string and datetime inputs
+            d: Dict[str, Any] = asdict(item) if isinstance(item, Duty) else item            # Parse Dates - handle both string and datetime inputs
             b = parse_iso_datetime(d.get('begin'))
             e = parse_iso_datetime(d.get('end'))
 

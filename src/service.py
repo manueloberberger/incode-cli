@@ -12,6 +12,7 @@ import os
 import sys
 import platform
 import subprocess
+import tempfile
 import time
 
 from typing import Optional, Dict, List, Any, Tuple
@@ -130,13 +131,13 @@ WantedBy=multi-user.target
                 f.write(service_content)
             console.print(Align.center(f"[green]✓ Service-Datei erstellt: {service_file_path}[/green]"))
             
-            os.system("systemctl daemon-reload")
+            subprocess.run(["systemctl", "daemon-reload"])
             console.print(Align.center("[green]✓ Systemd neu geladen[/green]"))
-            
-            os.system(f"systemctl enable incode-bot-{safe_name}.service")
+
+            subprocess.run(["systemctl", "enable", f"incode-bot-{safe_name}.service"])
             console.print(Align.center("[green]✓ Service aktiviert (Auto-Start)[/green]"))
-            
-            os.system(f"systemctl start incode-bot-{safe_name}.service")
+
+            subprocess.run(["systemctl", "start", f"incode-bot-{safe_name}.service"])
             console.print(Align.center("[green]✓ Service gestartet[/green]"))
             
             console.print()
@@ -152,10 +153,13 @@ WantedBy=multi-user.target
             console.print(Align.center(f"[red]Fehler bei der Installation: {e}[/red]"))
             sys.exit(1)
     else:
-        temp_file = f"/tmp/incode-bot-{safe_name}.service"
-        script_file = f"/tmp/install-incode-bot-{safe_name}.sh"
+        # Use secure temp files with unpredictable names to prevent symlink attacks
+        fd_svc, temp_file = tempfile.mkstemp(suffix='.service', prefix=f'incode-{safe_name}-')
+        fd_script, script_file = tempfile.mkstemp(suffix='.sh', prefix=f'incode-install-{safe_name}-')
         
-        with open(temp_file, 'w') as f:
+        # Write service file with restrictive permissions
+        os.chmod(temp_file, 0o600)
+        with os.fdopen(fd_svc, 'w') as f:
             f.write(service_content)
         
         # Create installation script
@@ -188,9 +192,10 @@ echo "  journalctl -u incode-bot-{safe_name} -f"
 rm -f {temp_file} {script_file}
 """
         
-        with open(script_file, 'w') as f:
+        # Write script file with execute permissions
+        os.chmod(script_file, 0o700)
+        with os.fdopen(fd_script, 'w') as f:
             f.write(install_script)
-        os.chmod(script_file, 0o755)
         
         console.print(Align.center("[yellow]Keine Root-Rechte erkannt.[/yellow]"))
         console.print()
@@ -273,7 +278,7 @@ def install_launchd_service(bot_user: Dict[str, Any]) -> None:
         console.print(Align.center(f"[green]✓ Plist-Datei erstellt: {plist_path}[/green]"))
         
         # Load the service
-        os.system(f"launchctl load {plist_path}")
+        subprocess.run(["launchctl", "load", plist_path])
         console.print(Align.center("[green]✓ Service geladen und gestartet[/green]"))
         
         console.print()
@@ -360,17 +365,17 @@ def uninstall_service(specific_user: Optional[str] = None) -> None:
         is_root = os.geteuid() == 0
         if is_root:
             try:
-                os.system(f"systemctl stop {service_name}")
-                os.system(f"systemctl disable {service_name}")
+                subprocess.run(["systemctl", "stop", service_name])
+                subprocess.run(["systemctl", "disable", service_name])
                 if os.path.exists(service_file):
                     os.remove(service_file)
-                os.system("systemctl daemon-reload")
+                subprocess.run(["systemctl", "daemon-reload"])
                 console.print(Align.center("[green]✓ Service erfolgreich deinstalliert![/green]"))
             except Exception as e:
                 console.print(Align.center(f"[red]Fehler: {e}[/red]"))
         else:
-            # Generate uninstall script for non-root users
-            script_file = f"/tmp/uninstall-incode-bot-{safe_name}.sh"
+            # Generate uninstall script with secure temp file
+            fd_script, script_file = tempfile.mkstemp(suffix='.sh', prefix=f'incode-uninstall-{safe_name}-')
             
             uninstall_script = f"""#!/bin/bash
 set -e
@@ -397,9 +402,10 @@ echo "✅ Deinstallation erfolgreich!"
 rm -f {script_file}
 """
             
-            with open(script_file, 'w') as f:
+            # Write script file with execute permissions
+            os.chmod(script_file, 0o700)
+            with os.fdopen(fd_script, 'w') as f:
                 f.write(uninstall_script)
-            os.chmod(script_file, 0o755)
             
             console.print(Align.center("[yellow]Keine Root-Rechte erkannt.[/yellow]"))
             console.print()
@@ -415,7 +421,7 @@ rm -f {script_file}
         
         try:
             if os.path.exists(plist_path):
-                os.system(f"launchctl unload {plist_path}")
+                subprocess.run(["launchctl", "unload", plist_path])
                 os.remove(plist_path)
                 console.print(Align.center("[green]✓ Service erfolgreich deinstalliert![/green]"))
             else:
