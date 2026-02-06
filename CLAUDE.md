@@ -80,33 +80,30 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
-## Recent Context (2026-02-01)
-*State at v2.23.0 - Robustness, performance & documentation improvements*
+## Recent Context (2026-02-06)
+*State at v2.27.0 - 221 tests, mypy --strict clean*
 
-### v2.23.0 Changes:
-- **Robustness**:
-    - Replaced 6x `assert self.session` with proper `RuntimeError` in `api_async.py`
-    - Specific exception handling in `updates.py`, `bot.py`, `pdf.py` (no more silent `pass`)
-    - Login error messages now include troubleshooting suggestions
-- **Performance**:
-    - Database indexes on `cache.timestamp` and `users.username`
-    - Automatic cache cleanup on startup (`clear_expired_cache()`)
-    - String concatenation optimized with `join()` in `parser.py`
-- **UX**:
-    - `/help` command in Telegram bot with full command reference
-- **Documentation**:
-    - Comprehensive docstrings for `exceptions.py` (usage examples, troubleshooting)
-    - Computus algorithm fully documented in `holidays.py`
-    - Regex patterns explained in `api_async.py`
-- **Dependencies**:
-    - Version ranges instead of pinning (e.g., `requests>=2.31.0,<3.0.0`)
-    - `python-telegram-bot>=21.7` (fixed deprecation warnings)
-    - Added `types-aiohttp` for complete type checking
-- **Tests**:
-    - 11 new tests: bot help command, corrupted backups, service restart
-    - Total: 175 tests passing, mypy --strict clean
+### v2.27.0: Minor code quality fixes
+- Fixed indentation inconsistency in `api_async.py`
+- Fixed potential KeyError when password missing in bot config
+- Added try/finally for PDF cleanup in bot
 
-### Previous (v2.22.0):
-- `parse_iso_datetime()` utility, staff caching with TTL, O(1) event lookups
-- Pre-compiled vehicle regex, backup error handling, dead code removal
-- 164 tests, all cleanup tasks completed
+### v2.26.0: Expanded test coverage
+- New test files: `test_updates.py` (10 tests), `test_api_async.py` (16 async tests)
+- Extended `test_ui.py` with UI module export validation
+- Total: 186 → 221 tests
+
+### v2.25.0: Async improvements & exception handling
+- Wrapped blocking `get_key()` in `asyncio.to_thread()`
+- `LoginError` instead of generic `Exception` in bot.py
+- Specific exception handling (`KeyError`, `ValueError`, `TypeError`) in api.py
+
+### v2.24.0: Security & robustness
+- Periodic cache cleanup in Bot mode (every 15 min)
+- Path validation in `backup.py` (prevent system directory access)
+- `/tmp/` → `tempfile.mkstemp()` with secure permissions (`0o600`/`0o700`)
+
+### v2.23.0: Robustness, performance & documentation
+- `assert self.session` → `RuntimeError`, specific exception handling
+- DB indexes, auto cache cleanup, `/help` bot command
+- Version ranges for dependencies, `python-telegram-bot>=21.7`
