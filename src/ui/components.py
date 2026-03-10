@@ -90,7 +90,7 @@ def render_next_duty_panel(duty: Any) -> None:
     console.print(Align.center(p))
     console.print() # Spacer
 
-def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: Optional[str] = None, allow_escape: bool = True) -> Optional[Any]:
+def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", dashboard_data: Any = None, current_user: Optional[str] = None, allow_escape: bool = True, subtitle: Optional[str] = None) -> Optional[Any]:
     """
     Renders an interactive menu navigated by arrow keys.
     options: list of tuples (Label, ReturnValue)
@@ -131,9 +131,12 @@ def interactive_menu(options: List[Tuple[str, Any]], title: str = "HAUPTMENÜ", 
             console.print(Align.center(f"[bold white]👤 {display_user}[/bold white]  [dim]•[/dim]  [{s_color}]🔒 {s_short}[/{s_color}]"))
             console.print() # Spacer
         
-        console.print(Align.center(f"[header]{title}[/header]\n"))
+        console.print(Align.center(f"[header]{title}[/header]"))
+        if subtitle:
+            for line in subtitle.splitlines():
+                console.print(Align.center(f"[dim]{line}[/dim]"))
+        console.print()
 
-        
         # Use a 3-column grid: Cursor (2) | Icon (4) | Text (Auto)
         menu_grid = Table.grid(padding=(0, 1))
         menu_grid.add_column(width=2, justify="right")   # Cursor

@@ -407,27 +407,27 @@ def show_bot_menu(incode_instance: Any) -> None:
     from src.utils import wait_for_return
     
     while True:
-        clear_screen()
-        console.print(Align.center(BANNER))
-        console.print()
-        
         # Check if services are installed
         services_exist = has_installed_services()
-        
+
         options: List[Tuple[str, Any]] = [
             ("▶️  Bot jetzt starten (interaktiv)", "start"),
             ("🟢  Als Systemdienst installieren", "install"),
         ]
-        
+
         if services_exist:
             options.append(("🔴  Systemdienst deinstallieren", "uninstall"))
-        
+
         options.extend([
             ("📊  Systemdienst Status anzeigen", "status"),
             ("🔙  Zurück zum Hauptmenü", "back")
         ])
-        
-        selection = interactive_menu(options, title="TELEGRAM BOT")
+
+        selection = interactive_menu(
+            options,
+            title="TELEGRAM BOT",
+            subtitle="Empfängt Befehle & überwacht deinen Dienstplan automatisch.\nÄnderungen werden alle 30 Min. geprüft und per Nachricht gemeldet."
+        )
         
         if selection == "start":
             start_bot_mode(incode_instance)

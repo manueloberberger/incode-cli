@@ -66,6 +66,9 @@ class ConflictFilter(logging.Filter):
 # States for ConversationHandler
 WAITING_FOR_DATE = 1
 
+# Monitoring interval in seconds (30 minutes)
+MONITOR_INTERVAL = 1800
+
 class IncodeBot:
     """
     Telegram Bot implementation for Incode CLI.
@@ -169,12 +172,16 @@ class IncodeBot:
             "/dienste - Deine Dienste als PDF\n"
             "/tagesplan - Heutigen Tagesplan als PDF\n"
             "/heute - Alias für /tagesplan\n"
+            "/monitor - Aktuellen Snapshot zurücksetzen\n"
             "/help - Diese Hilfe anzeigen\n"
             "/cancel - Aktuelle Aktion abbrechen\n\n"
             "*Buttons:*\n"
             "• 📅 Meine Dienste - Alle zukünftigen Dienste\n"
             "• 🚑 Tagesplan - Plan für heute\n"
             "• 📆 Anderes Datum - Datum eingeben\n\n"
+            "*Automatische Überwachung:*\n"
+            "Der Bot prüft alle 30 Min. auf Dienstplan-Änderungen\n"
+            "und benachrichtigt dich automatisch per Nachricht.\n\n"
             "*Datumseingabe:*\n"
             "Format: TT.MM. oder TT.MM.JJJJ\n"
             "Beispiele: 15.01. oder 15.01.2026"
@@ -276,6 +283,20 @@ class IncodeBot:
         await self._process_duties_request(update.message, context, filter_today, chat_id)
         return ConversationHandler.END
 
+    async def monitor_reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Handle /monitor – reset the stored snapshot so next check is a fresh baseline."""
+        if not update.message or not update.effective_user: return ConversationHandler.END
+        allowed_id = str(self.user_config.get("allowed_user_id", ""))
+        if str(update.effective_user.id) != allowed_id:
+            await self.unauthorized(update)
+            return ConversationHandler.END
+        username = self.api.username or self.user_config.get('username', 'default')
+        db.set_value(f"duty_snapshot_{username}", None)
+        await update.message.reply_text(
+            "🔄 Snapshot zurückgesetzt. Beim nächsten Check wird ein neuer Basisstand gespeichert."
+        )
+        return ConversationHandler.END
+
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if update.message: await update.message.reply_text("Vorgang abgebrochen.")
         return ConversationHandler.END
@@ -369,6 +390,111 @@ class IncodeBot:
             duties = self.api.load_future_duties()
             return [asdict(d) for d in duties]
 
+    def _duty_to_key(self, duty: Dict[str, Any]) -> str:
+        """Create a unique string key for a duty (for change detection)."""
+        begin = duty.get('begin', '')
+        if isinstance(begin, datetime):
+            begin = begin.isoformat()
+        end = duty.get('end', '')
+        if isinstance(end, datetime):
+            end = end.isoformat()
+        return f"{begin}|{end}|{duty.get('vehicle') or ''}|{duty.get('duty_type') or ''}"
+
+    def _get_stored_snapshot(self) -> Optional[List[str]]:
+        """Load previously stored duty snapshot keys from DB."""
+        username = self.api.username or self.user_config.get('username', 'default')
+        stored = db.get_value(f"duty_snapshot_{username}")
+        if isinstance(stored, list):
+            return stored
+        return None
+
+    def _store_snapshot(self, duty_keys: List[str]) -> None:
+        """Save current duty keys as snapshot to DB."""
+        username = self.api.username or self.user_config.get('username', 'default')
+        db.set_value(f"duty_snapshot_{username}", duty_keys)
+
+    def _fetch_duties_for_monitor(self) -> List[Dict[str, Any]]:
+        """Fetch current duties bypassing cache for fresh comparison data."""
+        if not self.api.header_key:
+            self.config = load_credentials()
+            self.user_config = self._get_active_user_config()
+            password = self.user_config.get('password')
+            if not password:
+                raise LoginError("Kein Passwort gefunden.")
+            self.api.login(self.user_config['username'], password)
+        duties = self.api.load_future_duties(use_cache=False)
+        return [asdict(d) for d in duties]
+
+    def _format_duty_begin(self, begin: Any) -> str:
+        """Format a duty begin timestamp for display."""
+        try:
+            if isinstance(begin, datetime):
+                return begin.strftime('%d.%m.%Y %H:%M')
+            return datetime.fromisoformat(str(begin)).strftime('%d.%m.%Y %H:%M')
+        except (ValueError, TypeError):
+            return str(begin)
+
+    async def _check_for_changes(self, bot: Any) -> None:
+        """
+        Fetch duties, compare with stored snapshot, and notify on changes.
+        Called periodically from the main bot loop.
+        """
+        try:
+            duties = await asyncio.to_thread(self._fetch_duties_for_monitor)
+            current_keys = [self._duty_to_key(d) for d in duties]
+            stored_keys = self._get_stored_snapshot()
+
+            if stored_keys is None:
+                # First run – just store snapshot silently
+                self._store_snapshot(current_keys)
+                logger.info("Duty snapshot initialized.")
+                return
+
+            stored_set = set(stored_keys)
+            current_set = set(current_keys)
+            added = current_set - stored_set
+            removed = stored_set - current_set
+
+            if not added and not removed:
+                logger.debug("Duty monitor: no changes detected.")
+                return
+
+            # Build notification message
+            msg = "🔔 *Dienstplan-Änderung erkannt!*\n\n"
+
+            if added:
+                msg += "✅ *Neue Dienste:*\n"
+                for d in duties:
+                    if self._duty_to_key(d) in added:
+                        label = self._format_duty_begin(d.get('begin', ''))
+                        vehicle = d.get('vehicle') or d.get('duty_type') or '?'
+                        msg += f"  • {label} – {vehicle}\n"
+
+            if removed:
+                msg += "\n❌ *Entfernte Dienste:*\n"
+                for key in removed:
+                    parts = key.split('|')
+                    begin_str = parts[0] if parts else '?'
+                    vehicle = parts[2] if len(parts) > 2 else ''
+                    if not vehicle and len(parts) > 3:
+                        vehicle = parts[3]
+                    if not vehicle:
+                        vehicle = '?'
+                    label = self._format_duty_begin(begin_str)
+                    msg += f"  • {label} – {vehicle}\n"
+
+            allowed_id = self.user_config.get("allowed_user_id")
+            if allowed_id:
+                await bot.send_message(chat_id=allowed_id, text=msg, parse_mode='Markdown')
+                logger.info(f"Change notification sent: {len(added)} added, {len(removed)} removed.")
+
+            self._store_snapshot(current_keys)
+
+        except LoginError as e:
+            logger.warning(f"Duty monitor: login failed – {e}")
+        except Exception as e:
+            logger.warning(f"Duty monitor: unexpected error – {e}")
+
     def run(self, debug: bool = False) -> None:
         """Starts the bot."""
         token = self.user_config.get('telegram_token')
@@ -432,6 +558,7 @@ class IncodeBot:
             entry_points=[
                 CommandHandler('start', self.start),
                 CommandHandler('help', self.help_command),
+                CommandHandler('monitor', self.monitor_reset),
                 CommandHandler(['dienste', 'plan', 'dienst'], self.send_duties),
                 CommandHandler(['tagesplan', 'heute'], self.send_duties),
                 CallbackQueryHandler(self.button_handler, pattern='^(my_duties|today_plan|custom_date)$')
@@ -463,12 +590,15 @@ class IncodeBot:
             last_cache_cleanup = time.time()
             CACHE_CLEANUP_INTERVAL = 900  # 15 minutes in seconds
 
+            # Periodic duty change monitoring
+            last_monitor_check = 0.0  # 0 triggers an immediate first snapshot on startup
+
             try:
                 while True:
                     # Check if stopped by error handler (Conflict)
                     if not application.running:
                         break
-                    
+
                     # Check our custom stop signal from the log filter
                     if getattr(self, '_stop_signal', False):
                         console.print(Align.center("\n[bold red]⚠️  Verbindung durch neue Session beendet.[/bold red]"))
@@ -481,7 +611,12 @@ class IncodeBot:
                         if deleted > 0:
                             logger.debug(f"Cache cleanup: {deleted} expired entries removed")
                         last_cache_cleanup = time.time()
-                        
+
+                    # Periodic duty change monitoring
+                    if time.time() - last_monitor_check > MONITOR_INTERVAL:
+                        await self._check_for_changes(application.bot)
+                        last_monitor_check = time.time()
+
                     await asyncio.sleep(0.1)
                     # Use to_thread to avoid blocking the async event loop
                     k = await asyncio.to_thread(get_key, timeout=0.05)
