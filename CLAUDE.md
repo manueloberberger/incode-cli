@@ -80,8 +80,16 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
-## Recent Context (2026-02-06)
-*State at v2.27.0 - 221 tests, mypy --strict clean*
+## Recent Context (2026-03-10)
+*State at v2.28.0 - 221 tests, mypy --strict clean*
+
+### v2.28.0: Automatic duty roster change monitoring
+- Bot checks for duty changes every 30 min via `_check_for_changes()`
+- Snapshot stored in SQLite valuestore (`duty_snapshot_{username}`)
+- Telegram notification on added/removed duties
+- New `/monitor` command to reset snapshot baseline
+- `interactive_menu()` gains optional `subtitle` parameter (centered display)
+- Telegram Bot menu shows monitoring info as subtitle
 
 ### v2.27.0: Minor code quality fixes
 - Fixed indentation inconsistency in `api_async.py`
