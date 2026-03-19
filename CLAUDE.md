@@ -80,8 +80,13 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
-## Recent Context (2026-03-10)
-*State at v2.28.0 - 221 tests, mypy --strict clean*
+## Recent Context (2026-03-19)
+*State at v2.29.0 - 221 tests, mypy --strict clean*
+
+### v2.29.0: Performance & robustness improvements
+- DB indexes on `cache(key)` and `valuestore(key)` for O(1) cache lookups
+- `api.py __del__()` with `try/finally` for guaranteed EventLoop cleanup
+- Bot change notification messages use `list + join` instead of string concatenation
 
 ### v2.28.0: Automatic duty roster change monitoring
 - Bot checks for duty changes every 30 min via `_check_for_changes()`

@@ -126,6 +126,8 @@ class DatabaseManager:
 
         # Performance indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cache_timestamp ON cache(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache(key)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_valuestore_key ON valuestore(key)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
 
         conn.commit()

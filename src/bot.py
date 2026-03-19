@@ -460,28 +460,30 @@ class IncodeBot:
                 return
 
             # Build notification message
-            msg = "🔔 *Dienstplan-Änderung erkannt!*\n\n"
+            parts: List[str] = ["🔔 *Dienstplan-Änderung erkannt!*\n"]
 
             if added:
-                msg += "✅ *Neue Dienste:*\n"
+                parts.append("\n✅ *Neue Dienste:*")
                 for d in duties:
                     if self._duty_to_key(d) in added:
                         label = self._format_duty_begin(d.get('begin', ''))
                         vehicle = d.get('vehicle') or d.get('duty_type') or '?'
-                        msg += f"  • {label} – {vehicle}\n"
+                        parts.append(f"  • {label} – {vehicle}")
 
             if removed:
-                msg += "\n❌ *Entfernte Dienste:*\n"
+                parts.append("\n❌ *Entfernte Dienste:*")
                 for key in removed:
-                    parts = key.split('|')
-                    begin_str = parts[0] if parts else '?'
-                    vehicle = parts[2] if len(parts) > 2 else ''
-                    if not vehicle and len(parts) > 3:
-                        vehicle = parts[3]
+                    key_parts = key.split('|')
+                    begin_str = key_parts[0] if key_parts else '?'
+                    vehicle = key_parts[2] if len(key_parts) > 2 else ''
+                    if not vehicle and len(key_parts) > 3:
+                        vehicle = key_parts[3]
                     if not vehicle:
                         vehicle = '?'
                     label = self._format_duty_begin(begin_str)
-                    msg += f"  • {label} – {vehicle}\n"
+                    parts.append(f"  • {label} – {vehicle}")
+
+            msg = "\n".join(parts) + "\n"
 
             allowed_id = self.user_config.get("allowed_user_id")
             if allowed_id:

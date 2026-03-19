@@ -54,8 +54,10 @@ class IncodeRequests:
         """Clean up the event loop and close the session."""
         try:
             if not self.loop.is_closed():
-                self.loop.run_until_complete(self.client.close())
-                self.loop.close()
+                try:
+                    self.loop.run_until_complete(self.client.close())
+                finally:
+                    self.loop.close()
         except (RuntimeError, AttributeError) as e:
             # Silently ignore cleanup errors during garbage collection
             logger.debug(f"Cleanup error (expected during shutdown): {e}")
