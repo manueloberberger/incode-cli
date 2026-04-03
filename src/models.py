@@ -30,6 +30,7 @@ class Duty:
     duty_type: Optional[str] = None
     crew: List[str] = field(default_factory=list)
     comment: Optional[str] = None
+    is_cancelled: bool = False
     
     @property
     def duration_hours(self) -> float:

@@ -4,6 +4,8 @@ API response parsing utilities for incode-cli.
 This module provides functions to parse and transform raw API responses
 from the Incode duty roster system into structured Python objects.
 """
+import json
+import re
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
@@ -144,25 +146,38 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
     ]
     
     for item in data.get('data', []):
-        if not isinstance(item, dict): 
+        if not isinstance(item, dict):
             continue
-            
+
         dt_name = str(item.get('dutyTypeName') or item.get('absenceTypeName') or item.get('type') or item.get('text') or "")
+        shift_name = str(item.get('shiftName', ''))
         loc = str(item.get('orgUnitName', ''))
-        comm = str(item.get('comment', ''))
+        comm = str(item.get('comment', '') or '')
         alloc = item.get('allocationInfo', {})
         al = next(iter(alloc.values())) if isinstance(alloc, dict) and alloc.values() else (alloc if isinstance(alloc, list) else [])
         content = (dt_name + loc + comm + str(al)).lower()
-        is_abs = bool(item.get('absenceTypeName')) or any(w in content for w in absence_keywords)
-        
+        # An entry with dutyTypeName is always a real duty (even if shiftName contains training keywords).
+        # Keyword-based absence detection only applies when there is no explicit duty type.
+        is_abs = bool(item.get('absenceTypeName')) or (
+            not item.get('dutyTypeName') and any(w in content for w in absence_keywords)
+        )
+
+        # Check if attendances are cancelled due to an absence (e.g. Urlaub overrides duty)
+        attendances_raw = item.get('attendances', '[]')
+        try:
+            attendances = json.loads(attendances_raw) if isinstance(attendances_raw, str) else (attendances_raw if isinstance(attendances_raw, list) else [])
+        except (ValueError, TypeError):
+            attendances = []
+        is_cancelled = bool(attendances) and all(bool(a.get('isCanceled')) for a in attendances if isinstance(a, dict))
+
         # Apply filter
-        if filter_mode == 'exclude_absences' and is_abs: 
+        if filter_mode == 'exclude_absences' and is_abs:
             continue
-        if filter_mode == 'only_absences' and not is_abs: 
+        if filter_mode == 'only_absences' and not is_abs:
             continue
-            
+
         b, e = fix_datetime(item.get('begin')), fix_datetime(item.get('end'))
-        if not b or not e: 
+        if not b or not e:
             continue
 
         # Parse vehicle and crew from allocation info
@@ -189,19 +204,25 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
                     key=lambda x: match_score(x[1])
                 )
                 best_score = match_score(best_member)
-                
+
                 if best_score > 0:
                     me = crew.pop(best_idx)
                     crew.insert(0, me)
+
+        # Use shiftName as display name if dutyTypeName is generic (e.g. "Beruflich")
+        raw_name = shift_name if shift_name and dt_name in ("Beruflich", "Ehrenamtlich", "") else dt_name
+        # Strip bracket prefixes like "[FB] ", "[S2] ", "[B14] " from shift names
+        display_name = re.sub(r'^\[[^\]]+\]\s*', '', raw_name) or raw_name
 
         results.append(Duty(
             begin=b,
             end=e,
             location=loc,
             vehicle=veh,
-            duty_type=dt_name,
+            duty_type=display_name or dt_name,
             crew=crew,
-            comment=comm
+            comment=comm,
+            is_cancelled=is_cancelled
         ))
         
     return results
