@@ -388,7 +388,8 @@ class AsyncIncodeRequests:
                     location=d['location'],
                     duty_type=d['duty_type'],
                     crew=d['crew'],
-                    comment=d.get('comment')
+                    comment=d.get('comment'),
+                    is_cancelled=d.get('is_cancelled', False)
                 ) for d in cd]
 
         await self.ensure_session()
@@ -426,7 +427,7 @@ class AsyncIncodeRequests:
             duties = sorted(d_map.values(), key=lambda x: x.begin)
             
             # Cache
-            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment} for d in duties]
+            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment, 'is_cancelled': d.is_cancelled} for d in duties]
             self._set_cached_data(cache_key, ser)
             return duties
         except Exception as e:
@@ -437,7 +438,7 @@ class AsyncIncodeRequests:
         duties = await self.load_future_duties(use_cache=True)
         now = datetime.now()
         for d in duties:
-            if d.begin > now: return d
+            if d.begin > now and not d.is_cancelled: return d
         return None
 
     # Implement other methods similarly (search_staff_contact, load_absences etc.)

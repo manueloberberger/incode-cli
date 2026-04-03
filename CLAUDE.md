@@ -80,8 +80,18 @@ Modular TUI using [Rich](https://github.com/Textualize/rich):
 - **Version**: Bump `VERSION` in `src/config.py` for releases. **IMPORTANT**: Always update the version badge in `README.md` to match!
 - **CI**: GitHub Actions runs tests on Python 3.9, 3.11, 3.12
 
-## Recent Context (2026-03-19)
-*State at v2.29.0 - 221 tests, mypy --strict clean*
+## Recent Context (2026-04-03)
+*State at v2.30.0 - 221 tests, mypy --strict clean*
+
+### v2.30.0: Duty/absence overlap & Fortbildung fixes
+- Stornierte Dienste (`isCanceled: true` in API `attendances`) werden erkannt und komplett ausgeblendet (Urlaub überschreibt Dienst)
+- `Duty.is_cancelled` Feld im Model; Parser liest `attendances`-JSON-String
+- `get_next_duty()` überspringt stornierte Dienste
+- Dashboard: stornierte Dienste fehlen in Tabelle, Stunden- und Dienst-Statistik
+- Fortbildungen (`dutyTypeName` gesetzt) nicht mehr fälschlich als Abwesenheit gefiltert
+- `shiftName` als Anzeigename wenn `dutyTypeName` generisch (`"Beruflich"`)
+- Bracket-Präfixe wie `[FB]`, `[S2]` aus Schichtnamen entfernt
+- Besatzungsspalte zeigt Dienstname wenn kein Fahrzeug und keine Crew
 
 ### v2.29.0: Performance & robustness improvements
 - DB indexes on `cache(key)` and `valuestore(key)` for O(1) cache lookups

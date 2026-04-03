@@ -85,14 +85,21 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             # d is now a Duty object
             b, e = d.begin, d.end
             h = d.duration_hours
-            crew_str = ", ".join(d.crew) if d.crew else "-"
+            if d.crew:
+                crew_str = ", ".join(d.crew)
+            elif d.duty_type and not d.vehicle:
+                crew_str = d.duty_type
+            else:
+                crew_str = "-"
             if search_colleague and search_colleague.lower() not in crew_str.lower(): continue
             found_any = True
-            
+
+            if d.is_cancelled:
+                continue
+
             # Use Duty object directly
             export_duties.append(d)
 
-            
             month_key = f"{b.year}-{b.month:02d} ({month_names[b.month]})"
             monthly_stats[month_key] += h
             loc = d.location or ""
@@ -133,6 +140,8 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             vehicle_types = ["RTWA", "RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"] 
             
             for d in duties:
+                if d.is_cancelled:
+                    continue
                 loc = d.location or ""
                 if loc: location_counts[loc] += 1
                 
