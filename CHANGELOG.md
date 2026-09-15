@@ -5,6 +5,17 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.30.1] - 2026-09-15
+
+### Changed
+- Update GitHub Actions to checkout 7.0.1, setup-python 7.0.0 and cache 6.1.0,
+  which use Node.js 24 directly.
+- Run CI tests and strict type checks across Python 3.9 through 3.14.
+
+### Fixed
+- Keep aiohttp below 3.14 while aioresponses requires the older response API,
+  so fresh installations and dependency updates retain working API tests.
+
 ## [2.27.0] - 2026-02-05
 
 ### Fixed
