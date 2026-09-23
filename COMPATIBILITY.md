@@ -18,6 +18,13 @@ This document outlines the platform compatibility of `incode-cli` installation s
 - **Git**: For cloning the repository
 - **curl**: For one-liner installation (usually pre-installed)
 
+### Python Dependencies
+
+Install with `python -m pip install --upgrade -r requirements.txt`. The version
+ranges allow the tested current major releases. On Python 3.9, pip automatically
+selects older compatible releases where newer versions require Python 3.10+.
+HTTP tests use a local aiohttp server and do not require aioresponses.
+
 ### Shell Configuration
 The scripts create a symlink in `~/.local/bin/incode`. Make sure this directory is in your `PATH`:
 
