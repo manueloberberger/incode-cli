@@ -102,3 +102,29 @@ async def test_search_staff(api):
     results = await api.search_staff_contact("Julia")
     assert len(results) == 1
     assert results[0]["vorname"] == "Julia"
+
+
+def test_sync_client_serializes_concurrent_workers():
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from src.api import IncodeRequests
+    client = IncodeRequests('https://example.invalid')
+    running = 0
+    maximum = 0
+
+    async def operation():
+        nonlocal running, maximum
+        running += 1
+        maximum = max(maximum, running)
+        await asyncio.sleep(0.01)
+        running -= 1
+        return 1
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            futures = [workers.submit(client._run, operation()) for _ in range(2)]
+            assert [future.result() for future in futures] == [1, 1]
+        assert maximum == 1
+    finally:
+        client._run(client.client.close())
+        client.loop.close()

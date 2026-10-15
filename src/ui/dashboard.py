@@ -1,217 +1,121 @@
-"""
-Dashboard view for incode-cli.
-
-This module provides the main duty schedule view showing future duties
-with statistics (hours per month, duty types, locations).
-
-Functions:
-    show_future_duties: Display user's future duties with export options
-"""
-import logging
-from collections import defaultdict
+"""Personal roster, filtered exports and clearly separated statistics."""
+from collections import Counter
 from datetime import datetime
-from typing import Optional, Any, Dict, List, Union
+from typing import Any, List, Optional
 
-from src.models import Duty
-
-logger = logging.getLogger(__name__)
-
-from rich.table import Table
+from rich import box
 from rich.align import Align
+from rich.columns import Columns
 from rich.live import Live
 from rich.spinner import Spinner
-from rich.columns import Columns
-from rich import box
+from rich.table import Table
 
-from src.config import console, BANNER
-from src.utils import clear_screen, wait_for_return, flush_input, get_key
-from src.pdf import export_to_pdf
+from src.config import BANNER, console
 from src.ical import export_to_ics
-from src.ui.components import send_pdf_via_bot
+from src.models import Duty
+from src.pdf import export_to_pdf
+from src.ui.components import interactive_menu, send_pdf_via_bot
+from src.ui.network import network_view
+from src.utils import (clear_screen, duty_hours, filter_duties, flush_input,
+                       get_key, duty_category, wait_for_return)
 
+
+def _count_table(title: str, label: str, counts: Counter[str]) -> Table:
+    table = Table(title=title, box=box.SIMPLE_HEAD, header_style="stats")
+    table.add_column(label)
+    table.add_column("Anzahl", justify="right")
+    for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+        table.add_row(name, f"{count}×")
+    return table
+
+
+def _render_statistics(duties: List[Duty], now: datetime) -> None:
+    hours = Table(title="Stunden der angezeigten Dienste", box=box.SIMPLE_HEAD,
+                  header_style="stats")
+    for heading in ("Monat", "Geleistet", "Geplant / laufend", "Gesamt"):
+        hours.add_column(heading, justify="left" if heading == "Monat" else "right")
+    completed_total = planned_total = 0.0
+    for month, (completed, planned) in sorted(duty_hours(duties, now).items()):
+        hours.add_row(month, f"{completed:g}", f"{planned:g}", f"{completed + planned:g}")
+        completed_total += completed
+        planned_total += planned
+    hours.add_section()
+    hours.add_row("GESAMT (Std.)", f"{completed_total:g}", f"{planned_total:g}",
+                  f"{completed_total + planned_total:g}")
+    console.print(Align.center(hours))
+    console.print(Align.center(Columns([
+        _count_table("Dienst-Statistik", "Dienst", Counter(duty_category(d) for d in duties)),
+        _count_table("Dienststellen", "Dienststelle", Counter(d.location or "Ohne Dienststelle" for d in duties)),
+    ], align="center")))
+    console.print(Align.center("[dim]Auswertung der geladenen Dienste. Stunden zählen zum Startmonat; laufende Dienste unter geplant.[/dim]"))
+
+
+@network_view
 def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> None:
-    """
-    Display future duties for the current user.
-
-    Shows a table of upcoming duties with date, time, location, vehicle,
-    and crew information. Includes monthly hour statistics and duty type
-    breakdowns. Supports filtering by colleague name for finding shared shifts.
-
-    Args:
-        incode: The IncodeRequests API instance.
-        search_colleague: Optional name to filter for shared duties.
-
-    User can press:
-        - 'p': Export to PDF
-        - 'c': Export to iCal (.ics)
-        - 't': Export to PDF and send via Telegram
-        - Any other key: Return to menu
-    """
-    clear_screen()
-    console.print(Align.center(BANNER))
-    console.print()
-    
-    if search_colleague:
-        console.print(Align.center(f"[bold header]GEMEINSAME DIENSTE MIT '{search_colleague.upper()}'[/bold header]"))
-    else:
-        console.print(Align.center("[bold header]MEIN DIENSTPLAN[/bold header]"))
-    
-    console.print()
-    with Live(Align.center(Spinner("dots", text=" Lade Dienstplan ...")), console=console, transient=True):
-        duties = incode.load_future_duties(override_name=search_colleague)
-    if not duties: 
+    period = "all"
+    label = "Alle geladenen Dienste"
+    refresh = False
+    with Live(Align.center(Spinner("dots", text="Lade Dienstplan …")), console=console, transient=True):
+        loaded = incode.load_future_duties(override_name=search_colleague)
+    while True:
+        if refresh:
+            loaded = incode.load_future_duties(use_cache=False, override_name=search_colleague)
+            refresh = False
+        now = datetime.now()
+        duties = filter_duties(loaded, period, now)
         if search_colleague:
-            console.print(Align.center(f"\n[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]"))
+            duties = [d for d in duties if any(search_colleague.casefold() in name.casefold() for name in d.crew)]
+        clear_screen()
+        console.print(Align.center(BANNER))
+        title = "MEIN DIENSTPLAN" if not search_colleague else f"GEMEINSAME DIENSTE MIT {search_colleague}"
+        console.print(Align.center(title))
+        console.print(Align.center(label))
+        status = getattr(incode, "data_status", "")
+        if isinstance(status, str) and status:
+            console.print(Align.center(f"[dim]{status}[/dim]"))
+        table = Table(box=box.SIMPLE_HEAD, header_style="header")
+        for heading in ("Datum", "Zeit", "Ort", "Fzg", "Besatzung / Dienstart"):
+            table.add_column(heading)
+        for duty in duties:
+            end = duty.end.strftime("%H:%M")
+            if duty.end.date() != duty.begin.date():
+                end += f" ({duty.end:%d.%m.})"
+            table.add_row(duty.begin.strftime("%d.%m.%Y"),
+                          f"{duty.begin:%H:%M}–{end} ({duty.duration_hours:g}h)",
+                          duty.location or "–", duty.vehicle or "–",
+                          ", ".join(duty.crew) or duty.duty_type or "–")
+        if duties:
+            console.print(Align.center(table))
+            if not search_colleague:
+                _render_statistics(duties, now)
         else:
-            console.print(Align.center("\n[info]Keine Dienste gefunden.[/info]"))
-        wait_for_return()
-        return
-
-    title = "📅  Mein Dienstplan" if not search_colleague else f"🔍  Gemeinsame Dienste mit '{search_colleague}'"
-    table = Table(title=title, header_style="header", expand=False, box=None, padding=(0, 1), show_header=True)
-    table.add_column("Datum", style="info")
-    table.add_column("Zeit", style="info")
-    table.add_column("Ort", style="dim", min_width=15)
-    table.add_column("Fzg", style="success")
-    table.add_column("Besatzung", style="crew")
-    
-    monthly_stats: Dict[str, float] = defaultdict(float)
-    found_any = False
-    export_duties: List[Union[Dict[str, Any], Duty]] = []
-    month_names = {1: "Januar", 2: "Februar", 3: "März", 4: "April", 5: "Mai", 6: "Juni", 7: "Juli", 8: "August", 9: "September", 10: "Oktober", 11: "November", 12: "Dezember"}
-    
-    for d in duties:
-        try:
-            # d is now a Duty object
-            b, e = d.begin, d.end
-            h = d.duration_hours
-            if d.crew:
-                crew_str = ", ".join(d.crew)
-            elif d.duty_type and not d.vehicle:
-                crew_str = d.duty_type
-            else:
-                crew_str = "-"
-            if search_colleague and search_colleague.lower() not in crew_str.lower(): continue
-            found_any = True
-
-            if d.is_cancelled:
-                continue
-
-            # Use Duty object directly
-            export_duties.append(d)
-
-            month_key = f"{b.year}-{b.month:02d} ({month_names[b.month]})"
-            monthly_stats[month_key] += h
-            loc = d.location or ""
-            if not loc and d.duty_type == 'Vergangen':
-                loc = "[dim]-[/dim]"
-            table.add_row(b.strftime('%d.%m.%Y'), f"{b.strftime('%H:%M')}-{e.strftime('%H:%M')} ({h:g}h) ", loc, d.vehicle or "-", crew_str)
-        except (AttributeError, KeyError, ValueError) as e:
-            logger.debug(f"Error processing duty entry: {e}")
-
-    if not found_any: 
-        if search_colleague:
-            console.print(Align.center(f"\n[info]Keine gemeinsamen Dienste mit '{search_colleague}' gefunden.[/info]"))
-        else:
-            console.print(Align.center("\n[info]Keine Dienste gefunden.[/info]"))
-        wait_for_return()
-    else:
-        table.box = box.SIMPLE_HEAD
-        console.print(Align.center(table))
-        
-        if not search_colleague:
-            console.print(Align.center("\n" + "─" * 50 + "\n")) # Separator line
-            
-            # Hours Statistics
-            stats_table = Table(title="[bold blue]Stunden-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
-            stats_table.add_column("Monat"); stats_table.add_column("Stunden", justify="right")
-            total_all_hours = 0.0
-            for m, total in sorted(monthly_stats.items()): 
-                stats_table.add_row(m, f"{total:g} Std.")
-                total_all_hours += total
-            
-            stats_table.add_section()
-            stats_table.add_row("[bold]GESAMT[/bold]", f"[bold]{total_all_hours:g} Std.[/bold]")
-            
-            # Duty Count Statistics
-            duty_counts: Dict[str, int] = defaultdict(int)
-            location_counts: Dict[str, int] = defaultdict(int)
-            
-            vehicle_types = ["RTWA", "RTW", "KTW", "BTW", "NEF", "BKTW", "VEF"] 
-            
-            for d in duties:
-                if d.is_cancelled:
-                    continue
-                loc = d.location or ""
-                if loc: location_counts[loc] += 1
-                
-                key = None
-                vehicle = (d.vehicle or "").upper()
-                duty_type = d.duty_type or ""
-                
-                if vehicle:
-                    for vt in vehicle_types:
-                        if vt in vehicle:
-                            key = vt
-                            break
-                    if not key: key = vehicle
-                elif duty_type:
-                    key = duty_type
-                
-                if key:
-                    if key == "Beruflich" or key == "-": key = "Sonstige / Ohne Fzg."
-                    duty_counts[key] += 1
-            
-            # Print Stats in a nice way
-            
-            count_table = Table(title="[bold blue]Dienst-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
-            count_table.add_column("Typ/Art"); count_table.add_column("Anzahl", justify="right")
-            for k, v in sorted(duty_counts.items(), key=lambda item: item[1], reverse=True):
-                count_table.add_row(k, f"{v}x")
-            loc_table = Table(title="[bold blue]Dienststellen-Statistik[/bold blue]", header_style="stats", box=box.SIMPLE_HEAD, padding=(0, 2))
-            loc_table.add_column("Dienststelle"); loc_table.add_column("Anzahl", justify="right")
-            for k, v in sorted(location_counts.items(), key=lambda item: item[1], reverse=True):
-                loc_table.add_row(k, f"{v}x")
-
-
-            # Display tables side by side
-            console.print(Align.center(Columns([stats_table, count_table, loc_table], align="center", expand=True)))
-
-            # Display tables side by side or neatly stacked
-        opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
-        console.print(Align.center(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste ...[/dim]"))
-        
+            console.print(Align.center("[info]Keine Dienste für diesen Filter gefunden.[/info]"))
+        console.print(Align.center("[dim]F: Zeitraum · R: neu laden · P: PDF · C: Kalender · T: PDF & Telegram · Andere Taste: zurück[/dim]"))
         flush_input()
-        while True:
-            key_input = get_key()
-            if key_input:
-                k_str = key_input.lower()
-                # Clean timestamp for filenames: YYYY-MM-DD_HH-MM
-                ts_readable = datetime.now().strftime('%Y-%m-%d_%H-%M')
-                
-                if k_str == 'p' or k_str == 't':
-                    if search_colleague:
-                        # Sanitize name
-                        safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])
-                        fn = f"Dienstplan_{safe_name}_{ts_readable}.pdf"
-                    else:
-                        fn = f"Mein_Dienstplan_{ts_readable}.pdf"
-
-                    if export_to_pdf(export_duties, fn):
-                        if k_str == 't':
-                            msg = f"Dienstplan Export vom {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-                            if send_pdf_via_bot(incode, fn, msg):
-                                console.print("[success]PDF erfolgreich per Telegram gesendet !!![/success]")
-                    wait_for_return()
-                    break
-                elif k_str == 'c':
-                    fn = f"Dienstplan_{ts_readable}.ics"
-                    if search_colleague: 
-                        safe_name = "".join([c if c.isalnum() else "_" for c in search_colleague])
-                        fn = f"Dienstplan_{safe_name}_{ts_readable}.ics"
-                    
-                    export_to_ics(export_duties, fn)
-                    wait_for_return()
-                    break
-                else:
-                    break
+        key = (get_key() or "").lower()
+        if key == "r":
+            refresh = True
+            continue
+        if key == "f":
+            options = [("Alle geladenen Dienste", "all"), ("Bereits geleistet", "completed"),
+                       ("Geplant / laufend", "planned"), ("Aktueller Monat", "month"),
+                       ("Aktuelles Jahr", "year")]
+            options.extend((month, f"month:{month}") for month in
+                           sorted({d.begin.strftime("%Y-%m") for d in loaded}))
+            selected = interactive_menu(options, title="ZEITRAUM WÄHLEN")
+            if selected:
+                period = selected
+                label = next(text for text, value in options if value == selected)
+            continue
+        if key not in ("p", "c", "t"):
+            return
+        if not duties:
+            continue
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"Dienstplan_{timestamp}"
+        if key == "c":
+            export_to_ics(duties, filename + ".ics")
+        elif export_to_pdf(duties, filename + ".pdf") and key == "t":
+            if send_pdf_via_bot(incode, filename + ".pdf", f"Dienstplan – {label}"):
+                console.print("[success]PDF erfolgreich per Telegram gesendet.[/success]")
+        wait_for_return()

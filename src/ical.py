@@ -4,14 +4,21 @@ iCalendar export functionality for incode-cli.
 This module provides functions to export duty schedules to iCalendar (.ics) format,
 which can be imported into calendar applications like Google Calendar, Outlook, etc.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from dataclasses import asdict
 from icalendar import Calendar, Event, vText
 from src.config import console
-from src.utils import parse_iso_datetime
+from src.utils import parse_iso_datetime, duty_identity
 
-from typing import Dict, Any, Union, Sequence
+from typing import Dict, Any, Union, Sequence, Optional
 from src.models import Duty
+
+
+def _calendar_date(value: Any) -> Optional[datetime]:
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parse_iso_datetime(value)
 
 
 def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str = "dienstplan.ics") -> bool:
@@ -38,17 +45,18 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     cal.add('prodid', '-//RedCrossIncodeChecker//DE')
     cal.add('version', '2.0')
 
-    created_at = datetime.now()
+    created_at = datetime.now(timezone.utc)
+    exported = set()
     count = 0
 
     for item in duties:
         try:
             # Support both Dicts and Dataclasses (Duty objects)
-            d: Dict[str, Any] = asdict(item) if isinstance(item, Duty) else item            # Parse timestamps (handles strings, datetime objects, and None)
-            dt_start = parse_iso_datetime(d.get('begin'))
-            dt_end = parse_iso_datetime(d.get('end'))
+            d: Dict[str, Any] = asdict(item) if isinstance(item, Duty) else item
+            dt_start = _calendar_date(d.get('begin'))
+            dt_end = _calendar_date(d.get('end'))
 
-            if not dt_start or not dt_end:
+            if d.get("is_cancelled") or not dt_start or not dt_end or dt_end <= dt_start:
                 continue
 
             event = Event()
@@ -62,14 +70,16 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
             event.add('summary', summary)
 
             # Add date/time properties
-            event.add('dtstart', dt_start)
-            event.add('dtend', dt_end)
+            event.add('dtstart', dt_start.replace(tzinfo=ZoneInfo('Europe/Vienna')) if dt_start.tzinfo is None else dt_start)
+            event.add('dtend', dt_end.replace(tzinfo=ZoneInfo('Europe/Vienna')) if dt_end.tzinfo is None else dt_end)
             event.add('dtstamp', created_at)
 
-            # Generate unique ID for the event
-            veh_safe = str(vehicle).replace(" ", "_")
-            uid = f"{dt_start.strftime('%Y%m%dT%H%M%S')}-{veh_safe}@incodechecker"
+            uid = duty_identity(d) + "@incode-cli"
+            if uid in exported:
+                continue
+            exported.add(uid)
             event.add('uid', uid)
+            event.add('last-modified', created_at)
 
             # Build description from location and crew
             desc_lines = []

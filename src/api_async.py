@@ -31,7 +31,7 @@ from typing import Optional, List, Dict, Any, cast
 
 from src.db import db
 from src.exceptions import LoginError, ApiError
-from src.utils import get_holidays
+from src.utils import get_holidays, merge_duties
 from src.parser import (
     fix_datetime,
     parse_staff_contact,
@@ -82,6 +82,7 @@ class AsyncIncodeRequests:
         self.extra_guids = extra_guids if extra_guids else []
         self.username = username
         self.user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Safari/605.1.15'
+        self.data_status = ""
         self.session: Optional[aiohttp.ClientSession] = None
         self.header_key: Optional[str] = None
         self.header_value: Optional[str] = None
@@ -104,7 +105,7 @@ class AsyncIncodeRequests:
     async def ensure_session(self) -> None:
         """Ensure an aiohttp session exists, creating one if necessary."""
         if not self.session:
-            self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent})
+            self.session = aiohttp.ClientSession(headers={'User-Agent': self.user_agent}, timeout=aiohttp.ClientTimeout(total=20, connect=5, sock_read=10))
 
     def _get_cache_key(self, key_base: str) -> str:
         """Generate a user-specific cache key."""
@@ -115,12 +116,16 @@ class AsyncIncodeRequests:
     def _get_cached_data(self, key: str) -> Optional[Any]:
         """Retrieve data from cache if not expired."""
         key = self._get_cache_key(key)
-        return db.get_cache(key, CACHE_TTL)
+        value = db.get_cache(key, CACHE_TTL)
+        if value is not None:
+            self.data_status = "Zwischenspeicher (höchstens 15 Minuten alt)"
+        return value
 
     def _set_cached_data(self, key: str, data: Any) -> None:
         """Store data in cache with current timestamp."""
         key = self._get_cache_key(key)
         db.set_cache(key, data)
+        self.data_status = f"Live-Abruf: {datetime.now():%d.%m.%Y %H:%M:%S}"
 
     def _get_api_headers(self) -> Dict[str, str]:
         """Build HTTP headers for API requests including auth token."""
@@ -219,6 +224,8 @@ class AsyncIncodeRequests:
         project_map = {}
         try:
             async with self.session.get(f"{self.base_url}/StaffPortal/projects.php", headers=self._get_api_headers()) as r_proj:
+                if r_proj.status != 200:
+                    raise ApiError("Eventübersicht nicht verfügbar.")
                 txt = await r_proj.text()
                 
             # Pattern matches GUIDs: 40 hex chars followed by underscore-separated numbers
@@ -250,9 +257,9 @@ class AsyncIncodeRequests:
                     for g in re.findall(guid_pattern, text_resp):
                         if g not in project_map and g not in guids_to_try: project_map[g] = "Event"
         except aiohttp.ClientError as e:
-            logger.debug(f"Network error fetching project GUIDs: {e}")
+            raise ApiError("Eventübersicht konnte nicht geladen werden.") from e
         except Exception as e:
-            logger.debug(f"Error fetching project GUIDs: {e}")
+            raise ApiError("Eventübersicht konnte nicht geladen werden.") from e
         return project_map
 
     async def load_events_plan(self) -> List[Dict[str, Any]]:
@@ -268,6 +275,8 @@ class AsyncIncodeRequests:
             if self.session is None:
                 raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/projects/show.content.projects.php", headers=self._get_api_headers(), data={'orgUnitDataGuid[]': guids_to_try, 'projectType': '', 'name': '', 'month': '', 'form.event.onsubmit': 'searchForm'}) as resp:
+                if resp.status != 200:
+                    raise ApiError("Eventplan nicht verfügbar.")
                 if resp.status == 200:
                     soup = BeautifulSoup(await resp.text(), 'html.parser')
                     for card in soup.find_all('div', attrs={'data-role': 'incode-project'}):
@@ -278,8 +287,7 @@ class AsyncIncodeRequests:
                         t_tag = card.find('h3', class_='card-title')
                         events.append({'guid': guid, 'begin': b_dt, 'end': e_dt, 'vehicle': t_tag.get_text(strip=True) if t_tag else "Event", 'location': '', 'crew': {}, 'open_slots': 0})
         except Exception as exc:
-            logger.warning(f"Events load error: {exc}")
-            return []
+            raise ApiError("Events konnten nicht geladen werden.") from exc
 
         if not events: return []
 
@@ -306,6 +314,10 @@ class AsyncIncodeRequests:
             tasks.append(fetch_chunk(guids[i:i+30]))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        if any(not isinstance(result, dict) or not isinstance(result.get('data'), (list, dict))
+               for result in results):
+            raise ApiError("Eventplan konnte nicht vollständig geladen werden.")
 
         # Build event index for O(1) lookups instead of O(n) nested loop
         event_map: Dict[tuple[str, date], Dict[str, Any]] = {}
@@ -337,7 +349,7 @@ class AsyncIncodeRequests:
                     elif eid != "KFZ": evt['crew'][f"{eid or 'Staff'}_{len(evt['crew'])}"] = rn
         return events
 
-    async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
+    async def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences', *, strict: bool = True) -> List[Duty]:
         """
         Load archived duties from a specific year.
         
@@ -353,15 +365,19 @@ class AsyncIncodeRequests:
             if self.session is None:
                 raise RuntimeError("Session initialization failed")
             async with self.session.post(f"{self.base_url}/StaffPortal/archive/data/loadDuties.json", headers=self._get_api_headers(), data={'year': str(year), 'month': '', 'dateDescendingSort': 'true', 'orgUnit': '', 'withSubOrgs': 'on', 'form.event.onsubmit': 'searchForm'}) as resp:
-                if resp.status == 200:
-                    return parse_personal_duties(await resp.json(content_type=None), filter_mode)
-        except aiohttp.ClientError as e:
-            logger.debug(f"Network error loading archive duties: {e}")
+                if resp.status != 200:
+                    raise ApiError(f"Archiv konnte nicht geladen werden (Status {resp.status}).")
+                data = await resp.json(content_type=None)
+                if strict and (not isinstance(data, dict) or not isinstance(data.get('data'), list)):
+                    raise ApiError("Ungültige Antwort beim Laden des Archivs.")
+                return parse_personal_duties(data, filter_mode)
         except Exception as e:
+            if strict:
+                raise ApiError("Archiv konnte nicht vollständig geladen werden.") from e
             logger.debug(f"Error loading archive duties: {e}")
         return []
 
-    async def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
+    async def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None, *, strict: bool = True) -> List[Duty]:
         """
         Load future duties for the current user.
         
@@ -372,6 +388,7 @@ class AsyncIncodeRequests:
             use_cache: Whether to use cached data if available.
             filter_mode: 'exclude_absences', 'only_absences', or 'include_all'.
             override_name: Override name for crew list reordering.
+            strict: Raise ApiError on failed/incomplete loads instead of returning an empty list.
             
         Returns:
             List of Duty objects sorted by begin date.
@@ -379,7 +396,7 @@ class AsyncIncodeRequests:
         cache_key = f"future_duties_{filter_mode}"
         if use_cache:
             cd = self._get_cached_data(cache_key)
-            if cd:
+            if cd is not None:
                  # Serialization hydration
                  return [Duty(
                     begin=datetime.strptime(d['begin'], '%Y-%m-%dT%H:%M:%S'),
@@ -388,6 +405,8 @@ class AsyncIncodeRequests:
                     location=d['location'],
                     duty_type=d['duty_type'],
                     crew=d['crew'],
+                    source_id=d.get("source_id"),
+                    source_scope=d.get("source_scope", ""),
                     comment=d.get('comment'),
                     is_cancelled=d.get('is_cancelled', False)
                 ) for d in cd]
@@ -412,33 +431,33 @@ class AsyncIncodeRequests:
                     raise ApiError(f"Status {resp.status}")
 
                 json_data = await resp.json(content_type=None)
+                if strict and (not isinstance(json_data, dict) or not isinstance(json_data.get('data'), list)):
+                    raise ApiError("Ungültige Antwort beim Laden des Dienstplans.")
                 
             duties = parse_personal_duties(json_data, filter_mode, my_name=override_name or self.discovered_name)
             
             # Archive fetch 
-            archive = await self.load_archive_duties(now.year, filter_mode)
+            archive = await self.load_archive_duties(now.year, filter_mode, strict=strict)
             
-            # Merge logic
-            d_map = {d.begin: d for d in duties}
-            for ad in archive:
-                if ad.begin not in d_map: d_map[ad.begin] = ad
-                elif not d_map[ad.begin].location and ad.location: d_map[ad.begin] = ad
-            
-            duties = sorted(d_map.values(), key=lambda x: x.begin)
-            
+            for duty in duties + archive:
+                duty.source_scope = f"{self.base_url.rstrip('/')}|{self.username or ''}"
+            duties = merge_duties(duties, archive)
+
             # Cache
-            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment, 'is_cancelled': d.is_cancelled} for d in duties]
+            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment, 'source_id': d.source_id, 'source_scope': d.source_scope, 'is_cancelled': d.is_cancelled} for d in duties]
             self._set_cached_data(cache_key, ser)
             return duties
         except Exception as e:
             logger.warning(f"Async Future Duties Error: {e}")
+            if strict:
+                raise ApiError("Dienstplan konnte nicht vollständig geladen werden.") from e
             return []
 
     async def get_next_duty(self) -> Optional[Duty]:
         duties = await self.load_future_duties(use_cache=True)
         now = datetime.now()
         for d in duties:
-            if d.begin > now and not d.is_cancelled: return d
+            if d.end > now and not d.is_cancelled: return d
         return None
 
     # Implement other methods similarly (search_staff_contact, load_absences etc.)
@@ -485,6 +504,11 @@ class AsyncIncodeRequests:
         gather_results = await asyncio.gather(fetch_abs(), fetch_wishes(), return_exceptions=True)
         res_abs = None if isinstance(gather_results[0], BaseException) else gather_results[0]
         res_wishes = None if isinstance(gather_results[1], BaseException) else gather_results[1]
+
+        if any(not isinstance(result, dict) or not isinstance(result.get('data'), list)
+               for result in gather_results):
+            raise ApiError("Abwesenheiten konnten nicht vollständig geladen werden.")
+        self.data_status = f"Live-Abruf: {datetime.now():%d.%m.%Y %H:%M:%S}"
 
         # Logic same as Sync
         if res_abs:
@@ -617,6 +641,10 @@ class AsyncIncodeRequests:
         # Fetch all GUIDs in parallel (cached ones return instantly)
         raw_results = await asyncio.gather(*[fetch_one(g) for g in sorted_guids], return_exceptions=True)
 
+        if any(not isinstance(result, dict) or not isinstance(result.get('data'), list)
+               for result in raw_results):
+            raise ApiError("Mitarbeiter-Verzeichnis konnte nicht vollständig geladen werden.")
+
         # Parse and filter locally
         parsed_results: List[List[Dict[str, Any]]] = []
         for raw in raw_results:
@@ -651,14 +679,14 @@ class AsyncIncodeRequests:
                 if resp.status == 200:
                     return parse_personal_duties(await resp.json(content_type=None), filter_mode='include_all')
         except Exception as e:
-            logger.warning(f"Failed to load personal event duties: {e}")
-        return []
+            raise ApiError("Eigene Eventdienste konnten nicht geladen werden.") from e
+        raise ApiError("Eigene Eventdienste konnten nicht geladen werden.")
 
     async def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
         cache_key = f"daily_{date.strftime('%Y-%m-%d')}"
         if use_cache:
             cached = self._get_cached_data(cache_key)
-            if cached: 
+            if cached is not None:
                  # Hydrate simple dicts
                  hydrated = []
                  for item in cached:
@@ -671,15 +699,15 @@ class AsyncIncodeRequests:
         sd, ed = date.replace(hour=0, minute=0, second=0, microsecond=0), date.replace(hour=23, minute=59, second=59, microsecond=999999)
         try:
             results = await self._fetch_daily_plan_items(sd, ed)
-            serializable = [{'begin': i['begin'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('begin'), datetime) else i.get('begin'), 'end': i['end'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('end'), datetime) else i.get('end'), 'vehicle': i['vehicle'], 'crew': i['crew']} for i in results]
+            serializable = [{'begin': i['begin'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('begin'), datetime) else i.get('begin'), 'end': i['end'].strftime('%Y-%m-%dT%H:%M:%S') if isinstance(i.get('end'), datetime) else i.get('end'), 'vehicle': i['vehicle'], 'crew': i['crew'], 'source_id': i.get('source_id'), 'source_scope': i.get('source_scope', ''), 'location': i.get('location', '')} for i in results]
             self._set_cached_data(cache_key, serializable)
             return results
-        except aiohttp.ClientError as e:
-            logger.debug(f"Network error loading daily plan: {e}")
-            return []
         except Exception as e:
-            logger.debug(f"Error loading daily plan: {e}")
-            return []
+            raise ApiError("Tagesplan konnte nicht vollständig geladen werden.") from e
+
+    async def load_daily_plan_range(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """Public range API; all request concurrency stays in the async layer."""
+        return await self._fetch_daily_plan_items(date_from, date_to)
 
     async def _fetch_daily_plan_items(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         if not self.session: await self.ensure_session()
@@ -717,7 +745,13 @@ class AsyncIncodeRequests:
                 logger.debug(f"Error fetching plan: {e}")
             return None
 
+        if not guids_list:
+            raise ApiError("Keine Dienststelle für den Tagesplan verfügbar.")
         plan_results = await asyncio.gather(*[fetch_plan(g) for g in guids_list if g], return_exceptions=True)
+        if any(not isinstance(result, dict) or not isinstance(result.get('data'), (list, dict))
+               for result in plan_results):
+            raise ApiError("Tagesplan unvollständig: Mindestens eine Dienststelle konnte nicht geladen werden.")
+        self.data_status = f"Live-Abruf: {datetime.now():%d.%m.%Y %H:%M:%S}"
 
         results, seen = [], set()
         for data in plan_results:
@@ -727,7 +761,8 @@ class AsyncIncodeRequests:
             if data and data.get('data'):
                 for item in parse_daily_plan_raw(data):
                     if item['begin'] and item['end'] and not (item['end'] < date_from or item['begin'] > date_to):
-                        sig = (item['vehicle'], item['begin'], item['end'], tuple(sorted(item['crew'].items())))
+                        item['source_scope'] = f"{self.base_url.rstrip('/')}|{self.username or ''}"
+                        sig = (item.get('source_id'), item['vehicle'], item['begin'], item['end'], tuple(sorted(item['crew'].items())))
                         if sig not in seen: seen.add(sig); results.append(item)
         return results
 

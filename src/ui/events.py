@@ -7,6 +7,8 @@ personal event assignments and organization-wide event overview.
 Functions:
     show_events_menu: Display the events submenu with navigation
 """
+from src.ui.network import network_view
+
 import logging
 from datetime import datetime
 from typing import Any
@@ -24,6 +26,7 @@ from src.config import console, BANNER
 from src.utils import clear_screen, wait_for_return
 from src.ui.components import interactive_menu
 
+@network_view
 def show_events_menu(incode: Any) -> None:
     """
     Display the events/ambulance duties menu.

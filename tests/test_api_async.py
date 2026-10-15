@@ -235,3 +235,135 @@ class TestCaching:
             # Get cache
             result = client._get_cached_data("key1")
             assert result == {'test': 'data'}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('endpoint,mode', [
+    ('roster', 'http'), ('roster', 'invalid_json'),
+    ('roster', 'invalid_envelope'), ('roster', 'invalid_data'),
+    ('archive', 'http'), ('archive', 'invalid_json'),
+    ('archive', 'invalid_envelope'),
+])
+async def test_strict_load_rejects_failed_or_incomplete_roster(endpoint, mode):
+    from aiohttp import web
+    from aiohttp.test_utils import TestServer
+
+    async def respond(request):
+        target = 'archive' if 'archive' in request.path else 'roster'
+        if target == endpoint:
+            if mode == 'http':
+                return web.Response(status=503)
+            if mode == 'invalid_json':
+                return web.Response(text='<html>Login</html>')
+            if mode == 'invalid_data':
+                return web.json_response({'data': None})
+            return web.json_response({'error': 'session expired'})
+        return web.json_response({'data': []})
+
+    app = web.Application()
+    app.router.add_post('/StaffPortal/duties/data/load.json', respond)
+    app.router.add_post('/StaffPortal/archive/data/loadDuties.json', respond)
+    async with TestServer(app) as server:
+        async with AsyncIncodeRequests(str(server.make_url('')).rstrip('/')) as client:
+            with patch.object(client, '_set_cached_data') as cache:
+                with pytest.raises(ApiError):
+                    await client.load_future_duties(use_cache=False, strict=True)
+                cache.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_strict_load_accepts_genuinely_empty_roster():
+    client = AsyncIncodeRequests('https://example.invalid')
+    response = AsyncMock()
+    response.status = 200
+    response.json.return_value = {'data': []}
+    response.__aenter__.return_value = response
+    client.session = MagicMock()
+    client.session.post.return_value = response
+    with patch.object(client, 'ensure_session', new_callable=AsyncMock), \
+         patch.object(client, '_set_cached_data'):
+        assert await client.load_future_duties(use_cache=False, strict=True) == []
+    client.session = None
+
+
+@pytest.mark.asyncio
+async def test_strict_load_propagates_network_timeout():
+    client = AsyncIncodeRequests('https://example.invalid')
+    client.session = MagicMock()
+    client.session.post.side_effect = TimeoutError()
+    with patch.object(client, 'ensure_session', new_callable=AsyncMock):
+        with pytest.raises(ApiError):
+            await client.load_future_duties(use_cache=False, strict=True)
+    client.session = None
+
+
+@pytest.mark.asyncio
+async def test_session_has_bounded_network_timeouts():
+    async with AsyncIncodeRequests('https://example.invalid') as client:
+        assert client.session.timeout.total == 20
+        assert client.session.timeout.connect == 5
+        assert client.session.timeout.sock_read == 10
+
+
+@pytest.mark.asyncio
+async def test_empty_roster_cache_is_valid_and_preserves_identity():
+    client = AsyncIncodeRequests('https://example.invalid')
+    with patch.object(client, '_get_cached_data', return_value=[]), \
+         patch.object(client, 'ensure_session', new_callable=AsyncMock) as ensure:
+        assert await client.load_future_duties() == []
+    ensure.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_daily_plan_failure_does_not_cache_partial_data():
+    client = AsyncIncodeRequests('https://example.invalid')
+    client.org_unit_data_guid = 'unit-1'
+    response = AsyncMock()
+    response.status = 503
+    response.__aenter__.return_value = response
+    client.session = MagicMock()
+    client.session.post.return_value = response
+    with patch.object(client, '_set_cached_data') as cache:
+        with pytest.raises(ApiError):
+            await client.load_daily_plan(datetime(2026, 10, 20), use_cache=False)
+    cache.assert_not_called()
+    client.session = None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('method', ['load_absences', 'search_staff_contact', 'load_my_event_duties', 'load_events_plan'])
+async def test_other_views_raise_on_http_failures(method):
+    client = AsyncIncodeRequests('https://example.invalid')
+    client.org_unit_data_guid = 'unit-1'
+    response = AsyncMock()
+    response.status = 503
+    response.__aenter__.return_value = response
+    client.session = MagicMock()
+    client.session.post.return_value = response
+    args = ['test'] if method == 'search_staff_contact' else []
+    with pytest.raises(ApiError):
+        await getattr(client, method)(*args)
+    client.session = None
+
+
+@pytest.mark.asyncio
+async def test_roster_merge_and_cache_preserve_ids():
+    client = AsyncIncodeRequests('https://example.invalid', username='test')
+    data = {'data': [dict(begin='2026-10-20T07:00:00.000Z', end='2026-10-20T19:00:00.000Z',
+                          dutyTypeName='SEW', dataGuid=key, allocationInfo=['Me', 'Crew', vehicle])
+                     for key, vehicle in [('shift-1', 'RTW'), ('shift-2', 'KTW')]]}
+    response = AsyncMock()
+    response.status = 200
+    response.json.return_value = data
+    response.__aenter__.return_value = response
+    client.session = MagicMock()
+    client.session.post.return_value = response
+    with patch.object(client, '_set_cached_data') as cache:
+        duties = await client.load_future_duties(use_cache=False)
+    assert len(duties) == 2
+    serialized = cache.call_args.args[1]
+    assert {d['source_id'] for d in serialized} == {'shift-1', 'shift-2'}
+    with patch.object(client, '_get_cached_data', return_value=serialized):
+        cached = await client.load_future_duties()
+    assert [(d.source_id, d.source_scope) for d in cached] == [(d.source_id, d.source_scope) for d in duties]
+    client.session = None

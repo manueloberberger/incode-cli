@@ -86,45 +86,40 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
 
 
 def update_app() -> bool:
-    """Performs safe git pull (with stash) and pip install. Returns True if successful."""
+    """Update a clean checkout only. Never move or overwrite local changes."""
     try:
         console.print()  # Initial Spacer
         
-        # 1. Check for local changes
-        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
-        stashed = False
-        
+        # Refuse to alter a checkout containing local changes, including new files.
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            check=True, capture_output=True, text=True, timeout=GIT_REVLIST_TIMEOUT
+        ).stdout.strip()
         if status:
-            console.print(Align.center("[yellow]Lokale Änderungen erkannt. Sichere Arbeitsstand (git stash) ...[/yellow]"))
-            subprocess.run(["git", "stash"], check=True, stdout=subprocess.DEVNULL)
-            stashed = True
-        
+            console.print(Align.center(
+                "[warning]Update abgebrochen: Lokale Änderungen vorhanden. "
+                "Bitte zuerst sichern oder committen und das Update erneut starten.[/warning]"
+            ))
+            return False
+
         # Capture current HEAD before pulling to check changes later
-        current_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        current_head = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True, timeout=GIT_REVLIST_TIMEOUT).stdout.strip()
         
         # 2. Git Pull (use --ff-only to avoid merge commits and divergent branch issues)
         with Live(Align.center(Spinner("dots", text="[bold blue]Lade Updates von GitHub (git pull) ...[/bold blue]")), console=console, transient=True):
-            subprocess.run(["git", "pull", "--ff-only"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            subprocess.run(["git", "pull", "--ff-only"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60)
         console.print(Align.center("[dim]Updates heruntergeladen.[/dim]"))
-        
-        # 3. Restore Stash (if any)
-        if stashed:
-            console.print(Align.center("[info]Stelle lokale Änderungen wieder her (git stash pop) ...[/info]"))
-            pop_res = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
-            if pop_res.returncode != 0:
-                console.print(Align.center("[bold red]Warnung: Konflikte beim Wiederherstellen der Änderungen !!![/bold red]"))
-                console.print(Align.center("Deine Änderungen sind im 'git stash' gespeichert."))
         
         # 4. Smart Dependency Check
         # Check if requirements.txt changed between old HEAD and new HEAD
-        new_head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        new_head = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True, timeout=GIT_REVLIST_TIMEOUT).stdout.strip()
         
         needs_pip = False
         if current_head != new_head:
             diff = subprocess.run(
                 ["git", "diff", "--name-only", current_head, new_head], 
-                capture_output=True, 
-                text=True
+                check=True, capture_output=True,
+                text=True, timeout=GIT_REVLIST_TIMEOUT
             ).stdout
             if "requirements.txt" in diff:
                 needs_pip = True
@@ -138,7 +133,8 @@ def update_app() -> bool:
                     [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
                     check=True,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
+                    timeout=180
                 )
             console.print(Align.center("[dim]Abhängigkeiten aktualisiert.[/dim]"))
         else:
@@ -159,6 +155,9 @@ def update_app() -> bool:
         console.print()  # Final Spacer
         return True
         
+    except subprocess.TimeoutExpired:
+        console.print(Align.center("[error]Update wegen Zeitüberschreitung abgebrochen. Bitte erneut versuchen.[/error]"))
+        return False
     except subprocess.CalledProcessError as e:
         console.print(Align.center(f"[error]Fehler beim Update-Prozess (Exit Code {e.returncode}).[/error]"))
         if e.stderr:

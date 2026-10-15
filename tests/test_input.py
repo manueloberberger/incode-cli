@@ -254,3 +254,29 @@ class TestCenteredInput:
         result = centered_input("Label: ")
 
         assert result == "ac"
+
+
+@pytest.mark.parametrize('character', ['ö', 'Ä', 'ß', '€', '🚑'])
+def test_unix_reads_complete_utf8_character(character):
+    from src.input import _get_key_unix
+    encoded = [bytes([byte]) for byte in character.encode('utf-8')]
+    with patch('src.input.sys.stdin') as stdin, \
+         patch('src.input.termios.tcgetattr', return_value=[]), \
+         patch('src.input.termios.tcsetattr') as restore, \
+         patch('src.input.tty.setraw'), \
+         patch('src.input.select.select', return_value=([0], [], [])), \
+         patch('src.input.os.read', side_effect=encoded):
+        stdin.fileno.return_value = 0
+        assert _get_key_unix(0.1) == character
+        restore.assert_called_once()
+
+
+def test_unix_incomplete_utf8_does_not_hang():
+    from src.input import _get_key_unix
+    with patch('src.input.sys.stdin') as stdin, \
+         patch('src.input.termios.tcgetattr', return_value=[]), \
+         patch('src.input.termios.tcsetattr'), patch('src.input.tty.setraw'), \
+         patch('src.input.select.select', side_effect=[([0], [], []), ([], [], [])]), \
+         patch('src.input.os.read', return_value=b'\xc3'):
+        stdin.fileno.return_value = 0
+        assert _get_key_unix(0.1) is None

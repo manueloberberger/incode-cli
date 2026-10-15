@@ -7,7 +7,10 @@ sick leave, and other time-off entries with balance information.
 Functions:
     show_absences: Display user's planned absences with balance summary
 """
+from src.ui.network import network_view
+
 import logging
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -23,6 +26,7 @@ from rich.spinner import Spinner
 from src.config import console, BANNER
 from src.utils import clear_screen, wait_for_return, get_holidays, get_key, KEY_ENTER, KEY_ESC
 
+@network_view
 def show_absences(incode: Any) -> None:
     """
     Display the user's planned absences (vacation, sick leave, etc.).
@@ -46,7 +50,7 @@ def show_absences(incode: Any) -> None:
         
         # Fallback to duties only if absolutely nothing found in dedicated absences
         if not absences:
-             absences = incode.load_future_duties(filter_mode='only_absences')
+             absences = [asdict(d) for d in incode.load_future_duties(filter_mode='only_absences')]
 
         # NEW: Fetch Live Balance (Saldo)
         user_balance = None

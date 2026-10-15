@@ -339,3 +339,84 @@ class TestIncodeBotHelpCommand:
         result = await bot.help_command(mock_update, mock_context)
 
         assert result == ConversationHandler.END
+
+
+@pytest.mark.asyncio
+async def test_monitor_preserves_snapshot_across_failure_and_recovery():
+    from src.bot import IncodeBot
+    from src.exceptions import ApiError
+
+    monitor = IncodeBot.__new__(IncodeBot)
+    monitor.user_config = {'allowed_user_id': 123}
+    duty = {'begin': '2026-10-20T08:00:00', 'end': '2026-10-20T16:00:00',
+            'vehicle': 'RTW', 'duty_type': 'Dienst'}
+    snapshot = [monitor._duty_to_key(duty)]
+    monitor._get_stored_snapshot = MagicMock(return_value=snapshot)
+    monitor._store_snapshot = MagicMock()
+    monitor._fetch_duties_for_monitor = MagicMock(side_effect=[
+        ApiError('offline'), [duty], [],
+    ])
+    telegram = MagicMock()
+    telegram.send_message = AsyncMock()
+
+    # A failed request must neither announce removals nor overwrite the snapshot.
+    await monitor._check_for_changes(telegram)
+    telegram.send_message.assert_not_called()
+    monitor._store_snapshot.assert_not_called()
+    # Recovery with unchanged duties must not announce them as new.
+    await monitor._check_for_changes(telegram)
+    telegram.send_message.assert_not_called()
+    monitor._store_snapshot.assert_not_called()
+    # A successful, genuinely empty roster must still announce real removals.
+    await monitor._check_for_changes(telegram)
+    telegram.send_message.assert_awaited_once()
+    assert 'Entfernte Dienste' in telegram.send_message.call_args.kwargs['text']
+    monitor._store_snapshot.assert_called_once_with([])
+
+
+def test_monitor_requests_strict_uncached_roster():
+    from src.bot import IncodeBot
+    monitor = IncodeBot.__new__(IncodeBot)
+    monitor.api = MagicMock()
+    monitor.api.load_future_duties.return_value = []
+    assert monitor._fetch_duties_for_monitor() == []
+    monitor.api.load_future_duties.assert_called_once_with(use_cache=False, strict=True)
+
+
+@pytest.mark.asyncio
+async def test_monitor_reports_crew_change_as_update_and_ignores_order():
+    from src.bot import IncodeBot
+    monitor = IncodeBot.__new__(IncodeBot)
+    monitor.user_config = {'allowed_user_id': 123}
+    original = {'source_id': 'shift-1', 'begin': '2026-10-20T08:00:00',
+                'end': '2026-10-20T16:00:00', 'vehicle': 'RTW', 'crew': ['Test A', 'Test B']}
+    monitor._get_stored_snapshot = MagicMock(return_value=[monitor._duty_to_key(original)])
+    monitor._store_snapshot = MagicMock()
+    monitor._fetch_duties_for_monitor = MagicMock(return_value=dict())
+    telegram = MagicMock(send_message=AsyncMock())
+    monitor._fetch_duties_for_monitor.return_value = [dict(original, crew=['Test B', 'Test A'])]
+    await monitor._check_for_changes(telegram)
+    telegram.send_message.assert_not_called()
+    monitor._fetch_duties_for_monitor.return_value = [dict(original, crew=['Test C'])]
+    await monitor._check_for_changes(telegram)
+    telegram.send_message.assert_awaited_once()
+    text = telegram.send_message.call_args.kwargs['text']
+    assert 'Geänderte Dienste' in text
+    assert 'Besatzung: Test C' in text
+    assert 'Neue Dienste' not in text
+    assert 'Entfernte Dienste' not in text
+
+
+@pytest.mark.asyncio
+async def test_monitor_failed_notification_retains_snapshot():
+    from src.bot import IncodeBot
+    monitor = IncodeBot.__new__(IncodeBot)
+    monitor.user_config = {'allowed_user_id': 123}
+    monitor._get_stored_snapshot = MagicMock(return_value=[])
+    monitor._store_snapshot = MagicMock()
+    monitor._fetch_duties_for_monitor = MagicMock(return_value=[{
+        'source_id': 'shift', 'begin': '2026-10-20T08:00:00', 'vehicle': 'RTW',
+    }])
+    telegram = MagicMock(send_message=AsyncMock(side_effect=RuntimeError('offline')))
+    await monitor._check_for_changes(telegram)
+    monitor._store_snapshot.assert_not_called()

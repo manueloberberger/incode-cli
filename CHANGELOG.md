@@ -5,6 +5,48 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.31.2] - 2026-10-15
+
+### Changed
+- Count regular Feistritz/Drau duties as SEW using the confirmed station rule;
+  retain training and explicit special-duty categories and avoid inferring SEW
+  from the Villach location. Label the compact summary as service statistics.
+
+## [2.31.1] - 2026-10-15
+
+### Changed
+- Keep statistics compact with hours, vehicle types and stations; omit the
+  fragmented duty-label table while retaining those labels in the roster.
+
+## [2.31.0] - 2026-10-15
+
+### Added
+- Roster filters for completed/planned duties and loaded months, with filtered
+  exports and separate completed/planned hour totals.
+- Separate vehicle, duty-label and station statistics; exact vehicle-token matching.
+- Retryable network error views, explicit HTTP timeouts and data-source labels.
+
+### Fixed
+- Read complete UTF-8 input characters, including umlauts and emoji.
+- Preserve simultaneous duties using upstream identifiers or a composite fallback,
+  retaining identity and account scope through the response cache.
+- Detect crew, location and other duty changes; silently initialize the new snapshot
+  format and serialize bot workers sharing one synchronous API client.
+- Fetch live plans without cache, retain the last valid plan on failures, and
+  report/retry failed Telegram deliveries accurately.
+- Export distinct stable calendar UIDs, explicit local time zones and UTC stamps;
+  omit cancelled duties and duplicate entries.
+- Expose daily-plan ranges through the public API and normalize absence fallbacks.
+
+## [2.30.3] - 2026-10-15
+
+### Fixed
+- Preserve the duty monitor snapshot and suppress change notifications when roster
+  or archive requests fail or return an invalid response envelope.
+- Refuse self-updates when tracked or untracked local changes exist, without
+  stashing or altering the working tree; check Git command failures and bound
+  update subprocess execution times.
+
 ## [2.30.2] - 2026-09-23
 
 ### Changed

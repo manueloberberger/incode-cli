@@ -8,7 +8,10 @@ allowing the existing synchronous UI code to use async I/O for better performanc
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Coroutine, TypeVar
+from threading import RLock
+
+T = TypeVar("T")
 
 from src.api_async import AsyncIncodeRequests
 from src.models import Duty
@@ -46,21 +49,34 @@ class IncodeRequests:
             extra_guids: Optional list of additional organization unit GUIDs.
             username: Optional username for cache key differentiation.
         """
+        self._request_lock = RLock()
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.client = AsyncIncodeRequests(base_url, extra_guids, username)
         
+    def _run(self, operation: Coroutine[Any, Any, T]) -> T:
+        """Serialize bot workers sharing the same client and event loop."""
+        with self._request_lock:
+            return self.loop.run_until_complete(operation)
+
     def __del__(self) -> None:
         """Clean up the event loop and close the session."""
         try:
             if not self.loop.is_closed():
                 try:
-                    self.loop.run_until_complete(self.client.close())
+                    self._run(self.client.close())
                 finally:
                     self.loop.close()
         except (RuntimeError, AttributeError) as e:
             # Silently ignore cleanup errors during garbage collection
             logger.debug(f"Cleanup error (expected during shutdown): {e}")
+
+    @property
+    def data_status(self) -> str:
+        return self.client.data_status
+
+    def load_daily_plan_range(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        return self._run(self.client.load_daily_plan_range(date_from, date_to))
 
     @property
     def discovered_name(self) -> Optional[str]:
@@ -106,7 +122,7 @@ class IncodeRequests:
         Raises:
             LoginError: If authentication fails.
         """
-        return self.loop.run_until_complete(self.client.login(username, password))
+        return self._run(self.client.login(username, password))
 
     def get_project_guids(self) -> Dict[str, str]:
         """
@@ -115,7 +131,7 @@ class IncodeRequests:
         Returns:
             Dictionary mapping project GUIDs to project names.
         """
-        return self.loop.run_until_complete(self.client.get_project_guids())
+        return self._run(self.client.get_project_guids())
 
     def load_events_plan(self) -> List[Dict[str, Any]]:
         """
@@ -124,9 +140,9 @@ class IncodeRequests:
         Returns:
             List of event dictionaries with details.
         """
-        return self.loop.run_until_complete(self.client.load_events_plan())
+        return self._run(self.client.load_events_plan())
 
-    def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None) -> List[Duty]:
+    def load_future_duties(self, use_cache: bool = True, filter_mode: str = 'exclude_absences', override_name: Optional[str] = None, *, strict: bool = True) -> List[Duty]:
         """
         Load future duties for the current user.
         
@@ -138,7 +154,7 @@ class IncodeRequests:
         Returns:
             List of Duty objects.
         """
-        return self.loop.run_until_complete(self.client.load_future_duties(use_cache, filter_mode, override_name))
+        return self._run(self.client.load_future_duties(use_cache, filter_mode, override_name, strict=strict))
 
     def get_next_duty(self) -> Optional[Duty]:
         """
@@ -147,7 +163,7 @@ class IncodeRequests:
         Returns:
             The next Duty object, or None if no upcoming duties.
         """
-        return self.loop.run_until_complete(self.client.get_next_duty())
+        return self._run(self.client.get_next_duty())
 
     def load_absences(self) -> List[Dict[str, Any]]:
         """
@@ -156,7 +172,7 @@ class IncodeRequests:
         Returns:
             List of absence dictionaries.
         """
-        return self.loop.run_until_complete(self.client.load_absences())
+        return self._run(self.client.load_absences())
     
     def search_staff_contact(self, query: str, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
@@ -169,7 +185,7 @@ class IncodeRequests:
         Returns:
             List of matching staff dictionaries.
         """
-        return self.loop.run_until_complete(self.client.search_staff_contact(query, use_cache))
+        return self._run(self.client.search_staff_contact(query, use_cache))
 
     def load_daily_plan(self, date: datetime, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
@@ -182,7 +198,7 @@ class IncodeRequests:
         Returns:
             List of shift dictionaries with crew and vehicle info.
         """
-        return self.loop.run_until_complete(self.client.load_daily_plan(date, use_cache))
+        return self._run(self.client.load_daily_plan(date, use_cache))
 
     def load_my_event_duties(self) -> List[Duty]:
         """
@@ -191,7 +207,7 @@ class IncodeRequests:
         Returns:
             List of Duty objects for events.
         """
-        return self.loop.run_until_complete(self.client.load_my_event_duties())
+        return self._run(self.client.load_my_event_duties())
 
     def load_archive_duties(self, year: int, filter_mode: str = 'exclude_absences') -> List[Duty]:
         """
@@ -204,7 +220,7 @@ class IncodeRequests:
         Returns:
             List of Duty objects from the archive.
         """
-        return self.loop.run_until_complete(self.client.load_archive_duties(year, filter_mode))
+        return self._run(self.client.load_archive_duties(year, filter_mode))
 
     def get_user_name(self, pnr: str) -> Optional[str]:
         """

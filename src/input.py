@@ -149,7 +149,18 @@ def _get_key_unix(timeout: Optional[float]) -> Optional[str]:
             
             return seq.decode('utf-8', errors='ignore')
             
-        return ch.decode('utf-8', errors='ignore')
+        # Read one complete UTF-8 code point; never discard continuation bytes.
+        if ch and ch[0] >= 0xC2:
+            size = 2 if ch[0] < 0xE0 else 3 if ch[0] < 0xF0 else 4
+            for _ in range(size - 1):
+                ready, _, _ = select.select([fd], [], [], 0.1)
+                if not ready:
+                    return None
+                ch += os.read(fd, 1)
+        try:
+            return ch.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
 
     except (OSError, termios.error) as e:
         logger.debug(f"Terminal input error: {e}")

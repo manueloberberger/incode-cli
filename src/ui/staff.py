@@ -3,6 +3,8 @@ Staff directory search view for incode-cli.
 
 Provides the interface for searching for colleagues and viewing their details.
 """
+from src.ui.network import network_view
+
 from datetime import datetime
 from typing import Any
 
@@ -19,6 +21,7 @@ from src.utils import clear_screen, centered_input, wait_for_return, get_key, KE
 from src.ui.components import interactive_menu
 from src.ui.dashboard import show_future_duties
 
+@network_view
 def show_staff_search(incode: Any) -> None:
     """
     Display the staff search interface.
@@ -246,6 +249,7 @@ def _display_staff_details_loop(p: Any) -> None:
         elif k == KEY_ENTER or (k and k.lower() == 'q') or k == KEY_ESC:
             return
 
+@network_view
 def show_colleague_search(incode: Any) -> None:
     """Shows a dedicated page for searching colleague duties."""
     clear_screen()

@@ -5,6 +5,7 @@ import asyncio
 import re
 import time
 import warnings
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Callable, cast
 from dataclasses import asdict
@@ -23,7 +24,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning, message="If 'per_mess
 from src.config import load_credentials, update_credentials, console, VERSION
 from src.api import IncodeRequests
 from src.db import db
-from src.utils import centered_input, get_key, KEY_ESC
+from src.utils import centered_input, get_key, KEY_ESC, duty_identity, duty_fingerprint
 from src.pdf import export_to_pdf
 from src.exceptions import LoginError, ApiError
 
@@ -291,7 +292,7 @@ class IncodeBot:
             await self.unauthorized(update)
             return ConversationHandler.END
         username = self.api.username or self.user_config.get('username', 'default')
-        db.set_value(f"duty_snapshot_{username}", None)
+        db.set_value(f"duty_snapshot_v2_{username}", None)
         await update.message.reply_text(
             "🔄 Snapshot zurückgesetzt. Beim nächsten Check wird ein neuer Basisstand gespeichert."
         )
@@ -391,19 +392,18 @@ class IncodeBot:
             return [asdict(d) for d in duties]
 
     def _duty_to_key(self, duty: Dict[str, Any]) -> str:
-        """Create a unique string key for a duty (for change detection)."""
-        begin = duty.get('begin', '')
-        if isinstance(begin, datetime):
-            begin = begin.isoformat()
-        end = duty.get('end', '')
-        if isinstance(end, datetime):
-            end = end.isoformat()
-        return f"{begin}|{end}|{duty.get('vehicle') or ''}|{duty.get('duty_type') or ''}"
+        """Versioned snapshot entry with identity and all meaningful details."""
+        return json.dumps({
+            "id": duty_identity(duty), "fingerprint": duty_fingerprint(duty),
+            "begin": str(duty.get("begin") or ""),
+            "vehicle": duty.get("vehicle") or duty.get("duty_type") or "Dienst",
+            "crew": duty.get("crew") or [], "location": duty.get("location") or "",
+        }, sort_keys=True, ensure_ascii=False)
 
     def _get_stored_snapshot(self) -> Optional[List[str]]:
         """Load previously stored duty snapshot keys from DB."""
         username = self.api.username or self.user_config.get('username', 'default')
-        stored = db.get_value(f"duty_snapshot_{username}")
+        stored = db.get_value(f"duty_snapshot_v2_{username}")
         if isinstance(stored, list):
             return stored
         return None
@@ -411,7 +411,7 @@ class IncodeBot:
     def _store_snapshot(self, duty_keys: List[str]) -> None:
         """Save current duty keys as snapshot to DB."""
         username = self.api.username or self.user_config.get('username', 'default')
-        db.set_value(f"duty_snapshot_{username}", duty_keys)
+        db.set_value(f"duty_snapshot_v2_{username}", duty_keys)
 
     def _fetch_duties_for_monitor(self) -> List[Dict[str, Any]]:
         """Fetch current duties bypassing cache for fresh comparison data."""
@@ -422,8 +422,8 @@ class IncodeBot:
             if not password:
                 raise LoginError("Kein Passwort gefunden.")
             self.api.login(self.user_config['username'], password)
-        duties = self.api.load_future_duties(use_cache=False)
-        return [asdict(d) for d in duties]
+        duties = self.api.load_future_duties(use_cache=False, strict=True)
+        return [asdict(d) for d in duties if not d.is_cancelled]
 
     def _format_duty_begin(self, begin: Any) -> str:
         """Format a duty begin timestamp for display."""
@@ -450,45 +450,42 @@ class IncodeBot:
                 logger.info("Duty snapshot initialized.")
                 return
 
-            stored_set = set(stored_keys)
-            current_set = set(current_keys)
-            added = current_set - stored_set
-            removed = stored_set - current_set
-
-            if not added and not removed:
-                logger.debug("Duty monitor: no changes detected.")
+            previous = {entry["id"]: entry for entry in map(json.loads, stored_keys)}
+            current = {entry["id"]: entry for entry in map(json.loads, current_keys)}
+            added = current.keys() - previous.keys()
+            removed = previous.keys() - current.keys()
+            changed = {key for key in current.keys() & previous.keys()
+                       if current[key]["fingerprint"] != previous[key]["fingerprint"]}
+            if not added and not removed and not changed:
                 return
 
-            # Build notification message
-            parts: List[str] = ["🔔 *Dienstplan-Änderung erkannt!*\n"]
-
-            if added:
-                parts.append("\n✅ *Neue Dienste:*")
-                for d in duties:
-                    if self._duty_to_key(d) in added:
-                        label = self._format_duty_begin(d.get('begin', ''))
-                        vehicle = d.get('vehicle') or d.get('duty_type') or '?'
-                        parts.append(f"  • {label} – {vehicle}")
-
-            if removed:
-                parts.append("\n❌ *Entfernte Dienste:*")
-                for key in removed:
-                    key_parts = key.split('|')
-                    begin_str = key_parts[0] if key_parts else '?'
-                    vehicle = key_parts[2] if len(key_parts) > 2 else ''
-                    if not vehicle and len(key_parts) > 3:
-                        vehicle = key_parts[3]
-                    if not vehicle:
-                        vehicle = '?'
-                    label = self._format_duty_begin(begin_str)
-                    parts.append(f"  • {label} – {vehicle}")
-
-            msg = "\n".join(parts) + "\n"
+            parts = ["🔔 Dienstplan-Änderung erkannt!"]
+            for title, keys, entries in (
+                ("✅ Neue Dienste:", added, current),
+                ("✏️ Geänderte Dienste:", changed, current),
+                ("❌ Entfernte Dienste:", removed, previous),
+            ):
+                if keys:
+                    parts.append("\n" + title)
+                for key in sorted(keys, key=lambda k: entries[k]["begin"]):
+                    entry = entries[key]
+                    label = self._format_duty_begin(entry["begin"])
+                    parts.append(f"  • {label} – {entry['vehicle']}")
+                    if key in changed:
+                        old = previous[key]
+                        for field, name in (("vehicle", "Fahrzeug"), ("location", "Ort"), ("crew", "Besatzung")):
+                            if old.get(field) != entry.get(field):
+                                value = entry[field]
+                                if isinstance(value, list):
+                                    value = ", ".join(value)
+                                parts.append(f"    {name}: {value or '–'}")
 
             allowed_id = self.user_config.get("allowed_user_id")
             if allowed_id:
-                await bot.send_message(chat_id=allowed_id, text=msg, parse_mode='Markdown')
-                logger.info(f"Change notification sent: {len(added)} added, {len(removed)} removed.")
+                # Plain text also handles brackets/underscores in upstream names safely.
+                message = "\n".join(parts)
+                for offset in range(0, len(message), 4000):
+                    await bot.send_message(chat_id=allowed_id, text=message[offset:offset + 4000])
 
             self._store_snapshot(current_keys)
 

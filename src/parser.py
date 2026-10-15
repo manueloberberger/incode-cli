@@ -222,6 +222,7 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
             duty_type=display_name or dt_name,
             crew=crew,
             comment=comm,
+            source_id=str(item.get("dutyDataGuid") or item.get("dataGuid") or item.get("id") or "") or None,
             is_cancelled=is_cancelled
         ))
         
@@ -250,7 +251,7 @@ def parse_daily_plan_raw(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             continue
             
         if pg not in grouped: 
-            grouped[pg] = {"crew": {}, "vehicle": "", "begin": None, "end": None}
+            grouped[pg] = {"source_id": str(pg), "location": str(i.get("orgUnitName") or ""), "crew": {}, "vehicle": "", "begin": None, "end": None}
             
         entry: Dict[str, Any] = grouped[pg]
         eid = str(i.get('externalId', '')).upper()

@@ -106,7 +106,7 @@ class TestUpdateApp:
     """Tests for update_app function."""
     
     @patch('src.updates.subprocess.run')
-    @patch('src.updates.restart_services', create=True)
+    @patch('src.service.restart_services')
     def test_update_success_no_local_changes(self, mock_restart, mock_run):
         """Should successfully update when no local changes exist."""
         mock_run.side_effect = [
@@ -123,26 +123,17 @@ class TestUpdateApp:
         
         assert result is True
     
+    @pytest.mark.parametrize("status", [" M file.py", "?? new-file.py"])
+    @patch('src.service.restart_services')
     @patch('src.updates.subprocess.run')
-    @patch('src.updates.restart_services', create=True)
-    def test_update_with_stash(self, mock_restart, mock_run):
-        """Should stash and pop when local changes exist."""
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stdout='M file.py'),  # git status (dirty)
-            MagicMock(returncode=0),  # git stash
-            MagicMock(returncode=0, stdout='abc123'),  # git rev-parse HEAD (before)
-            MagicMock(returncode=0),  # git pull
-            MagicMock(returncode=0, stdout='', text=True),  # git stash pop
-            MagicMock(returncode=0, stdout='def456'),  # git rev-parse HEAD (after)
-            MagicMock(returncode=0, stdout=''),  # git diff
-        ]
-        
-        with patch('src.updates.console'):
-            with patch('src.updates.Live'):
-                result = update_app()
-        
-        assert result is True
-    
+    def test_local_changes_abort_without_mutation(self, mock_run, mock_restart, status):
+        mock_run.return_value = MagicMock(returncode=0, stdout=status)
+        with patch('src.updates.console'), patch('src.updates.Live'):
+            assert update_app() is False
+        assert mock_run.call_count == 1
+        assert mock_run.call_args.args[0][:2] == ['git', 'status']
+        mock_restart.assert_not_called()
+
     @patch('src.updates.subprocess.run')
     def test_update_git_pull_fails(self, mock_run):
         """Should return False when git pull fails."""
@@ -159,7 +150,7 @@ class TestUpdateApp:
         assert result is False
     
     @patch('src.updates.subprocess.run')
-    @patch('src.updates.restart_services', create=True)
+    @patch('src.service.restart_services')
     @patch('src.updates.sys.executable', '/usr/bin/python3')
     def test_update_with_requirements_change(self, mock_restart, mock_run):
         """Should run pip install when requirements.txt changed."""
@@ -180,3 +171,56 @@ class TestUpdateApp:
         # Verify pip install was called
         pip_calls = [c for c in mock_run.call_args_list if 'pip' in str(c)]
         assert len(pip_calls) >= 1
+
+
+@pytest.mark.parametrize("failure", [
+    subprocess.CalledProcessError(1, 'git status'),
+    subprocess.TimeoutExpired('git status', 5),
+])
+@patch('src.service.restart_services')
+@patch('src.updates.subprocess.run')
+def test_update_status_failure_aborts(mock_run, mock_restart, failure):
+    mock_run.side_effect = failure
+    with patch('src.updates.console'), patch('src.updates.Live'):
+        assert update_app() is False
+    assert mock_run.call_count == 1
+    mock_restart.assert_not_called()
+
+
+@patch('src.service.restart_services')
+@patch('src.updates.subprocess.run')
+def test_dependency_install_failure_never_restarts_or_reports_success(mock_run, mock_restart):
+    mock_run.side_effect = [
+        MagicMock(stdout=''), MagicMock(stdout='old'), MagicMock(),
+        MagicMock(stdout='new'), MagicMock(stdout='requirements.txt'),
+        subprocess.CalledProcessError(1, 'pip'),
+    ]
+    with patch('src.updates.console') as console, patch('src.updates.Live'):
+        assert update_app() is False
+    mock_restart.assert_not_called()
+    assert 'Update erfolgreich' not in str(console.print.call_args_list)
+
+
+@pytest.mark.parametrize('untracked', [False, True])
+def test_update_preserves_real_worktree_and_existing_stash(tmp_path, monkeypatch, untracked):
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=tmp_path, check=True,
+                              capture_output=True, text=True).stdout
+    git('init')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.invalid')
+    tracked = tmp_path / 'tracked.txt'
+    tracked.write_text('original')
+    git('add', '.')
+    git('commit', '-m', 'initial')
+    tracked.write_text('existing stash')
+    git('stash', 'push')
+    changed = tmp_path / 'new.txt' if untracked else tracked
+    changed.write_text('valuable changes')
+    before = (git('status', '--porcelain'), git('stash', 'list'), git('rev-parse', 'HEAD'))
+    monkeypatch.chdir(tmp_path)
+    with patch('src.updates.console'), patch('src.service.restart_services') as restart:
+        assert update_app() is False
+    assert changed.read_text() == 'valuable changes'
+    assert before == (git('status', '--porcelain'), git('stash', 'list'), git('rev-parse', 'HEAD'))
+    restart.assert_not_called()

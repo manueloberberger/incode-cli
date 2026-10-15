@@ -16,7 +16,8 @@ from rich.align import Align
 from rich.live import Live
 
 from src.config import console, BANNER, load_credentials
-from src.utils import clear_screen, get_key, centered_input, prompt_yes_no
+from src.exceptions import ApiError
+from src.utils import clear_screen, get_key, centered_input, prompt_yes_no, duty_fingerprint
 from src.ui.components import interactive_menu, select_date_interactive, send_pdf_via_bot
 # Circular import note: show_daily_plan is in src/ui/daily_plan.py
 from src.ui.daily_plan import show_daily_plan
@@ -89,7 +90,7 @@ def show_live_monitor(incode: Any) -> None:
     while True:
         try:
             # Load Data
-            current_plan = incode.load_daily_plan(target_date)
+            current_plan = sorted(incode.load_daily_plan(target_date, use_cache=False), key=duty_fingerprint)
             
             # Check for changes
             has_changes = False
@@ -100,7 +101,7 @@ def show_live_monitor(incode: Any) -> None:
                     has_changes = True
 
             if has_changes:
-                last_plan = current_plan
+                delivered = True
                 
                 # Update UI
                 show_daily_plan(incode, date=target_date, is_live=True, override_plan=current_plan)
@@ -134,13 +135,21 @@ def show_live_monitor(incode: Any) -> None:
                         
                         try:
                             console.print(Align.center(f"[dim]Sende Telegram Update...[/dim]"))
-                            send_pdf_via_bot(incode, fn, msg_text)
-                            console.print(Align.center(f"[success]Telegram gesendet.[/success]"))
+                            if send_pdf_via_bot(incode, fn, msg_text):
+                                console.print(Align.center("[success]Telegram gesendet.[/success]"))
+                            else:
+                                delivered = False
+                                console.print(Align.center("[error]Telegram-Versand fehlgeschlagen. Erneuter Versuch beim nächsten Abruf.[/error]"))
                         except Exception as e:
+                            delivered = False
                             console.print(Align.center(f"[error]Telegram Fehler: {e}[/error]"))
                         finally:
                             if os.path.exists(fn):
                                 os.remove(fn)
+                    else:
+                        delivered = False
+                if delivered:
+                    last_plan = current_plan
             
             first_run = False
             
@@ -155,7 +164,9 @@ def show_live_monitor(incode: Any) -> None:
                     if k == '\x1b' or (k and k.lower() == 'q'):
                         return
 
-        except Exception as e:
-            console.print(Align.center(f"[error]Fehler im Live-Monitor Loop: {e}[/error]"))
-            # Wait a bit before retry to avoid spamming errors if network is down
-            time.sleep(10)
+        except ApiError:
+            console.print(Align.center("[warning]Abruf fehlgeschlagen. Letzter gültiger Stand bleibt erhalten. Neuer Versuch in 10 Sekunden; ESC beendet.[/warning]"))
+            until = time.monotonic() + 10
+            while time.monotonic() < until:
+                if get_key(timeout=0.1) in ('\x1b', 'q'):
+                    return

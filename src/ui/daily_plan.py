@@ -7,6 +7,8 @@ for a specific date across the organization.
 Functions:
     show_daily_plan: Display the duty plan for a specific date
 """
+from src.ui.network import network_view
+
 import logging
 from datetime import datetime
 from typing import Optional, List, Any
@@ -24,6 +26,7 @@ from src.pdf import export_to_pdf
 from src.ical import export_to_ics
 from src.ui.components import send_pdf_via_bot
 
+@network_view
 def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool = False, override_plan: Optional[List[Any]] = None) -> Optional[List[Any]]:
     """
     Display the duty plan for a specific date.
@@ -63,7 +66,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
         else:
             plan = incode.load_daily_plan(date)
         
-    if not plan:
+    if not plan and not is_live:
         if not is_live: 
             console.print(Align.center(f"\n[info]Keine Plan für {date.strftime('%d.%m.%Y')}.[/info]"))
             wait_for_return()
@@ -79,7 +82,7 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
     # Prepare data for export logic later
     export_duties = []
 
-    for p in plan:
+    for p in plan or []:
         try:
             b, e = p["begin"], p["end"]
             if b and e:
@@ -96,7 +99,9 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
                 export_duties.append({
                     'begin': b.strftime('%Y-%m-%dT%H:%M:%S'),
                     'end': e.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'location': "", 
+                    'source_id': p.get('source_id'),
+                    'source_scope': p.get('source_scope', ''),
+                    'location': p.get('location', ''),
                     'vehicle': p['vehicle'],
                     'duty_type': "", 
                     'crew': cl
@@ -118,8 +123,11 @@ def show_daily_plan(incode: Any, date: Optional[datetime] = None, is_live: bool 
         return plan
     else: 
         console.print(Align.center(table))
+        status = getattr(incode, "data_status", "")
+        if isinstance(status, str) and status:
+            console.print(Align.center(f"[dim]{status}[/dim]"))
         console.print()
-        
+
         opt_str = "'p' für PDF, 'c' für Kalender (iCal), 't' für PDF & Telegram"
         console.print(Align.center(f"\n[dim]Drücke {opt_str}, oder eine beliebige andere Taste ...[/dim]"))
         

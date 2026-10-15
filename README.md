@@ -2,7 +2,7 @@
 
 ![incode-cli Banner](.github/banner.png)
 
-[![Version](https://img.shields.io/badge/version-2.30.2-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.31.2-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 **The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
 
@@ -133,6 +133,46 @@ The built-in Telegram Bot allows you to query your duty roster from your smartph
   ./incode install-service --user "Max Mustermann"
   ```
   *Supports systemd (Linux) and launchd (macOS).*
+
+### Roster filters and statistics
+
+In **Mein Dienstplan**, press **F** to choose completed duties, planned/ongoing
+duties, the current month/year, or any month present in the loaded data. **R**
+refreshes from the server. PDF and calendar exports use the displayed filter.
+
+Monthly hours separate completed from planned/ongoing shifts. Hours are attributed
+to the start month of each shift. Statistics summarize the loaded roster rather
+than claiming a complete year. The compact summary shows service categories (including KTWB and BKTW) and stations;
+individual shift labels stay in the roster instead of creating extra statistics
+categories. Regular duties at Feistritz/Drau count as SEW based on the station. Explicit
+training, ambulance and special-duty labels retain their own compact categories.
+Elsewhere, explicit service labels take priority over the vehicle type; Villach
+is never classified as SEW from its location alone. A missing vehicle remains
+unknown when neither label nor station identifies the service, and all hours
+are still counted.
+
+### Reliability and exports
+
+Network requests have explicit time limits. Failed or incomplete responses produce
+a recoverable error rather than an empty roster. Views offer **R** to retry;
+roster and daily-plan views identify cached data. The live monitor fetches fresh
+data, keeps the last valid display after a failed request and reports actual
+Telegram delivery results.
+
+The duty-change monitor detects crew, station, time, vehicle and comment changes.
+Its upgraded snapshot is initialized silently on first use. Requests from bot
+workers sharing a client are serialized.
+
+Duty identifiers supplied by the server are retained through parsing, merging,
+caching and exports. Calendar UIDs use these identifiers and the account scope;
+without a server identifier a composite fallback is used, so changing its time,
+vehicle or location can still create a new calendar identity. Calendar imports
+remain dependent on the receiving app; an exported file is not a calendar sync.
+Local calendar times explicitly use Europe/Vienna, and export timestamps use UTC.
+
+Self-updates require a clean working tree, including untracked files. If you have
+local changes, save them outside the checkout or commit them before retrying.
+The updater leaves those changes untouched and does not automatically stash them.
 
 ---
 

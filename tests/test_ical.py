@@ -176,3 +176,35 @@ class TestExportToIcs:
         # Try to write to an invalid path
         result = export_to_ics(duties, '/nonexistent/path/file.ics')
         assert result is False
+
+
+def test_calendar_identity_timezone_and_cancellations(tmp_path):
+    from dataclasses import replace
+    from icalendar import Calendar
+    from src.ical import export_to_ics
+    duty = Duty(datetime(2026, 10, 25, 7), datetime(2026, 10, 25, 19),
+                vehicle='RTW', location='A', source_id='stable-1', source_scope='account-a')
+    path = tmp_path / 'duties.ics'
+    with patch('src.ical.console'):
+        assert export_to_ics([duty, replace(duty), replace(duty, source_id='cancelled', is_cancelled=True)], str(path))
+        original = Calendar.from_ical(path.read_bytes()).walk('VEVENT')
+        assert len(original) == 1
+        assert original[0].decoded('dtstamp').utcoffset().total_seconds() == 0
+        assert original[0].decoded('dtstart').hour == 7
+        assert original[0].decoded('dtstart').tzinfo is not None
+        assert export_to_ics([replace(duty, begin=datetime(2026, 10, 25, 8), vehicle='KTW')], str(path))
+        updated = Calendar.from_ical(path.read_bytes()).walk('VEVENT')
+    assert original[0]['UID'] == updated[0]['UID']
+
+
+def test_calendar_legacy_simultaneous_distinct_duties(tmp_path):
+    from dataclasses import replace
+    from icalendar import Calendar
+    from src.ical import export_to_ics
+    first = Duty(datetime(2026, 10, 20, 8), datetime(2026, 10, 20, 16), vehicle='RTW', location='A')
+    second = replace(first, end=datetime(2026, 10, 20, 12), location='B')
+    path = tmp_path / 'duties.ics'
+    with patch('src.ical.console'):
+        assert export_to_ics([first, second], str(path))
+    events = Calendar.from_ical(path.read_bytes()).walk('VEVENT')
+    assert len({str(event['UID']) for event in events}) == 2

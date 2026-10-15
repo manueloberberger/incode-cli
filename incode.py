@@ -293,7 +293,7 @@ def run_cli(debug: bool = False) -> None:
         
         # Status display removed as per user request
         
-        from src.exceptions import LoginError
+        from src.exceptions import LoginError, ApiError
         try:
             with Live(Align.center(Spinner("dots", text=f" Melde an als {u} ...")), console=console, transient=True):
                 incode.login(u, p)
@@ -333,7 +333,11 @@ def run_cli(debug: bool = False) -> None:
         db.set_active_user(u)
         
         # Pre-fetch next duty for dashboard
-        next_duty = incode.get_next_duty()
+        try:
+            next_duty = incode.get_next_duty()
+        except ApiError:
+            next_duty = None
+            console.print("[warning]Dienstplan momentan nicht verfügbar. Du kannst ihn im Menü erneut laden.[/warning]")
         
         menu_options: List[Tuple[str, Any]] = [
             ("📅  Mein Dienstplan", "future"),
@@ -357,7 +361,10 @@ def run_cli(debug: bool = False) -> None:
             
             if selection == "future":
                 show_future_duties(incode)
-                next_duty = incode.get_next_duty() # Refresh
+                try:
+                    next_duty = incode.get_next_duty()
+                except ApiError:
+                    pass  # Keep the last dashboard while the connection is unavailable.
             elif selection == "absences":
                 show_absences(incode)
             elif selection == "events":
