@@ -147,7 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Docstrings for `src/ui/settings.py` & `src/ui/staff.py`
   - Docstrings for `src/service.py` & `src/bot.py`
 - New `README.md` sections for Multi-User & Telegram Bot usage
-- Explicit version sync rule in `CLAUDE.md`
+- Explicit version sync rule in the project agent guidance
 
 ## [2.18.0] - 2026-01-26
 
