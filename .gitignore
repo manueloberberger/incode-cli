@@ -19,3 +19,6 @@ incode.db
 
 # Backups
 incode_backup_*.json
+
+# The managed environment can be a symlink after a Python migration.
+/.venv
