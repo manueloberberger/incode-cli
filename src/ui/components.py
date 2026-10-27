@@ -80,6 +80,11 @@ def render_next_duty_panel(duty: Any) -> None:
     if duty.vehicle:
         grid.add_row(f"🚗  {veh}", "")
         
+    if getattr(duty, 'assignments', None):
+        from src.utils import assignment_lines
+        from rich.markup import escape
+        for line in assignment_lines(duty.assignments):
+            grid.add_row(escape(line), "")
     p = Panel(
         Align.center(grid),
         title="[bold green]Nächster Dienst[/bold green]",

@@ -92,6 +92,8 @@ def export_to_ics(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
                 c_str = ", ".join(crew) if isinstance(crew, list) else str(crew)
                 desc_lines.append(f"Crew: {c_str}")
 
+            from src.utils import assignment_lines
+            desc_lines.extend(assignment_lines(d.get("assignments") or []))
             if desc_lines:
                 event.add('description', "\n".join(desc_lines))
 

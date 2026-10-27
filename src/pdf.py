@@ -79,7 +79,7 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
             
             # Format Crew - handle list, dict, or string
             crew_raw = d.get('crew')
-            crew_str = "-"
+            crew_str: Any = "-"
             
             if isinstance(crew_raw, list):
                 crew_str = "\n".join(crew_raw)
@@ -103,11 +103,17 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
             if not crew_str: 
                 crew_str = "-"
 
+            if d.get("assignments"):
+                from src.utils import assignment_lines
+                from xml.sax.saxutils import escape
+                crew_str = "\n".join(assignment_lines(d["assignments"]))
+                crew_str = Paragraph(escape(crew_str).replace("\n", "<br/>"), styles['Normal'])
+
             data.append([
                 b.strftime('%d.%m.%Y'),
                 f"{b.strftime('%H:%M')} - {e.strftime('%H:%M')}",
                 f"{h:.1f}h",
-                d.get('vehicle') or "-",
+                Paragraph(escape(str(d.get('vehicle') or "-")).replace(" / ", "<br/>"), styles['Normal']) if d.get("assignments") else (d.get('vehicle') or "-"),
                 crew_str
             ])
         except (ValueError, AttributeError, KeyError, TypeError) as e:
@@ -116,7 +122,7 @@ def export_to_pdf(duties: Sequence[Union[Dict[str, Any], Duty]], filename: str =
     # Column Widths optimized for A4
     col_widths = [70, 90, 40, 90, 160]
     
-    table = PDFTable(data, colWidths=col_widths, repeatRows=1)
+    table = PDFTable(data, colWidths=col_widths, repeatRows=1, splitByRow=1, splitInRow=1)
     
     table_style = TableStyle([
         # Header styling

@@ -398,6 +398,7 @@ class IncodeBot:
             "begin": str(duty.get("begin") or ""),
             "vehicle": duty.get("vehicle") or duty.get("duty_type") or "Dienst",
             "crew": duty.get("crew") or [], "location": duty.get("location") or "",
+            "assignments": duty.get("assignments") or [],
         }, sort_keys=True, ensure_ascii=False)
 
     def _get_stored_snapshot(self) -> Optional[List[str]]:
@@ -471,6 +472,9 @@ class IncodeBot:
                     entry = entries[key]
                     label = self._format_duty_begin(entry["begin"])
                     parts.append(f"  • {label} – {entry['vehicle']}")
+                    from src.utils import assignment_lines
+                    for line in assignment_lines(entry.get("assignments") or []):
+                        parts.append("    " + line)
                     if key in changed:
                         old = previous[key]
                         for field, name in (("vehicle", "Fahrzeug"), ("location", "Ort"), ("crew", "Besatzung")):

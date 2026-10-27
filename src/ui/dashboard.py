@@ -1,3 +1,4 @@
+from src.utils import assignment_lines
 """Personal roster, filtered exports and clearly separated statistics."""
 from collections import Counter
 from datetime import datetime
@@ -83,7 +84,7 @@ def show_future_duties(incode: Any, search_colleague: Optional[str] = None) -> N
             table.add_row(duty.begin.strftime("%d.%m.%Y"),
                           f"{duty.begin:%H:%M}–{end} ({duty.duration_hours:g}h)",
                           duty.location or "–", duty.vehicle or "–",
-                          ", ".join(duty.crew) or duty.duty_type or "–")
+                          "\n".join(assignment_lines(duty.assignments)) if duty.assignments else (", ".join(duty.crew) or duty.duty_type or "–"))
         if duties:
             console.print(Align.center(table))
             if not search_colleague:

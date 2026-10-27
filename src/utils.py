@@ -165,6 +165,8 @@ def duty_fingerprint(duty: Dict[str, Any]) -> str:
             ("begin", "end", "vehicle", "location", "duty_type", "comment", "is_cancelled")}
     crew = duty.get("crew") or []
     data["crew"] = sorted(crew.items()) if isinstance(crew, dict) else sorted(crew)
+    if duty.get("assignments"):
+        data["assignments"] = canonical_assignments(duty["assignments"])
     return hashlib.sha256(json.dumps(data, sort_keys=True, default=str,
                                     ensure_ascii=False).encode("utf-8")).hexdigest()
 
@@ -220,3 +222,25 @@ def duty_hours(duties: Sequence[Duty], now: datetime) -> Dict[str, Tuple[float, 
             planned += duty.duration_hours
         result[month] = completed, planned
     return result
+
+
+def canonical_assignments(assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Stable comparison of all timed allocations, ignoring response/crew order."""
+    parts = [dict(begin=str(p['begin']), end=str(p['end']), vehicle=str(p.get('vehicle') or ''),
+                  crew=sorted(str(v) for v in p.get('crew', []))) for p in assignments]
+    return sorted(parts, key=lambda p: (p['begin'], p['end'], p['vehicle'], p['crew']))
+
+
+def assignment_lines(assignments: List[Dict[str, Any]]) -> List[str]:
+    """Plain text for terminal, calendar, PDF and bot, with overnight dates."""
+    lines = []
+    for part in sorted(assignments, key=lambda p: (p['begin'], p['end'])):
+        start, end = parse_iso_datetime(part['begin']), parse_iso_datetime(part['end'])
+        if start is None or end is None:
+            continue
+        time = f"{start:%H:%M}–{end:%H:%M}"
+        if start.date() != end.date():
+            time = f"{start:%d.%m. %H:%M}–{end:%d.%m. %H:%M}"
+        lines.append(time + " · " + (part.get('vehicle') or 'Fahrzeug offen') + " · " +
+                     (', '.join(part.get('crew') or []) or 'Besatzung offen'))
+    return lines

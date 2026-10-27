@@ -7,7 +7,7 @@ from the Incode duty roster system into structured Python objects.
 import json
 import re
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from src.models import Duty
 from src.config import VEHICLE_PATTERN
@@ -121,6 +121,49 @@ def extract_role(person_data: Dict[str, Any]) -> str:
     return ", ".join(roles) if roles else "-"
 
 
+def _allocation_parts(value: Any) -> Tuple[str, List[str]]:
+    """Decode one upstream allocation without interpreting identifiers as names."""
+    if not isinstance(value, list) or len(value) < 2:
+        return "", []
+    last = str(value[-1])
+    if last and (last[0].isdigit() or VEHICLE_PATTERN.search(last)):
+        return last, [str(x) for x in value[1:-1] if x and str(x) != '*']
+    return "", [str(x) for x in value[1:] if x and str(x) != '*']
+
+
+def _duty_assignments(alloc: Any, attendances: List[Any], begin: datetime, end: datetime) -> List[Dict[str, Any]]:
+    """Join attendance times to allocation labels by identity, never by order."""
+    result: List[Dict[str, Any]] = []
+    for attendance in attendances:
+        if not isinstance(attendance, dict) or attendance.get('isCanceled'):
+            continue
+        if not isinstance(attendance.get('begin'), str) or not isinstance(attendance.get('end'), str):
+            continue
+        start, finish = fix_datetime(attendance.get('begin')), fix_datetime(attendance.get('end'))
+        if start is None or finish is None:
+            continue
+        start, finish = max(begin, start), min(end, finish)
+        if finish <= start:
+            continue
+        allocation = None
+        if isinstance(alloc, dict):
+            for key in ('guid', 'originalGuid'):
+                identity = attendance.get(key)
+                if isinstance(identity, str) and identity in alloc:
+                    allocation = alloc[identity]
+                    break
+            # One label set is unambiguous; multiple sets must match by ID.
+            if allocation is None and len(alloc) == 1:
+                allocation = next(iter(alloc.values()))
+        elif isinstance(alloc, list):
+            allocation = alloc
+        vehicle, crew = _allocation_parts(allocation)
+        segment = dict(begin=start.isoformat(), end=finish.isoformat(), vehicle=vehicle, crew=crew)
+        if segment not in result:
+            result.append(segment)
+    return sorted(result, key=lambda part: (part['begin'], part['end'], part['vehicle']))
+
+
 def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_absences', my_name: Optional[str] = None) -> List[Duty]:
     """
     Parse duty/shift data from API response into Duty objects.
@@ -168,7 +211,10 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
             attendances = json.loads(attendances_raw) if isinstance(attendances_raw, str) else (attendances_raw if isinstance(attendances_raw, list) else [])
         except (ValueError, TypeError):
             attendances = []
-        is_cancelled = bool(attendances) and all(bool(a.get('isCanceled')) for a in attendances if isinstance(a, dict))
+        if not isinstance(attendances, list):
+            attendances = []
+        valid_attendances = [a for a in attendances if isinstance(a, dict)]
+        is_cancelled = bool(valid_attendances) and all(bool(a.get('isCanceled')) for a in valid_attendances)
 
         # Apply filter
         if filter_mode == 'exclude_absences' and is_abs:
@@ -188,6 +234,19 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
                 veh, crew = last, [str(x) for x in al[1:-1]]
             else:
                 veh, crew = "", [str(x) for x in al[1:]]
+
+        assignments = _duty_assignments(alloc, attendances, b, e)
+        if assignments:
+            veh = " / ".join(dict.fromkeys(part['vehicle'] for part in assignments if part['vehicle']))
+            crew = list(dict.fromkeys(member for part in assignments for member in part['crew']))
+        elif isinstance(alloc, dict) and len(alloc) > 1:
+            # Preserve all labels even if the server omits usable attendance times.
+            parts = [_allocation_parts(value) for value in alloc.values()]
+            veh = " / ".join(dict.fromkeys(vehicle for vehicle, _ in parts if vehicle))
+            crew = list(dict.fromkeys(member for _, members in parts for member in members))
+
+        if len(assignments) == 1 and assignments[0]['begin'] == b.isoformat() and assignments[0]['end'] == e.isoformat():
+            assignments = []
 
         # Reorder crew to show current user first (optimized with max())
         if my_name and crew:
@@ -223,7 +282,8 @@ def parse_personal_duties(data: Dict[str, Any], filter_mode: str = 'exclude_abse
             crew=crew,
             comment=comm,
             source_id=str(item.get("dutyDataGuid") or item.get("dataGuid") or item.get("id") or "") or None,
-            is_cancelled=is_cancelled
+            is_cancelled=is_cancelled,
+            assignments=assignments
         ))
         
     return results

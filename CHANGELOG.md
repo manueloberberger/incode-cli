@@ -5,6 +5,14 @@ All notable changes to incode-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.0] - 2026-10-27
+
+### Fixed
+- Preserve any number of timed vehicle and crew allocations within one duty.
+  Keep total duty hours/counts unchanged; show allocations in roster, next-duty
+  panel, PDF, calendar descriptions and change notifications. Match allocations
+  by attendance identity, ignore cancelled parts, and refresh legacy caches.
+
 ## [2.31.2] - 2026-10-15
 
 ### Changed

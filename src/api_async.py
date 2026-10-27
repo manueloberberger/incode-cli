@@ -393,7 +393,7 @@ class AsyncIncodeRequests:
         Returns:
             List of Duty objects sorted by begin date.
         """
-        cache_key = f"future_duties_{filter_mode}"
+        cache_key = f"future_duties_v3_{filter_mode}"
         if use_cache:
             cd = self._get_cached_data(cache_key)
             if cd is not None:
@@ -408,7 +408,8 @@ class AsyncIncodeRequests:
                     source_id=d.get("source_id"),
                     source_scope=d.get("source_scope", ""),
                     comment=d.get('comment'),
-                    is_cancelled=d.get('is_cancelled', False)
+                    is_cancelled=d.get('is_cancelled', False),
+                    assignments=d.get('assignments', [])
                 ) for d in cd]
 
         await self.ensure_session()
@@ -444,7 +445,7 @@ class AsyncIncodeRequests:
             duties = merge_duties(duties, archive)
 
             # Cache
-            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment, 'source_id': d.source_id, 'source_scope': d.source_scope, 'is_cancelled': d.is_cancelled} for d in duties]
+            ser = [{'begin': d.begin.strftime('%Y-%m-%dT%H:%M:%S'), 'end': d.end.strftime('%Y-%m-%dT%H:%M:%S'), 'vehicle': d.vehicle, 'location': d.location, 'duty_type': d.duty_type, 'crew': d.crew, 'comment': d.comment, 'source_id': d.source_id, 'source_scope': d.source_scope, 'is_cancelled': d.is_cancelled, 'assignments': d.assignments} for d in duties]
             self._set_cached_data(cache_key, ser)
             return duties
         except Exception as e:

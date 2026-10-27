@@ -33,6 +33,7 @@ class Duty:
     is_cancelled: bool = False
     source_id: Optional[str] = None
     source_scope: str = ""
+    assignments: List[Dict[str, Any]] = field(default_factory=list)
     
     @property
     def duration_hours(self) -> float:
