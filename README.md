@@ -1,209 +1,109 @@
-<div align="center">
+# Incode CLI
 
-![incode-cli Banner](.github/banner.png)
+Tastaturgesteuerte Terminal-Anwendung für Incode-Dienstpläne des Österreichischen Roten Kreuzes – mit mehreren Konten, Statistiken, Exporten und Telegram-Bot.
 
-[![Version](https://img.shields.io/badge/version-2.32.1-blue.svg?style=flat-square)](https://github.com/manueloberberger/incode-cli) ![Python](https://img.shields.io/badge/python-3.9%2B-green?style=flat-square) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+![Projektbanner](.github/banner.png)
 
-**The lightning-fast, keyboard-driven interface for the Red Cross duty roster.**
+[![Version](https://img.shields.io/badge/version-2.32.1-blue.svg)](CHANGELOG.md) ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg) [![MIT-Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
 
-[Installation](#-installation) • [Features](#-features) • [Usage](#-usage) • [Contributing](#-contributing)
+**macOS und Linux · Python 3.9+ · Berechtigtes Incode-Konto für eigene Dienstplandaten**
 
-</div>
+## Funktionen
 
----
+- Persönlichen Dienstplan und Tagesplan mit Suche, Filtern und Tastaturbedienung anzeigen.
+- Mehrere Konten verwalten und bewusst zwischen ihnen wechseln.
+- Geleistete und geplante Stunden getrennt auswerten.
+- Dienste als PDF oder Kalenderdatei exportieren und lokale Daten exportieren/importieren.
+- Dienständerungen überwachen und optional per Telegram melden.
+- Hintergrundbetrieb über launchd auf macOS oder systemd auf Linux.
+- Git-basierte Selbstaktualisierung bei sauberem Arbeitsverzeichnis.
 
-## ✨ Features
+## Installation
 
-- 🚀 **Lightning Fast**: Optimized startup and navigation
-- ⌨️ **Keyboard-Driven**: Efficient TUI (Terminal User Interface)
-- 👥 **Multi-User Support**: Manage multiple accounts
-- 📊 **Duty Roster Management**: View and manage your shifts
-- 📇 **Staff Directory**: Quick access to contact information
-- 📈 **Statistics & Analytics**: Track your work hours
-- 🔄 **Smart Auto-Updates**: Self-updating app & background services
-- 💾 **Backup & Restore**: Export/Import your data seamlessly
-- 🔒 **Secure & Local**: Credentials stored locally on your machine
+Benötigt werden Python 3.9+, Git, eine Shell und die vom Installer geprüften Systemwerkzeuge. Für Plattformdetails siehe [COMPATIBILITY.md](COMPATIBILITY.md).
 
----
-
-## 🚀 Installation
-
-### Quick Install (One-Liner)
-
-```bash
-curl -sSL https://raw.githubusercontent.com/manueloberberger/incode-cli/main/quick-install.sh | bash
-```
-
-This automatically clones the repository to `~/.local/share/incode-cli` and installs everything.
-
-### Manual Install
-
-```bash
-# 1. Clone the repository
+```sh
 git clone https://github.com/manueloberberger/incode-cli.git
 cd incode-cli
-
-# 2. Run the installer
 ./install.sh
 ```
 
-The installer will:
-- ✅ Check Python version (3.9+ required)
-- ✅ Create a virtual environment
-- ✅ Install dependencies
-- ✅ Create a global `incode` command in `~/.local/bin`
+Der Installer richtet eine virtuelle Python-Umgebung und den Befehl `incode` unter `~/.local/bin` ein. Falls nötig, diesen Ordner zum PATH der eigenen Shell hinzufügen:
 
-> **Note**: Make sure `~/.local/bin` is in your PATH. Add this to your `~/.zshrc` or `~/.bashrc`:
-> ```bash
-> export PATH="$HOME/.local/bin:$PATH"
-> ```
-
-### Uninstall
-
-```bash
-./uninstall.sh
+```sh
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-This removes the symlink, virtual environment, and optionally your credentials.
+Alternativ steht [quick-install.sh](quick-install.sh) für die Installation unter `~/.local/share/incode-cli` bereit. Das Skript vor dem Ausführen prüfen. Zur Deinstallation dient `./uninstall.sh`; die Nachfrage zur Entfernung persönlicher Zugänge bewusst beantworten.
 
----
+## Erster Start und Konten
 
-
-### Usage
-
-Run from anywhere:
-
-```bash
+```sh
 incode
-```
-
-Or use the local wrapper:
-
-```bash
+# Im Projektverzeichnis alternativ:
 ./incode
 ```
 
-*On the first run, you will be prompted for your Incode credentials. They are stored securely and locally on your machine.*
+Beim ersten Start ein Konto einrichten. **Benutzer wechseln** wählt ein bestehendes Profil; **Neuen Benutzer hinzufügen** ergänzt ein weiteres.
 
-### 👥 Multi-User Support
+```sh
+./incode --select
+./incode --user "Profilname"
+```
 
-Incode CLI supports multiple user accounts (personas) simultaneously. This is useful for:
-- Managing different credentials for different organizations
-- Switching between user and bot accounts
+## Dienstplan, Statistik und Export
 
-**Commands:**
-- **Switch User**: Select "Benutzer wechseln" in the main menu.
-- **Add User**: Select "Neuen Benutzer hinzufügen" in the login screen.
-- **CLI Login**: Start directly as a specific user:
-  ```bash
-  ./incode --user "Max Mustermann"
-  ```
-- **Interactive Selection**: Force the selection menu on startup:
-  ```bash
-  ./incode --select
-  ```
+In **Mein Dienstplan** öffnet **F** die Filter für abgeschlossene, geplante/laufende Dienste sowie Monat und Jahr. **R** lädt erneut vom Server. PDF- und Kalenderexport verwenden die sichtbare Filterauswahl.
 
-### 🤖 Telegram Bot
+Statistiken beziehen sich auf die tatsächlich geladenen Daten, nicht automatisch auf ein vollständiges Jahr. Dienste werden dem Startmonat zugerechnet; abgeschlossene und geplante Stunden bleiben getrennt. Die Dienstart berücksichtigt ausdrückliche Bezeichnungen und die implementierten Dienststellen-/Fahrzeugregeln; unklare Angaben bleiben unbekannt, ihre Stunden werden trotzdem gezählt.
 
-The built-in Telegram Bot allows you to query your duty roster from your smartphone.
+Kalenderexport ist eine Dateiübertragung und keine laufende Synchronisation. Serverseitige Dienstkennungen bleiben bis zum Export erhalten. Fehlt eine Kennung, kann eine Änderung von Zeit, Fahrzeug oder Ort eine neue Kalenderidentität erzeugen. Lokale Kalenderzeiten verwenden Europe/Vienna, Exportzeitstempel UTC.
 
-**Setup:**
-1. Run `./incode bot` interactively.
-2. Enter your Bot Token (from @BotFather).
-3. Enter your Telegram User ID (from @userinfobot).
-4. The bot is now configured!
+## Telegram-Bot
 
-**Running the Bot:**
+Zuerst einen eigenen Telegram-Bot und die erlaubte Benutzer-ID einrichten. Der interaktive Start fragt die nötigen Angaben ab:
 
-- **Interactive Mode**:
-  ```bash
-  ./incode bot
-  ```
-  *Auto-logs in with the last active user.*
+```sh
+./incode bot
+./incode bot --user "Profilname"
+```
 
-- **Specific User**:
-  ```bash
-  ./incode bot --user "Max Mustermann"
-  ```
-  *Starts the bot for a specific user profile.*
+Für dauerhaften Hintergrundbetrieb nach erfolgreicher Einrichtung:
 
-- **Background Service**:
-  To keep the bot running 24/7, install it as a system service:
-  ```bash
-  ./incode install-service --user "Max Mustermann"
-  ```
-  *Supports systemd (Linux) and launchd (macOS).*
+```sh
+./incode install-service --user "Profilname"
+```
 
-### Roster filters and statistics
+Der Dienst verwendet systemd beziehungsweise launchd. Ein laufender Prozess bestätigt noch keine erfolgreiche Anmeldung oder Zustellung. Dienständerungen umfassen unter anderem Besatzung, Dienststelle, Zeiten, Fahrzeug und Kommentare. Ein neuer Überwachungssnapshot wird zunächst ohne Änderungsalarm initialisiert.
 
-In **Mein Dienstplan**, press **F** to choose completed duties, planned/ongoing
-duties, the current month/year, or any month present in the loaded data. **R**
-refreshes from the server. PDF and calendar exports use the displayed filter.
+## Daten, Verbindungen und Updates
 
-Monthly hours separate completed from planned/ongoing shifts. Hours are attributed
-to the start month of each shift. Statistics summarize the loaded roster rather
-than claiming a complete year. The compact summary shows service categories (including KTWB and BKTW) and stations;
-individual shift labels stay in the roster instead of creating extra statistics
-categories. Regular duties at Feistritz/Drau count as SEW based on the station. Explicit
-training, ambulance and special-duty labels retain their own compact categories.
-Elsewhere, explicit service labels take priority over the vehicle type; Villach
-is never classified as SEW from its location alone. A missing vehicle remains
-unknown when neither label nor station identifies the service, and all hours
-are still counted.
+Konten, Einstellungen, Cache und Botzustände werden lokal in SQLite verwaltet. Gespeicherte Passwörter und Bot-Tokens sind keine verschlüsselte Schlüsselbundablage. Datenbanken, Logs, Exporte und Sicherungen vertraulich behandeln und nicht in Git übernehmen.
 
-### Reliability and exports
+Netzwerkaufrufe haben Zeitlimits. Fehlerhafte oder unvollständige Antworten werden nicht als leerer gültiger Dienstplan ausgegeben. Ansichten kennzeichnen Cache-Daten beziehungsweise bieten erneutes Laden an; der Live-Monitor behält bei Fehlern die letzte gültige Anzeige.
 
-Network requests have explicit time limits. Failed or incomplete responses produce
-a recoverable error rather than an empty roster. Views offer **R** to retry;
-roster and daily-plan views identify cached data. The live monitor fetches fresh
-data, keeps the last valid display after a failed request and reports actual
-Telegram delivery results.
+Selbstupdates benötigen einen sauberen Checkout einschließlich unversionierter Dateien. Eigene Änderungen vorher bewusst sichern oder committen. Der Updater führt kein automatisches Stash aus.
 
-The duty-change monitor detects crew, station, time, vehicle and comment changes.
-Its upgraded snapshot is initialized silently on first use. Requests from bot
-workers sharing a client are serialized.
+## Entwicklung und Prüfung
 
-Duty identifiers supplied by the server are retained through parsing, merging,
-caching and exports. Calendar UIDs use these identifiers and the account scope;
-without a server identifier a composite fallback is used, so changing its time,
-vehicle or location can still create a new calendar identity. Calendar imports
-remain dependent on the receiving app; an exported file is not a calendar sync.
-Local calendar times explicitly use Europe/Vienna, and export timestamps use UTC.
-
-Self-updates require a clean working tree, including untracked files. If you have
-local changes, save them outside the checkout or commit them before retrying.
-The updater leaves those changes untouched and does not automatically stash them.
-
----
-
-## 🧪 Testing
-
-To verify cross-platform compatibility on your system:
-
-```bash
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pytest tests/ -v
+.venv/bin/python -m mypy --strict incode.py src/
 ./test-compatibility.sh
 ```
 
-This script checks:
-- Bash syntax of installation scripts
-- Required commands (python3, git, curl, etc.)
-- Platform detection
-- Python version
-- PATH configuration
+| Bereich | Einstieg |
+| --- | --- |
+| Start und Terminaloberfläche | `incode.py`, `src/ui/` |
+| HTTP und synchrone Fassade | `src/api_async.py`, `src/api.py` |
+| Speicherung und Parsing | `src/db.py`, `src/parser.py` |
+| Bot und Hintergrunddienst | `src/bot.py`, `src/service.py` |
+| Sicherung und Updates | `src/backup.py`, `src/updates.py` |
 
----
+Tests prüfen definierte Fälle und ersetzen keine Prüfung gegen ein verändertes Incode-Portal. Keine echten Zugangsdaten oder persönlichen Dienstpläne als Testfixtures verwenden.
 
-## 🤝 Contributing
+## Weitere Informationen
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get started.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-
-
+[Änderungen](CHANGELOG.md) · [Kompatibilität](COMPATIBILITY.md) · [Mitwirken](CONTRIBUTING.md) · [MIT-Lizenz](LICENSE) · [Historische README](README-ARCHIV.md)
