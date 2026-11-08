@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "project": "incode-cli",
+  "repository": "manueloberberger/incode-cli",
+  "kind": "project",
+  "components": [
+    "incode-data"
+  ],
+  "tools": [
+    "git",
+    "gh",
+    "python3"
+  ],
+  "setup": [
+    "python"
+  ],
+  "verify": [
+    "python-syntax"
+  ],
+  "related": [],
+  "manual": [],
+  "backupRepository": "manueloberberger/project-vault-recovery"
+}
