@@ -9,6 +9,7 @@ Provides the interactive menu for managing application settings like:
 """
 from src.config import console, BANNER, get_update_interval, set_update_interval, VERSION, update_credentials
 from src.db import db
+from src.updates import UpdateCheckError
 
 from src.ui.components import interactive_menu
 from src.utils import clear_screen, check_for_updates, update_app, wait_for_return, prompt_yes_no, centered_input
@@ -75,8 +76,13 @@ def _manual_update_check() -> None:
     from rich.spinner import Spinner
     
     console.print()
-    with Live(Align.center(Spinner("dots", text="[bold blue]Prüfe auf Updates ...[/bold blue]")), console=console, transient=True):
-        new_version = check_for_updates(ignore_cache=True)
+    try:
+        with Live(Align.center(Spinner("dots", text="[bold blue]Prüfe auf Updates ...[/bold blue]")), console=console, transient=True):
+            new_version = check_for_updates(ignore_cache=True, strict=True)
+    except UpdateCheckError:
+        console.print(Align.center("[yellow]Updateprüfung nicht abgeschlossen. Verbindung und Git-Zugang prüfen.[/yellow]"))
+        wait_for_return()
+        return
     
     if new_version:
         console.print(Align.center(f"[bold red]✨ Update verfügbar: v{VERSION} -> v{new_version}[/bold red]\n"))

@@ -1,3 +1,8 @@
+# 2.32.2
+
+- Manuelle Updateprüfung unterscheidet einen fehlgeschlagenen Abruf von einem bestätigten aktuellen Stand.
+- Prüfung: 300 pytest-Tests und striktes mypy über Einstiegspunkt und alle Quellmodule bestanden.
+
 # Changelog
 
 All notable changes to incode-cli will be documented in this file.

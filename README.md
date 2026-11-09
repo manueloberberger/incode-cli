@@ -4,7 +4,7 @@ Tastaturgesteuerte Terminal-Anwendung für Incode-Dienstpläne des Österreichis
 
 ![Projektbanner](.github/banner.png)
 
-[![Version](https://img.shields.io/badge/version-2.32.1-blue.svg)](CHANGELOG.md) ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg) [![MIT-Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.32.2-blue.svg)](CHANGELOG.md) ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg) [![MIT-Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
 
 **macOS und Linux · Python 3.9+ · Berechtigtes Incode-Konto für eigene Dienstplandaten**
 
@@ -107,3 +107,5 @@ Tests prüfen definierte Fälle und ersetzen keine Prüfung gegen ein verändert
 ## Weitere Informationen
 
 [Änderungen](CHANGELOG.md) · [Kompatibilität](COMPATIBILITY.md) · [Mitwirken](CONTRIBUTING.md) · [MIT-Lizenz](LICENSE) · [Historische README](README-ARCHIV.md)
+
+Manuelle Updateprüfungen zeigen Verbindungs- und Gitfehler ausdrücklich als unvollständige Prüfung an.

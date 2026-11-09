@@ -224,3 +224,23 @@ def test_update_preserves_real_worktree_and_existing_stash(tmp_path, monkeypatch
     assert changed.read_text() == 'valuable changes'
     assert before == (git('status', '--porcelain'), git('stash', 'list'), git('rev-parse', 'HEAD'))
     restart.assert_not_called()
+
+
+class TestStrictUpdateChecks:
+    def test_fetch_failure_is_not_current(self):
+        from src.updates import UpdateCheckError
+        with patch('src.updates.os.path.exists', return_value=True), patch('src.updates.subprocess.run', side_effect=OSError), pytest.raises(UpdateCheckError):
+            check_for_updates(ignore_cache=True, strict=True)
+
+    def test_invalid_comparison_is_not_current(self):
+        from src.updates import UpdateCheckError
+        with patch('src.updates.os.path.exists', return_value=True), patch('src.updates.subprocess.run', side_effect=[MagicMock(returncode=0), MagicMock(returncode=1, stdout='')]), pytest.raises(UpdateCheckError):
+            check_for_updates(ignore_cache=True, strict=True)
+
+    def test_manual_failure_never_claims_current(self):
+        from src.updates import UpdateCheckError
+        from src.ui.settings import _manual_update_check
+        with patch('src.ui.settings.check_for_updates', side_effect=UpdateCheckError), patch('src.ui.settings.wait_for_return'), patch('src.ui.settings.console.print') as output:
+            _manual_update_check()
+        assert any('nicht abgeschlossen' in str(call) for call in output.call_args_list)
+        assert not any('Version ist aktuell' in str(call) for call in output.call_args_list)

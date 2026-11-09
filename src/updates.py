@@ -24,9 +24,14 @@ from src.config import (
 )
 
 
-def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Optional[str]:
+class UpdateCheckError(RuntimeError):
+    """The check did not establish whether an update is available."""
+
+
+def check_for_updates(debug: bool = False, ignore_cache: bool = False, strict: bool = False) -> Optional[str]:
     """Checks for git updates. Returns new version string if updates are available, else None."""
     if not os.path.exists(".git"):
+        if strict: raise UpdateCheckError("Kein Git-Projekt gefunden.")
         if debug: console.print("[yellow]Debug: Keine .git Directory gefunden.[/yellow]")
         return None
     
@@ -72,11 +77,13 @@ def check_for_updates(debug: bool = False, ignore_cache: bool = False) -> Option
                 except (subprocess.SubprocessError, subprocess.TimeoutExpired):
                     pass
                 return "Neu"  # Fallback if version extraction fails but update exists
-        elif debug:
-            console.print(f"[yellow]Debug: git rev-list failed: {res.stderr}[/yellow]")
+        else:
+            if strict: raise UpdateCheckError("Online-Stand konnte nicht verglichen werden.")
+            if debug: console.print("[yellow]Debug: Git-Vergleich fehlgeschlagen.[/yellow]")
             
     except (subprocess.SubprocessError, subprocess.TimeoutExpired, OSError) as e:
-        if debug: console.print(f"[red]Debug: Update check error: {e}[/red]")
+        if strict: raise UpdateCheckError("Updateprüfung nicht abgeschlossen. Verbindung und Git-Zugang prüfen.") from None
+        if debug: console.print("[red]Debug: Updateprüfung fehlgeschlagen.[/red]")
     
     # Update timestamp if we actually checked (successfully or not, to avoid spamming on error)
     if not debug:
